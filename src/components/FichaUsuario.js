@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 
+// Función fetchData estándar
 async function fetchData(action, payload) {
   const params = new URLSearchParams({ action, ...payload });
   const response = await fetch(
-    "https://script.google.com/macros/s/AKfycbw1kn_hJ-UBaa1Y8mLJShVlVpsGEEhcfzdSyM7X3lY3rWTBEZadoYV4S8nGLiPh98hn/exec",
+    "https://script.google.com/macros/s/AKfycbyMAg-kGSee5qx1uPA-dpEU4tvAtRGinEQEvZlYkQB629gKFUKS53H3YYDEJkcBQ2wn/exec",
     {
       method: "POST",
       body: params,
@@ -13,7 +14,8 @@ async function fetchData(action, payload) {
   return response.json();
 }
 
-const TABS = [
+// Tabs base
+const BASE_TABS = [
   { id: 0, label: "Datos personales" },
   { id: 1, label: "Datos de dieta" },
   { id: 2, label: "Datos de pesaje" },
@@ -37,6 +39,15 @@ export default function FichaUsuario({ email }) {
   }, [email]);
 
   if (!usuario) return <div>Cargando...</div>;
+
+  // Comprobaciones robustas de acceso a recursos
+  const tieneEjercicios = (usuario.ejercicios || "").trim().toLowerCase() === "si";
+  const tieneRecetas = (usuario.recetas || "").trim().toLowerCase() === "si";
+
+  // Generar tabs según recursos contratados
+  let customTabs = [...BASE_TABS];
+  if (tieneEjercicios) customTabs.push({ id: 3, label: "Ejercicios" });
+  if (tieneRecetas) customTabs.push({ id: 4, label: "Recetas" });
 
   function handleChange(e) {
     setUsuario({ ...usuario, [e.target.name]: e.target.value });
@@ -83,10 +94,14 @@ export default function FichaUsuario({ email }) {
     });
   }
 
+  // Tus enlaces de Google Drive
+  const ejerciciosDriveLink = "https://drive.google.com/drive/folders/1EN-1h1VcV4K4kG2JgmRpxFSY-izas-9c?usp=sharing";
+  const recetasDriveLink = "https://drive.google.com/drive/folders/1FBwJtFBj0gWr0W9asHdGrkR7Q1FzkKK3?usp=sharing";
+
   return (
     <>
       <div className="tabs">
-        {TABS.map((t) => (
+        {customTabs.map((t) => (
           <button
             key={t.id}
             type="button"
@@ -182,6 +197,32 @@ export default function FichaUsuario({ email }) {
           <div>
             <strong>Peso actual:</strong> {usuario.pesoActual || "No registrado"}
           </div>
+        </div>
+      )}
+
+      {tab === 3 && tieneEjercicios && (
+        <div>
+          <h2>Ejercicios</h2>
+          <a
+            href={ejerciciosDriveLink}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Ver recursos de ejercicios
+          </a>
+        </div>
+      )}
+
+      {tab === 4 && tieneRecetas && (
+        <div>
+          <h2>Recetas</h2>
+          <a
+            href={recetasDriveLink}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Ver recursos de recetas
+          </a>
         </div>
       )}
     </>

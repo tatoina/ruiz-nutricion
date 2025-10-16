@@ -1,6 +1,6 @@
 // src/services/googleSheets.js
 
-const BACKEND_URL = "https://script.google.com/macros/s/AKfycbw1kn_hJ-UBaa1Y8mLJShVlVpsGEEhcfzdSyM7X3lY3rWTBEZadoYV4S8nGLiPh98hn/exec";
+const BACKEND_URL = "https://script.google.com/macros/s/AKfycbyMAg-kGSee5qx1uPA-dpEU4tvAtRGinEQEvZlYkQB629gKFUKS53H3YYDEJkcBQ2wn/exec";
 
 /**
  * Envía una acción y datos al backend de Apps Script vinculado a Google Sheets usando x-www-form-urlencoded.
