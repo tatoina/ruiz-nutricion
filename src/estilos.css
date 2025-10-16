@@ -70,10 +70,19 @@ body {
 /* Tabs */
 .tabs {
   display: flex;
-  justify-content: center;
+  overflow-x: auto;
+ -webkit-overflow-scrolling: touch; 
+  white-space: nowrap;
   gap: 8px;
-  margin-bottom: 18px;
+ margin-bottom: 18px;
+ justify-content: flex-start; /* centrar solo si hay pocas */
+ scrollbar-width: none; /* ocultar barra en Firefox */
 }
+
+.tabs::-webkit-scrollbar {
+ display: none; /* Oculta el scroll en Chrome/Safari */
+}
+
 
 .tab, .tab-active {
   background: var(--color-degradado);
