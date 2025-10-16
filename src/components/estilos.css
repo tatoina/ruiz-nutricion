@@ -1,0 +1,215 @@
+:root {
+  --color-primario: #89e03e;
+  --color-secundario: #ffff8b;
+  --color-degradado: linear-gradient(135deg, #ffff8b 0%, #89e03e 100%);
+  --color-fondo-app: #e8faee;
+  --color-forma: #ffffff;
+  --color-borde: #c3ecd9;
+  --color-titulo: #146b37;
+  --color-texto: #133c20;
+  --color-tabla: #f8fcf5;
+  --sombra-suave: 0 6px 20px rgba(0,0,0,0.11);
+  --fuente: 'Segoe UI', 'Roboto', Arial, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: var(--color-degradado);
+  color: var(--color-texto);
+  font-family: var(--fuente);
+}
+
+.layout {
+  text-align: center;
+  margin: 0 auto;
+  margin-top: 40px;
+  background: var(--color-fondo-app);
+  border-radius: 18px;
+  box-shadow: var(--sombra-suave);
+  padding: 40px 22px;
+  max-width: 480px;
+}
+
+.header {
+  padding-bottom: 12px;
+}
+
+.header h1 {
+  color: var(--color-titulo);
+  font-weight: 700;
+  letter-spacing: 1px;
+  font-size: 2rem;
+  margin-bottom: 0;
+}
+
+.btn {
+  background: var(--color-degradado);
+  color: var(--color-titulo);
+  font-weight: 700;
+  border: none;
+  border-radius: 32px;
+  padding: 15px 48px;
+  font-size: 1.12rem;
+  box-shadow: 0 6px 8px rgba(0, 0, 0, 0.13);
+  cursor: pointer;
+  margin: 12px 0;
+  transition: background 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+
+.btn:hover, .btn:focus {
+  background: linear-gradient(135deg, #e6ff50 0%, #6fbd2a 100%);
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.22);
+}
+
+.btn:active {
+  background: linear-gradient(135deg, #c1e031 0%, #4d8e1d 100%);
+  box-shadow: inset 0 3px 5px rgba(0,0,0,0.2);
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.tab, .tab-active {
+  background: var(--color-degradado);
+  color: var(--color-texto);
+  border-radius: 24px;
+  font-weight: 600;
+  border: none;
+  padding: 11px 26px;
+  font-size: 1rem;
+  box-shadow: 0 2px 7px rgba(0,0,0,0.09);
+  cursor: pointer;
+  margin: 0 3px;
+}
+
+.tab-active {
+  box-shadow: 0 4px 16px rgba(80,200,120,0.20);
+  outline: 2px solid #6fbd2a;
+}
+
+.tab:not(.tab-active):hover {
+  filter: brightness(0.96);
+}
+
+/* Mensaje de alerta/info */
+.mensaje {
+  color: #238c58;
+  font-size: 1.04rem;
+  background: #dffcde;
+  border-radius: 11px;
+  margin: 5px 0 18px 0;
+  padding: 8px 12px;
+  box-shadow: 0 2px 8px rgba(89,230,62,0.07);
+}
+
+/* Formularios e inputs */
+input, select, textarea {
+  width: 96%;
+  min-width: 90px;
+  font-size: 1rem;
+  padding: 10px 14px;
+  margin: 6px 0;
+  border-radius: 8px;
+  border: 1px solid var(--color-borde);
+  background: #fbfff8;
+  box-sizing: border-box;
+  font-family: var(--fuente);
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid #6fbd2a;
+  background: #f1ffe9;
+}
+
+label {
+  display: block;
+  color: var(--color-titulo);
+  margin-top: 12px;
+  font-weight: 600;
+  font-size: 1.04rem;
+  text-align: left;
+}
+
+form {
+  background: var(--color-forma);
+  border-radius: 14px;
+  box-shadow: 0 1px 6px rgba(80,200,120,0.11);
+  padding: 20px 16px;
+  max-width: 360px;
+  margin: 0 auto 10px auto;
+}
+
+/* Tablas (pesajes, datos) */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 14px;
+  background: var(--color-tabla);
+  border-radius: 9px;
+  box-shadow: 0 1px 6px rgba(80,200,120,0.08);
+}
+
+th, td {
+  padding: 8px 10px;
+  text-align: center;
+  border-bottom: 1px solid var(--color-borde);
+  font-size: 0.98rem;
+}
+
+th {
+  color: var(--color-titulo);
+  background: linear-gradient(90deg, #e1ffc8 0%, #f6ffe2 100%);
+  font-weight: 700;
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+tr:nth-child(even) {
+  background: #f0fbef;
+}
+
+/* Botón cerrar sesión extra */
+.cerrar-sesion-btn {
+  margin: 18px 0 0 0;
+  width: 78%;
+  max-width:300px;
+}
+
+/* Footer */
+.footer {
+  color: #478e46;
+  font-size: 0.98rem;
+  margin-top: 24px;
+  padding-bottom: 10px;
+  opacity: 0.88;
+}
+
+/* Imagen logo y fondo */
+img {
+  display: block;
+  margin: 0 auto 16px auto;
+  max-width: 180px;
+  border-radius: 50%;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+}
+
+@media (max-width: 520px) {
+  .layout {
+    padding: 12px 3vw;
+    max-width: 99vw;
+  }
+  input, select, textarea {
+    width: 99%;
+  }
+  form {
+    padding: 12px 5px;
+  }
+}
