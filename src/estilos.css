@@ -65,11 +65,23 @@ body {
   background: linear-gradient(135deg, #c1e031 0%, #4d8e1d 100%);
   box-shadow: inset 0 3px 5px rgba(0,0,0,0.2);
 }
-/* Elimina el borde gris de focus/active en todos los botones */
-.btn:focus, .btn:active {
-  outline: none;
-  box-shadow: none;
-  border: none;
+
+/* Elimina cualquier borde, outline o sombra por focus/active en cualquier navegador */
+button,
+button:focus,
+button:active,
+.btn:focus,
+.btn:active,
+input[type="button"].btn:focus,
+input[type="button"].btn:active,
+input[type="submit"].btn:focus,
+input[type="submit"].btn:active {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background-clip: padding-box !important;
+  -webkit-box-shadow: none !important;
+  -moz-box-shadow: none !important;
 }
 
 /* Tabs */
@@ -80,11 +92,11 @@ body {
   white-space: nowrap;
   gap: 8px;
   margin-bottom: 18px;
-  justify-content: flex-start; /* centrar solo si hay pocas */
-  scrollbar-width: none; /* ocultar barra en Firefox */
+  justify-content: flex-start;
+  scrollbar-width: none;
 }
 .tabs::-webkit-scrollbar {
-  display: none; /* Oculta el scroll en Chrome/Safari */
+  display: none;
 }
 .tab, .tab-active {
   background: var(--color-degradado);
@@ -151,7 +163,7 @@ form {
   margin: 0 auto 10px auto;
 }
 
-/* Tablas (pesajes, datos) */
+/* Tablas */
 table {
   border-collapse: collapse;
   width: 100%;
