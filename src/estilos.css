@@ -234,4 +234,10 @@ img {
   img {
     max-width: 98vw;
   }
+  .btn:focus, .btn:active {
+  outline: none;
+  box-shadow: none;
+  border: none;
+}
+
 }
