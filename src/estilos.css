@@ -188,41 +188,14 @@ form {
   margin: 0 auto 10px auto;
 }
 
-/* ---- Tablas ---- */
-table {
-  border-collapse: collapse;
-  width: 100%;
-  margin-bottom: 14px;
-  background: var(--color-tabla);
-  border-radius: 9px;
-  box-shadow: 0 1px 6px rgba(80,200,120,0.08);
-}
-th, td {
-  padding: 8px 10px;
-  text-align: center;
-  border-bottom: 1px solid var(--color-borde);
-  font-size: 0.98rem;
-}
-th {
-  color: var(--color-titulo);
-  background: linear-gradient(90deg, #e1ffc8 0%, #f6ffe2 100%);
-  font-weight: 700;
-}
-tr:last-child td {
-  border-bottom: none;
-}
-tr:nth-child(even) {
-  background: #f0fbef;
-}
-
-/* ---- Botón cerrar sesión extra ---- */
+/* Botón cerrar sesión extra */
 .cerrar-sesion-btn {
   margin: 18px 0 0 0;
   width: 78%;
   max-width:300px;
 }
 
-/* ---- Footer ---- */
+/* Footer */
 .footer {
   color: #478e46;
   font-size: 0.98rem;
@@ -231,13 +204,42 @@ tr:nth-child(even) {
   opacity: 0.88;
 }
 
-/* ---- Imagen logo y fondo ---- */
+/* Imagen logo y fondo */
 img {
   display: block;
   margin: 0 auto 16px auto;
   max-width: 180px;
   border-radius: 50%;
   box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+}
+
+/* ---- NUEVOS CAMPOS en ficha usuario ---- */
+.form-ficha-usuario label,
+form label {
+  margin-top: 15px;
+  font-weight: 600;
+  color: var(--color-titulo);
+  display: block;
+  text-align: left;
+}
+
+.form-ficha-usuario select,
+form select {
+  width: 60%;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #f7fdf3;
+  color: var(--color-texto);
+  border: 1px solid var(--color-borde);
+  font-family: var(--fuente);
+  font-size: 1.06rem;
+  transition: border 0.18s;
+}
+
+.form-ficha-usuario button.btn,
+form button.btn {
+  margin-top: 12px;
 }
 
 /* --- Responsive para móviles --- */

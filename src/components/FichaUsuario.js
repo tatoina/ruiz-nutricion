@@ -136,6 +136,7 @@ export default function FichaUsuario({ email }) {
 
       {tab === 1 && (
         <form
+          className="form-ficha-usuario"
           onSubmit={(e) => { e.preventDefault(); handleSave("dieta"); }}
         >
           <label>Objetivo nutricional:
@@ -150,6 +151,28 @@ export default function FichaUsuario({ email }) {
           <label>Tipo de dieta:
             <input name="tipoDieta" value={usuario.tipoDieta} onChange={handleChange} />
           </label>
+          {/* NUEVO BLOQUE PARA EDITAR EJERCICIOS Y RECETAS */}
+          <label htmlFor="ejercicios">¿Ver pestaña Ejercicios?</label>
+          <select
+            id="ejercicios"
+            name="ejercicios"
+            value={usuario.ejercicios || "no"}
+            onChange={handleChange}
+          >
+            <option value="si">Sí</option>
+            <option value="no">No</option>
+          </select>
+
+          <label htmlFor="recetas">¿Ver pestaña Recetas?</label>
+          <select
+            id="recetas"
+            name="recetas"
+            value={usuario.recetas || "no"}
+            onChange={handleChange}
+          >
+            <option value="si">Sí</option>
+            <option value="no">No</option>
+          </select>
           <button type="submit" className="btn">Guardar</button>
         </form>
       )}
