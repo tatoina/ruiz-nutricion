@@ -42,6 +42,7 @@ body {
   margin-bottom: 0;
 }
 
+/* ---- Botones ---- */
 .btn {
   background: var(--color-degradado);
   color: var(--color-titulo);
@@ -56,34 +57,35 @@ body {
   transition: background 0.2s, box-shadow 0.2s;
   outline: none;
 }
-
 .btn:hover, .btn:focus {
   background: linear-gradient(135deg, #e6ff50 0%, #6fbd2a 100%);
   box-shadow: 0 8px 15px rgba(0, 0, 0, 0.22);
 }
-
 .btn:active {
   background: linear-gradient(135deg, #c1e031 0%, #4d8e1d 100%);
   box-shadow: inset 0 3px 5px rgba(0,0,0,0.2);
+}
+/* Elimina el borde gris de focus/active en todos los botones */
+.btn:focus, .btn:active {
+  outline: none;
+  box-shadow: none;
+  border: none;
 }
 
 /* Tabs */
 .tabs {
   display: flex;
   overflow-x: auto;
- -webkit-overflow-scrolling: touch; 
+  -webkit-overflow-scrolling: touch; 
   white-space: nowrap;
   gap: 8px;
- margin-bottom: 18px;
- justify-content: flex-start; /* centrar solo si hay pocas */
- scrollbar-width: none; /* ocultar barra en Firefox */
+  margin-bottom: 18px;
+  justify-content: flex-start; /* centrar solo si hay pocas */
+  scrollbar-width: none; /* ocultar barra en Firefox */
 }
-
 .tabs::-webkit-scrollbar {
- display: none; /* Oculta el scroll en Chrome/Safari */
+  display: none; /* Oculta el scroll en Chrome/Safari */
 }
-
-
 .tab, .tab-active {
   background: var(--color-degradado);
   color: var(--color-texto);
@@ -96,12 +98,10 @@ body {
   cursor: pointer;
   margin: 0 3px;
 }
-
 .tab-active {
   box-shadow: 0 4px 16px rgba(80,200,120,0.20);
   outline: 2px solid #6fbd2a;
 }
-
 .tab:not(.tab-active):hover {
   filter: brightness(0.96);
 }
@@ -130,12 +130,10 @@ input, select, textarea {
   box-sizing: border-box;
   font-family: var(--fuente);
 }
-
 input:focus, select:focus, textarea:focus {
   outline: 2px solid #6fbd2a;
   background: #f1ffe9;
 }
-
 label {
   display: block;
   color: var(--color-titulo);
@@ -144,7 +142,6 @@ label {
   font-size: 1.04rem;
   text-align: left;
 }
-
 form {
   background: var(--color-forma);
   border-radius: 14px;
@@ -163,24 +160,20 @@ table {
   border-radius: 9px;
   box-shadow: 0 1px 6px rgba(80,200,120,0.08);
 }
-
 th, td {
   padding: 8px 10px;
   text-align: center;
   border-bottom: 1px solid var(--color-borde);
   font-size: 0.98rem;
 }
-
 th {
   color: var(--color-titulo);
   background: linear-gradient(90deg, #e1ffc8 0%, #f6ffe2 100%);
   font-weight: 700;
 }
-
 tr:last-child td {
   border-bottom: none;
 }
-
 tr:nth-child(even) {
   background: #f0fbef;
 }
@@ -234,10 +227,4 @@ img {
   img {
     max-width: 98vw;
   }
-  .btn:focus, .btn:active {
-  outline: none;
-  box-shadow: none;
-  border: none;
-}
-
 }
