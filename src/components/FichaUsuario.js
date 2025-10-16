@@ -6,7 +6,7 @@ import {
 async function fetchData(action, payload) {
   const params = new URLSearchParams({ action, ...payload });
   const response = await fetch(
-    "https://script.google.com/macros/s/AKfycbyMAg-kGSee5qx1uPA-dpEU4tvAtRGinEQEvZlYkQB629gKFUKS53H3YYDEJkcBQ2wn/exec",
+    "https://script.google.com/macros/s/AKfycbxvPkDMJElz3YMR468JjhxNu3OqZOtf-RffP8ZqR4gRfj1Mtan3CtgznwCU_j3CmkaR/exec",
     {
       method: "POST",
       body: params,
@@ -30,7 +30,9 @@ export default function FichaUsuario({ email }) {
   const [nuevoPesaje, setNuevoPesaje] = useState({
     fecha: "",
     peso: "",
-    medidas: "",
+    medidasPecho: "",
+    medidasEstomago: "",
+    medidasCintura: ""
   });
 
   useEffect(() => {
@@ -53,7 +55,7 @@ export default function FichaUsuario({ email }) {
   }
 
   async function handleSave(donde) {
-    const res = await fetchData("updateUser", { ...usuario, email: usuario.email });
+    const res = await fetchData("updateUser", { ...usuario, email: usuario.email, contraseña: usuario.contraseña });
     setMsg(res.ok ? "Cambios guardados." : "Error al guardar.");
     if (donde === "pesaje") {
       fetchData("getUser", { email: usuario.email }).then((res) => {
@@ -76,16 +78,19 @@ export default function FichaUsuario({ email }) {
     const nuevo = {
       fecha: nuevoPesaje.fecha,
       peso: nuevoPesaje.peso,
-      medidas: nuevoPesaje.medidas,
+      medidasPecho: nuevoPesaje.medidasPecho,
+      medidasEstomago: nuevoPesaje.medidasEstomago,
+      medidasCintura: nuevoPesaje.medidasCintura
     };
     const nuevoHistorial = [...pesajes, nuevo];
     setUsuario({ ...usuario, pesoHistorico: nuevoHistorial, pesoActual: nuevoPesaje.peso });
-    setNuevoPesaje({ fecha: "", peso: "", medidas: "" });
+    setNuevoPesaje({ fecha: "", peso: "", medidasPecho: "", medidasEstomago: "", medidasCintura: "" });
     await fetchData("updateUser", {
       ...usuario,
       pesoHistorico: JSON.stringify(nuevoHistorial),
       pesoActual: nuevoPesaje.peso,
       email: usuario.email,
+      contraseña: usuario.contraseña,
     });
     setMsg("Nuevo registro de pesaje añadido.");
     fetchData("getUser", { email: usuario.email }).then((res) => {
@@ -131,6 +136,15 @@ export default function FichaUsuario({ email }) {
           <label>Email:
             <input name="email" value={usuario.email} readOnly disabled />
           </label>
+          <label>Contraseña:
+            <input
+              name="contraseña"
+              type="text"
+              value={usuario.contraseña}
+              onChange={handleChange}
+              required
+            />
+          </label>
           <label>Fecha de nacimiento:
             <input name="nacimiento" type="date" value={usuario.nacimiento} onChange={handleChange} />
           </label>
@@ -165,7 +179,6 @@ export default function FichaUsuario({ email }) {
             <option value="si">Sí</option>
             <option value="no">No</option>
           </select>
-
           <label htmlFor="recetas">¿Ver pestaña Recetas?</label>
           <select
             id="recetas"
@@ -190,18 +203,27 @@ export default function FichaUsuario({ email }) {
             <label>Peso (kg):
               <input name="peso" type="number" step="0.1" value={nuevoPesaje.peso} onChange={handleNuevoPesajeChange} required />
             </label>
-            <label>Medidas (cm o texto):
-              <input name="medidas" value={nuevoPesaje.medidas} onChange={handleNuevoPesajeChange} />
+            <label>Medidas pecho (cm):
+              <input name="medidasPecho" value={nuevoPesaje.medidasPecho} onChange={handleNuevoPesajeChange} />
+            </label>
+            <label>Medidas estómago (cm):
+              <input name="medidasEstomago" value={nuevoPesaje.medidasEstomago} onChange={handleNuevoPesajeChange} />
+            </label>
+            <label>Medidas cintura (cm):
+              <input name="medidasCintura" value={nuevoPesaje.medidasCintura} onChange={handleNuevoPesajeChange} />
             </label>
             <button type="submit" className="btn">Añadir pesaje</button>
           </form>
+
           <strong>Histórico de pesaje:</strong>
           <table>
             <thead>
               <tr>
                 <th>Fecha</th>
                 <th>Peso (kg)</th>
-                <th>Medidas</th>
+                <th>Pecho (cm)</th>
+                <th>Estómago (cm)</th>
+                <th>Cintura (cm)</th>
               </tr>
             </thead>
             <tbody>
@@ -210,12 +232,14 @@ export default function FichaUsuario({ email }) {
                   <tr key={i}>
                     <td>{item.fecha}</td>
                     <td>{item.peso}</td>
-                    <td>{item.medidas}</td>
+                    <td>{item.medidasPecho || ""}</td>
+                    <td>{item.medidasEstomago || ""}</td>
+                    <td>{item.medidasCintura || ""}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={3}>Sin datos aún.</td>
+                  <td colSpan={5}>Sin datos aún.</td>
                 </tr>
               )}
             </tbody>
@@ -238,7 +262,6 @@ export default function FichaUsuario({ email }) {
                 <YAxis
                   unit=" kg"
                   domain={[50, 140]}
-                  reversed={true}
                   ticks={[
                     50, 55, 60, 65, 70, 75, 80, 85, 90, 95,
                     100, 105, 110, 115, 120, 125, 130, 135, 140
