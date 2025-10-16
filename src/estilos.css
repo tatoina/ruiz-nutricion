@@ -84,7 +84,43 @@ input[type="submit"].btn:active {
   -moz-box-shadow: none !important;
 }
 
-/* Tabs */
+/* ---- Mensajes App ---- */
+.mensaje {
+  color: #146b37;
+  font-size: 1.08rem;
+  background: #f9ffe4;
+  border-radius: 14px;
+  margin: 8px 0 18px 0;
+  padding: 12px 18px;
+  box-shadow: 0 3px 12px rgba(89,230,62,0.12);
+  border: 1px solid #c3ecd9;
+  font-family: var(--fuente);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mensaje--exito { 
+  background: #eaffcb; 
+  color: #218c49; 
+  border-left: 4px solid #89e03e; 
+}
+.mensaje--error { 
+  background: #fff5f5; 
+  color: #d22c2c; 
+  border-left: 4px solid #ff6161; 
+}
+.mensaje--aviso { 
+  background: #fffad8; 
+  color: #a1831c; 
+  border-left: 4px solid #ffff8b; 
+}
+.mensaje--info  { 
+  background: #eaf6ff; 
+  color: #20718d; 
+  border-left: 4px solid #90d8fd; 
+}
+
+/* ---- Tabs ---- */
 .tabs {
   display: flex;
   overflow-x: auto;
@@ -118,18 +154,7 @@ input[type="submit"].btn:active {
   filter: brightness(0.96);
 }
 
-/* Mensaje de alerta/info */
-.mensaje {
-  color: #238c58;
-  font-size: 1.04rem;
-  background: #dffcde;
-  border-radius: 11px;
-  margin: 5px 0 18px 0;
-  padding: 8px 12px;
-  box-shadow: 0 2px 8px rgba(89,230,62,0.07);
-}
-
-/* Formularios e inputs */
+/* ---- Formularios e inputs ---- */
 input, select, textarea {
   width: 96%;
   min-width: 90px;
@@ -163,7 +188,7 @@ form {
   margin: 0 auto 10px auto;
 }
 
-/* Tablas */
+/* ---- Tablas ---- */
 table {
   border-collapse: collapse;
   width: 100%;
@@ -190,14 +215,14 @@ tr:nth-child(even) {
   background: #f0fbef;
 }
 
-/* Botón cerrar sesión extra */
+/* ---- Botón cerrar sesión extra ---- */
 .cerrar-sesion-btn {
   margin: 18px 0 0 0;
   width: 78%;
   max-width:300px;
 }
 
-/* Footer */
+/* ---- Footer ---- */
 .footer {
   color: #478e46;
   font-size: 0.98rem;
@@ -206,7 +231,7 @@ tr:nth-child(even) {
   opacity: 0.88;
 }
 
-/* Imagen logo y fondo */
+/* ---- Imagen logo y fondo ---- */
 img {
   display: block;
   margin: 0 auto 16px auto;
