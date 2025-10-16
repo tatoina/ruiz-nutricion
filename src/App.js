@@ -39,7 +39,8 @@ function App() {
             }}
             style={{ marginTop: "1rem" }}
           >
-            Cerrar sesión
+            <button className="btn cerrar-sesion-btn">Cerrar sesión</button>
+
           </button>
         </>
       }
