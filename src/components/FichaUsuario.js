@@ -6,7 +6,7 @@ import {
 async function fetchData(action, payload) {
   const params = new URLSearchParams({ action, ...payload });
   const response = await fetch(
-    "https://script.google.com/macros/s/AKfycbxvPkDMJElz3YMR468JjhxNu3OqZOtf-RffP8ZqR4gRfj1Mtan3CtgznwCU_j3CmkaR/exec",
+    "https://script.google.com/macros/s/AKfycbytFOynjEru_YO3k6yj8Wp-rXTS58siF-_lgbXMRfpUqN48bwSBMsFscJFMnYhEUmV6/exec",
     {
       method: "POST",
       body: params,
@@ -55,7 +55,8 @@ export default function FichaUsuario({ email }) {
   }
 
   async function handleSave(donde) {
-    const res = await fetchData("updateUser", { ...usuario, email: usuario.email, contraseña: usuario.contraseña });
+    const { contraseña, ...resto } = usuario; // elimina contraseña
+    const res = await fetchData("updateUser", { ...resto, email: usuario.email });
     setMsg(res.ok ? "Cambios guardados." : "Error al guardar.");
     if (donde === "pesaje") {
       fetchData("getUser", { email: usuario.email }).then((res) => {
@@ -85,12 +86,12 @@ export default function FichaUsuario({ email }) {
     const nuevoHistorial = [...pesajes, nuevo];
     setUsuario({ ...usuario, pesoHistorico: nuevoHistorial, pesoActual: nuevoPesaje.peso });
     setNuevoPesaje({ fecha: "", peso: "", medidasPecho: "", medidasEstomago: "", medidasCintura: "" });
+    const { contraseña, ...resto } = usuario; // elimina contraseña
     await fetchData("updateUser", {
-      ...usuario,
+      ...resto,
       pesoHistorico: JSON.stringify(nuevoHistorial),
       pesoActual: nuevoPesaje.peso,
       email: usuario.email,
-      contraseña: usuario.contraseña,
     });
     setMsg("Nuevo registro de pesaje añadido.");
     fetchData("getUser", { email: usuario.email }).then((res) => {
@@ -135,15 +136,6 @@ export default function FichaUsuario({ email }) {
           </label>
           <label>Email:
             <input name="email" value={usuario.email} readOnly disabled />
-          </label>
-          <label>Contraseña:
-            <input
-              name="contraseña"
-              type="text"
-              value={usuario.contraseña}
-              onChange={handleChange}
-              required
-            />
           </label>
           <label>Fecha de nacimiento:
             <input name="nacimiento" type="date" value={usuario.nacimiento} onChange={handleChange} />
