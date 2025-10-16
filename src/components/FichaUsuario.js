@@ -3,10 +3,13 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 
+// Usa la URL de tu Apps Script:
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwfbbnE20wYyuSC95_30oP1wxM9mTBtovbRq_IbmMzjUtTPidRAHDzJ4zUiZyvT6OFY/exec";
+
 async function fetchData(action, payload) {
   const params = new URLSearchParams({ action, ...payload });
   const response = await fetch(
-    "https://script.google.com/macros/s/AKfycbytFOynjEru_YO3k6yj8Wp-rXTS58siF-_lgbXMRfpUqN48bwSBMsFscJFMnYhEUmV6/exec",
+    SCRIPT_URL,
     {
       method: "POST",
       body: params,
@@ -20,12 +23,24 @@ const BASE_TABS = [
   { id: 0, label: "Datos personales" },
   { id: 1, label: "Datos de dieta" },
   { id: 2, label: "Datos de pesaje" },
+  { id: 3, label: "Dieta actual" }
 ];
+
+const DIAS_SEMANA = [
+  "lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"
+];
+
+function getTodayTabIndex() {
+  const day = (new Date()).getDay();
+  if (day === 0) return 6;
+  return day - 1;
+}
 
 export default function FichaUsuario({ email }) {
   const [usuario, setUsuario] = useState(null);
   const [tab, setTab] = useState(0);
   const [msg, setMsg] = useState("");
+  const [tabDia, setTabDia] = useState(getTodayTabIndex());
   const [mostrarGrafico, setMostrarGrafico] = useState(false);
   const [nuevoPesaje, setNuevoPesaje] = useState({
     fecha: "",
@@ -47,15 +62,15 @@ export default function FichaUsuario({ email }) {
   const tieneEjercicios = (usuario.ejercicios || "").trim().toLowerCase() === "si";
   const tieneRecetas = (usuario.recetas || "").trim().toLowerCase() === "si";
   let customTabs = [...BASE_TABS];
-  if (tieneEjercicios) customTabs.push({ id: 3, label: "Ejercicios" });
-  if (tieneRecetas) customTabs.push({ id: 4, label: "Recetas" });
+  if (tieneEjercicios) customTabs.push({ id: 4, label: "Ejercicios" });
+  if (tieneRecetas) customTabs.push({ id: 5, label: "Recetas" });
 
   function handleChange(e) {
     setUsuario({ ...usuario, [e.target.name]: e.target.value });
   }
 
   async function handleSave(donde) {
-    const { contraseña, ...resto } = usuario; // elimina contraseña
+    const { contraseña, ...resto } = usuario;
     const res = await fetchData("updateUser", { ...resto, email: usuario.email });
     setMsg(res.ok ? "Cambios guardados." : "Error al guardar.");
     if (donde === "pesaje") {
@@ -86,7 +101,7 @@ export default function FichaUsuario({ email }) {
     const nuevoHistorial = [...pesajes, nuevo];
     setUsuario({ ...usuario, pesoHistorico: nuevoHistorial, pesoActual: nuevoPesaje.peso });
     setNuevoPesaje({ fecha: "", peso: "", medidasPecho: "", medidasEstomago: "", medidasCintura: "" });
-    const { contraseña, ...resto } = usuario; // elimina contraseña
+    const { contraseña, ...resto } = usuario;
     await fetchData("updateUser", {
       ...resto,
       pesoHistorico: JSON.stringify(nuevoHistorial),
@@ -278,7 +293,65 @@ export default function FichaUsuario({ email }) {
         </div>
       )}
 
-      {tab === 3 && tieneEjercicios && (
+      {tab === 3 && (
+        <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+            <button
+              type="button"
+              className="btn nav-dia"
+              style={{ marginRight: 16 }}
+              onClick={() => setTabDia((prev) => (prev - 1 + 7) % 7)}
+            >{"<"}</button>
+            <div style={{
+              minWidth: 320,
+              textAlign: "left",
+              background: "#f4f4f4",
+              borderRadius: 6,
+              padding: "12px 28px",
+              boxShadow: "0 2px 6px #eee",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start"
+            }}>
+              <h3 style={{ margin: "0 0 14px 0", textAlign: "left" }}>
+                Menú para {DIAS_SEMANA[tabDia].charAt(0).toUpperCase() + DIAS_SEMANA[tabDia].slice(1)}
+              </h3>
+              {usuario.dietaActual && usuario.dietaActual[DIAS_SEMANA[tabDia]] ? (
+                <table style={{ width: "100%", margin: "0", borderCollapse: "collapse" }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ fontWeight: "bold", textAlign: "left", padding: "8px 16px 8px 0", width: "120px" }}>Desayuno:</td>
+                      <td style={{ textAlign: "left", padding: "8px 0" }}>{usuario.dietaActual[DIAS_SEMANA[tabDia]].desayuno || "No definido"}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ fontWeight: "bold", textAlign: "left", padding: "8px 16px 8px 0" }}>Almuerzo:</td>
+                      <td style={{ textAlign: "left", padding: "8px 0" }}>{usuario.dietaActual[DIAS_SEMANA[tabDia]].almuerzo || "No definido"}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ fontWeight: "bold", textAlign: "left", padding: "8px 16px 8px 0" }}>Comida:</td>
+                      <td style={{ textAlign: "left", padding: "8px 0" }}>{usuario.dietaActual[DIAS_SEMANA[tabDia]].comida || "No definido"}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ fontWeight: "bold", textAlign: "left", padding: "8px 16px 8px 0" }}>Cena:</td>
+                      <td style={{ textAlign: "left", padding: "8px 0" }}>{usuario.dietaActual[DIAS_SEMANA[tabDia]].cena || "No definido"}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              ) : (
+                <div>No hay dieta definida para este día.</div>
+              )}
+            </div>
+            <button
+              type="button"
+              className="btn nav-dia"
+              style={{ marginLeft: 16 }}
+              onClick={() => setTabDia((prev) => (prev + 1) % 7)}
+            >{">"}</button>
+          </div>
+        </div>
+      )}
+
+      {tab === 4 && tieneEjercicios && (
         <div>
           <h2>Ejercicios</h2>
           <a
@@ -291,7 +364,7 @@ export default function FichaUsuario({ email }) {
         </div>
       )}
 
-      {tab === 4 && tieneRecetas && (
+      {tab === 5 && tieneRecetas && (
         <div>
           <h2>Recetas</h2>
           <a
