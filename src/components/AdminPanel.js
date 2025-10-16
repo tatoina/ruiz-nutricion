@@ -1,12 +1,14 @@
-// AdminPanel.js
-import UserTabs from './UserTabs';
+// src/AdminPage.js
+import React, { useEffect, useState } from 'react';
+import { getAllUsers } from './utils';
+import AdminPanel from './AdminPanel';
 
-export default function AdminPanel({ users, onUpdateUser }) {
-  // users: array de objetos usuario, onUpdateUser: callback para guardar cambios en un usuario
-  return (
-    <div>
-      <h1>Panel de Administración</h1>
-      <UserTabs users={users} onUpdateUser={onUpdateUser} />
-    </div>
-  );
+export default function AdminPage() {
+  const [users, setUsers] = useState([]);
+
+  useEffect(() => {
+    getAllUsers().then(setUsers);
+  }, []);
+
+  return <AdminPanel users={users} /* otras props */ />;
 }
