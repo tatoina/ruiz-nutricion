@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from "react";
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+} from "recharts";
 
 // Función fetchData estándar
 async function fetchData(action, payload) {
@@ -25,6 +28,7 @@ export default function FichaUsuario({ email }) {
   const [usuario, setUsuario] = useState(null);
   const [tab, setTab] = useState(0);
   const [msg, setMsg] = useState("");
+  const [mostrarGrafico, setMostrarGrafico] = useState(false);
   const [nuevoPesaje, setNuevoPesaje] = useState({
     fecha: "",
     peso: "",
@@ -43,8 +47,6 @@ export default function FichaUsuario({ email }) {
   // Comprobaciones robustas de acceso a recursos
   const tieneEjercicios = (usuario.ejercicios || "").trim().toLowerCase() === "si";
   const tieneRecetas = (usuario.recetas || "").trim().toLowerCase() === "si";
-
-  // Generar tabs según recursos contratados
   let customTabs = [...BASE_TABS];
   if (tieneEjercicios) customTabs.push({ id: 3, label: "Ejercicios" });
   if (tieneRecetas) customTabs.push({ id: 4, label: "Recetas" });
@@ -97,6 +99,13 @@ export default function FichaUsuario({ email }) {
   // Tus enlaces de Google Drive
   const ejerciciosDriveLink = "https://drive.google.com/drive/folders/1EN-1h1VcV4K4kG2JgmRpxFSY-izas-9c?usp=sharing";
   const recetasDriveLink = "https://drive.google.com/drive/folders/1FBwJtFBj0gWr0W9asHdGrkR7Q1FzkKK3?usp=sharing";
+
+  // Datos para gráfico de tendencia
+  const datosGrafico = Array.isArray(usuario.pesoHistorico)
+    ? usuario.pesoHistorico
+        .filter(item => item.fecha && item.peso)
+        .map(p => ({ fecha: p.fecha, peso: parseFloat(p.peso) }))
+    : [];
 
   return (
     <>
@@ -151,7 +160,6 @@ export default function FichaUsuario({ email }) {
           <label>Tipo de dieta:
             <input name="tipoDieta" value={usuario.tipoDieta} onChange={handleChange} />
           </label>
-          {/* NUEVO BLOQUE PARA EDITAR EJERCICIOS Y RECETAS */}
           <label htmlFor="ejercicios">¿Ver pestaña Ejercicios?</label>
           <select
             id="ejercicios"
@@ -217,6 +225,28 @@ export default function FichaUsuario({ email }) {
               )}
             </tbody>
           </table>
+
+          <button
+            type="button"
+            className="btn"
+            style={{ marginBottom: 15 }}
+            onClick={() => setMostrarGrafico(!mostrarGrafico)}
+          >
+            {mostrarGrafico ? "Ocultar gráfico de tendencias" : "Ver gráfico de tendencias"}
+          </button>
+
+          {mostrarGrafico && (
+            <ResponsiveContainer width="99%" height={260}>
+              <LineChart data={datosGrafico}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="fecha" />
+                <YAxis unit=" kg" domain={[50, 140]} />
+                <Tooltip />
+                <Line type="monotone" dataKey="peso" stroke="#89e03e" strokeWidth={3} dot />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+
           <div>
             <strong>Peso actual:</strong> {usuario.pesoActual || "No registrado"}
           </div>
