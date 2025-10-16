@@ -4,6 +4,7 @@ import Welcome from './components/Welcome';
 import Register from './components/Register';
 import Login from './components/Login';
 import FichaUsuario from './components/FichaUsuario';
+import AdminPage from './components/AdminPage'; // Importa el panel admin
 import './estilos.css';
 
 function App() {
@@ -31,7 +32,11 @@ function App() {
       }
       {view === "profile" &&
         <>
-          <FichaUsuario email={userEmail} />
+          {userEmail === "admin@admin.es" ? (
+            <AdminPage />
+          ) : (
+            <FichaUsuario email={userEmail} />
+          )}
           <button
             onClick={() => {
               setUserEmail(null);
@@ -39,8 +44,7 @@ function App() {
             }}
             style={{ marginTop: "1rem" }}
           >
-            <button className="btn cerrar-sesion-btn">Cerrar sesión</button>
-
+            <span className="btn cerrar-sesion-btn">Cerrar sesión</span>
           </button>
         </>
       }

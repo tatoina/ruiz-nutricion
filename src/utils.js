@@ -1,7 +1,7 @@
 // src/utils.js
 
 export async function getAllUsers() {
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbybDp84y-ttSWKLnTnceEC0SuVnP9aHeXVq3GDWtheSt9xrfoTW5_0FuTEQEidK81Dd/exec';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxbJsZneEf-7Dtark58zV3rMlpf2o31AF9nCSyh3_W0FGua0DY9M-9dlSTz4ML3HWVP/execc';
   const formData = new URLSearchParams();
   formData.append('action', 'getAllUsers');
   formData.append('email', 'admin@admin.es'); // Pon aquí el email correcto del administrador

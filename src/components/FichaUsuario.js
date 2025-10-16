@@ -4,7 +4,7 @@ import {
 } from "recharts";
 
 // Usa la URL de tu Apps Script:
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxbJsZneEf-7Dtark58zV3rMlpf2o31AF9nCSyh3_W0FGua0DY9M-9dlSTz4ML3HWVP/execc";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbybDp84y-ttSWKLnTnceEC0SuVnP9aHeXVq3GDWtheSt9xrfoTW5_0FuTEQEidK81Dd/exec";
 
 async function fetchData(action, payload) {
   const params = new URLSearchParams({ action, ...payload });
