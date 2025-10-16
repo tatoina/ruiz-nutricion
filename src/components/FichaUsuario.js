@@ -3,7 +3,6 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 
-// Función fetchData estándar
 async function fetchData(action, payload) {
   const params = new URLSearchParams({ action, ...payload });
   const response = await fetch(
@@ -17,7 +16,6 @@ async function fetchData(action, payload) {
   return response.json();
 }
 
-// Tabs base
 const BASE_TABS = [
   { id: 0, label: "Datos personales" },
   { id: 1, label: "Datos de dieta" },
@@ -44,7 +42,6 @@ export default function FichaUsuario({ email }) {
 
   if (!usuario) return <div>Cargando...</div>;
 
-  // Comprobaciones robustas de acceso a recursos
   const tieneEjercicios = (usuario.ejercicios || "").trim().toLowerCase() === "si";
   const tieneRecetas = (usuario.recetas || "").trim().toLowerCase() === "si";
   let customTabs = [...BASE_TABS];
@@ -96,11 +93,9 @@ export default function FichaUsuario({ email }) {
     });
   }
 
-  // Tus enlaces de Google Drive
   const ejerciciosDriveLink = "https://drive.google.com/drive/folders/1EN-1h1VcV4K4kG2JgmRpxFSY-izas-9c?usp=sharing";
   const recetasDriveLink = "https://drive.google.com/drive/folders/1FBwJtFBj0gWr0W9asHdGrkR7Q1FzkKK3?usp=sharing";
 
-  // Datos para gráfico de tendencia
   const datosGrafico = Array.isArray(usuario.pesoHistorico)
     ? usuario.pesoHistorico
         .filter(item => item.fecha && item.peso)
@@ -240,9 +235,24 @@ export default function FichaUsuario({ email }) {
               <LineChart data={datosGrafico}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="fecha" />
-                <YAxis unit=" kg" domain={[50, 140]} />
+                <YAxis
+                  unit=" kg"
+                  domain={[50, 140]}
+                  reversed={true}
+                  ticks={[
+                    50, 55, 60, 65, 70, 75, 80, 85, 90, 95,
+                    100, 105, 110, 115, 120, 125, 130, 135, 140
+                  ]}
+                />
                 <Tooltip />
-                <Line type="monotone" dataKey="peso" stroke="#89e03e" strokeWidth={3} dot />
+                <Line
+                  type="monotone"
+                  dataKey="peso"
+                  stroke="#89e03e"
+                  strokeWidth={3}
+                  dot={{ r: 5 }}
+                  activeDot={{ r: 8 }}
+                />
               </LineChart>
             </ResponsiveContainer>
           )}
