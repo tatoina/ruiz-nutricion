@@ -1,25 +1,38 @@
-import React, { useState } from 'react';
-import Layout from './Layout';
-import { fetchData } from '../services/googleSheets';
-import './estilos.css';
+import React, { useState } from "react";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { setDoc, doc } from "firebase/firestore";
+import { auth, db } from "../Firebase";
+import Layout from "./Layout";
 
-function Register({ onRegister, onBack }) {
-  const [nombre, setNombre] = useState('');
-  const [email, setEmail] = useState('');
-  const [pass, setPass] = useState('');
+export default function Register({ onRegister, onBack }) {
+  const [nombre, setNombre] = useState("");
+  const [apellidos, setApellidos] = useState("");
+  const [email, setEmail] = useState("");
+  const [nacimiento, setNacimiento] = useState("");
+  const [pass, setPass] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Importante: el campo debe llamarse 'contraseña'
-    const res = await fetchData('register', { nombre, email, contraseña: pass });
-    if (res.ok) {
-      alert('Registro exitoso');
-      if (onRegister) onRegister({ nombre, email, tipo: 'usuario' });
-      setNombre('');
-      setEmail('');
-      setPass('');
-    } else {
-      alert('Error en el registro');
+    setLoading(true);
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+      await setDoc(doc(db, "usuarios", userCredential.user.email), {
+        nombre,
+        apellidos,
+        email,
+        nacimiento,
+        role: "usuario",
+        pesoHistorico: [],
+        ejercicios: "no",
+        recetas: "no",
+      });
+      alert("Usuario registrado correctamente");
+      onRegister(); // volver a login
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -33,54 +46,41 @@ function Register({ onRegister, onBack }) {
           value={nombre}
           onChange={e => setNombre(e.target.value)}
           required
-          style={{ margin: "8px 0", padding: "8px", width: "90%", borderRadius: 6, border: "1px solid #ccc" }}
-        /><br/>
+        />
+        <input
+          type="text"
+          placeholder="Apellidos"
+          value={apellidos}
+          onChange={e => setApellidos(e.target.value)}
+          required
+        />
         <input
           type="email"
           placeholder="Correo"
           value={email}
           onChange={e => setEmail(e.target.value)}
           required
-          style={{ margin: "8px 0", padding: "8px", width: "90%", borderRadius: 6, border: "1px solid #ccc" }}
-        /><br/>
+        />
+        <input
+          type="date"
+          value={nacimiento}
+          onChange={e => setNacimiento(e.target.value)}
+          required
+        />
         <input
           type="password"
           placeholder="Contraseña"
           value={pass}
           onChange={e => setPass(e.target.value)}
           required
-          style={{ margin: "8px 0", padding: "8px", width: "90%", borderRadius: 6, border: "1px solid #ccc" }}
-        /><br/>
-        <button
-          type="submit"
-          style={{
-            background: "#36ae67",
-            color: "white",
-            padding: "10px 35px",
-            borderRadius: 6,
-            border: "none",
-            cursor: "pointer",
-            fontWeight: "bold"
-          }}>
-          Registrarse
+        />
+        <button type="submit" className="btn">
+          {loading ? "Registrando..." : "Registrarse"}
         </button>
       </form>
-      <button
-        onClick={onBack}
-        style={{
-          marginTop: "18px",
-          background: "#eee",
-          color: "#217a3a",
-          padding: "8px 28px",
-          borderRadius: 6,
-          border: "none",
-          cursor: "pointer",
-          fontWeight: "bold"
-        }}>
+      <button type="button" className="btn" style={{ marginTop: "12px" }} onClick={onBack}>
         Volver
       </button>
     </Layout>
   );
 }
-
-export default Register;

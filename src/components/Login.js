@@ -1,92 +1,64 @@
-import React, { useState } from 'react';
-import Layout from './Layout';
-import { fetchData } from '../services/googleSheets';
-import './estilos.css';
+import React, { useState } from "react";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "../Firebase";
+import Layout from "./Layout";
+import logo from "../assets/logo.png"; // Asegúrate de tener el logo en src/assets/
 
-function Login({ onLogin, onBack }) {
-  const [email, setEmail] = useState('');
-  const [pass, setPass] = useState('');
-  const [loading, setLoading] = useState(false);
+export default function Login({ onLogin, onShowRegister }) {
+  const [email, setEmail] = useState("");
+  const [pass, setPass] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    // Asegura email normalizado (sin espacios y minúsculas)
-    const emailNormalized = email.trim().toLowerCase();
-    try {
-      const res = await fetchData('getUser', { email: emailNormalized });
-      if (res.ok) {
-        if (res.data.contraseña === pass) {
-          alert("Bienvenido, " + res.data.nombre);
-          if (onLogin) onLogin({ email: res.data.email.trim().toLowerCase() });
-        } else {
-          alert("Contraseña incorrecta.");
-        }
-      } else {
-        alert("No existe un usuario con ese correo.");
-      }
-    } catch (err) {
-      alert("Error de conexión. Inténtalo de nuevo.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+      const userEmail = userCredential.user.email;
+      const docRef = doc(db, "usuarios", userEmail);
+      const docSnap = await getDoc(docRef);
 
-  return (
-    <Layout>
-      <h2>Iniciar sesión</h2>
-      <form onSubmit={handleSubmit}>
-        <input
-          type="email"
-          placeholder="Correo"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          required
-          autoComplete="username"
-          style={{ margin: "8px 0", padding: "8px", width: "90%", borderRadius: 6, border: "1px solid #ccc" }}
-        /><br/>
-        <input
-          type="password"
-          placeholder="Contraseña"
-          value={pass}
-          onChange={e => setPass(e.target.value)}
-          required
-          autoComplete="current-password"
-          style={{ margin: "8px 0", padding: "8px", width: "90%", borderRadius: 6, border: "1px solid #ccc" }}
-        /><br/>
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            background: "#36ae67",
-            color: "white",
-            padding: "10px 35px",
-            borderRadius: 6,
-            border: "none",
-            cursor: loading ? "not-allowed" : "pointer",
-            fontWeight: "bold"
-          }}
-        >
-          {loading ? "Entrando..." : "Entrar"}
-        </button>
-      </form>
-      <button
-        onClick={onBack}
-        style={{
-          marginTop: "18px",
-          background: "#eee",
-          color: "#217a3a",
-          padding: "8px 28px",
-          borderRadius: 6,
-          border: "none",
-          cursor: "pointer",
-          fontWeight: "bold"
-        }}
-      >
-        Volver
-      </button>
-    </Layout>
-  );
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        alert("Bienvenido, " + data.nombre);
+        onLogin(data);
+      } else {
+        alert("Usuario no encontrado en Firestore");
+      }
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Layout>
+      <img src={logo} alt="Logo" />
+      <h2>Iniciar sesión</h2>
+      <form onSubmit={handleSubmit}>
+        <input
+          type="email"
+          placeholder="Correo"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          required
+        />
+        <input
+          type="password"
+          placeholder="Contraseña"
+          value={pass}
+          onChange={e => setPass(e.target.value)}
+          required
+        />
+        <button type="submit" className="btn">
+          {loading ? "Entrando..." : "Entrar"}
+        </button>
+      </form>
+      <button className="btn" onClick={onShowRegister}>
+        Registrarse
+      </button>
+    </Layout>
+  );
 }
-
-export default Login;

@@ -1,52 +1,64 @@
-import React, { useState } from 'react';
-import Layout from './components/Layout';
-import Welcome from './components/Welcome';
-import Register from './components/Register';
-import Login from './components/Login';
-import FichaUsuario from './components/FichaUsuario';
-import AdminPage from './components/AdminPage';
-import './estilos.css';
+import React, { useEffect, useState } from "react";
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { auth, db } from "./Firebase";
+import { doc, getDoc } from "firebase/firestore";
 
-function App() {
-  const [view, setView] = useState('welcome');
-  const [userEmail, setUserEmail] = useState(null);
+import Login from "./components/Login";
+import Register from "./components/Register";
+import FichaUsuario from "./components/FichaUsuario";
+import AdminPanel from "./components/AdminPanel";
 
-  return (
-    <Layout>
-      {view === "welcome" &&
-        <Welcome onSelect={setView} />
-      }
-      {view === "register" &&
-        <Register onBack={() => setView("welcome")} />
-      }
-      {view === "login" &&
-        <Login
-          onLogin={({ email }) => {
-            setUserEmail(email);
-            setView("profile");
-          }}
-          onBack={() => setView("welcome")}
-        />
-      }
-      {view === "profile" &&
-        <>
-          {userEmail && userEmail.trim().toLowerCase() === "admin@admin.es" ? (
-            <AdminPage />
-          ) : (
-            <FichaUsuario email={userEmail} />
-          )}
-          <button
-            onClick={() => {
-              setUserEmail(null);
-              setView("welcome");
-            }}
-            style={{ marginTop: "1rem" }}
-          >
-            <span className="btn cerrar-sesion-btn">Cerrar sesión</span>
-          </button>
-        </>
-      }
-    </Layout>
-  );
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [role, setRole] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [showRegister, setShowRegister] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (usuario) => {
+      if (usuario) {
+        setUser(usuario);
+        const docRef = doc(db, "usuarios", usuario.email);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setRole(docSnap.data().role);
+        } else {
+          setRole("");
+        }
+      } else {
+        setUser(null);
+        setRole("");
+      }
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    setUser(null);
+    setRole("");
+  };
+
+  if (loading) return <p>Cargando...</p>;
+
+  if (!user) {
+    return showRegister ? (
+      <Register onRegister={() => setShowRegister(false)} />
+    ) : (
+      <Login onRegisterClick={() => setShowRegister(true)} />
+    );
+  }
+
+  // ✅ Si es ADMIN → panel completo de usuarios
+  if (role === "admin") {
+    return <AdminPanel onLogout={handleLogout} />;
+  }
+
+  // ✅ Si es USUARIO → ficha personal
+  if (role === "usuario") {
+    return <FichaUsuario user={user} onLogout={handleLogout} />;
+  }
+
+  return <p>No tienes permisos asignados.</p>;
 }
-export default App;
