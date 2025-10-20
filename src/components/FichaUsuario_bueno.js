@@ -27,17 +27,17 @@ import DriveFolderViewer from "./DriveFolderViewer";
 ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Title, Tooltip, Legend);
 
 /**
- * FichaUsuario.jsx — Ajuste: reordenado y columnas adaptativas para Pesaje
+ * FichaUsuario.jsx — versión completa y corregida
  *
- * Cambios principales:
- * - Pesaje: ahora el orden es Fecha -> Peso -> resto de medidas.
- * - Layout de medidas usa grid con "auto-fit/minmax" para mostrar más columnas en pantallas grandes
- *   y reducir automáticamente en pantallas pequeñas.
- * - Botón de guardar está al final del formulario.
- * - Histórico muestra columnas en el nuevo orden.
- * - El gráfico sigue mostrando únicamente la serie de peso.
+ * - Carga robusta de la ficha de usuario (targetUid o usuario autenticado).
+ * - Pestañas: Personales, Dieta, Pesaje, Dieta semanal, Ejercicios, Recetas.
+ * - Campos personales incluidos: nombre, apellidos, nacimiento (fecha), teléfono.
+ * - Dieta: tipo (select con opciones), campo "otros", restricciones, ejercicios/recetas toggle + descripciones.
+ * - Dieta semanal: editor por día con dos columnas (labels fijas en desktop, inline en móvil), autosize y autosave (debounce).
+ * - Pesaje: registro histórico, registrar nuevo peso.
+ * - Manejo de errores y mensajes de guardado.
  *
- * Sustituye el fichero actual por este contenido. Haz backup/commit antes de pegar.
+ * Asegúrate de tener en src/estilos.css las reglas necesarias (ya proporcionadas en anterior intercambio).
  */
 
 export default function FichaUsuario({ targetUid = null, adminMode = false }) {
@@ -133,83 +133,64 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     });
   }, [emptyDayMenu]);
 
-  // Load user doc (factored as loadUser so we can call it after saves)
-  const loadUser = useCallback(async () => {
-    if (!uid) return;
-    setLoading(true);
-    setError(null);
-    try {
-      if (!db) {
-        setError("Error interno: Firestore no inicializado.");
-        setLoading(false);
-        console.error("[FichaUsuario] db missing");
-        return;
-      }
-      console.debug("[FichaUsuario] loading user", uid);
-      const snap = await getDoc(doc(db, "users", uid));
-      if (!snap.exists()) {
-        console.info("[FichaUsuario] user doc not found:", uid);
-        setUserData(null);
-        setEditable((prev) => ({ ...prev, menu: Array.from({ length: 7 }, () => ({ ...emptyDayMenu() })), _selectedDay: 0 }));
-        setError(`No hay ficha para este usuario (UID: ${uid}).`);
-      } else {
-        const data = snap.data();
-        setUserData(data);
-
-        // Merge fields, keeping any existing editable values (non-destructive)
-        setEditable((prev) => ({
-          // personales
-          nombre: data.nombre || prev.nombre || "",
-          apellidos: data.apellidos || prev.apellidos || "",
-          nacimiento: data.nacimiento || prev.nacimiento || "",
-          telefono: data.telefono || prev.telefono || "",
-          dietaactual: data.dietaactual || prev.dietaactual || "",
-          dietaOtros: data.dietaOtros || prev.dietaOtros || "",
-          restricciones: data.restricciones || prev.restricciones || "",
-          ejercicios: !!(prev.ejercicios ?? data.ejercicios),
-          recetas: !!(prev.recetas ?? data.recetas),
-          ejerciciosDescripcion: data.ejerciciosDescripcion || prev.ejerciciosDescripcion || "",
-          recetasDescripcion: data.recetasDescripcion || prev.recetasDescripcion || "",
-          menu: normalizeMenu(data.menu),
-          _selectedDay: prev._selectedDay ?? 0,
-
-          // Pesaje / composición corporal fields
-          pesoActual: data.pesoActual ?? prev.pesoActual ?? "",
-          masaGrasaPct: data.masaGrasaPct ?? prev.masaGrasaPct ?? "",
-          masaGrasaKg: data.masaGrasaKg ?? prev.masaGrasaKg ?? "",
-          masaMagraKg: data.masaMagraKg ?? prev.masaMagraKg ?? "",
-          masaMuscularKg: data.masaMuscularKg ?? prev.masaMuscularKg ?? "",
-          aguaTotalKg: data.aguaTotalKg ?? prev.aguaTotalKg ?? "",
-          aguaTotalPct: data.aguaTotalPct ?? prev.aguaTotalPct ?? "",
-          masaOseaKg: data.masaOseaKg ?? prev.masaOseaKg ?? "",
-          mbKcal: data.mbKcal ?? prev.mbKcal ?? "",
-          grasaVisceralNivel: data.grasaVisceralNivel ?? prev.grasaVisceralNivel ?? "",
-          imc: data.imc ?? prev.imc ?? "",
-          edadMetabolica: data.edadMetabolica ?? prev.edadMetabolica ?? "",
-          indiceCinturaTalla: data.indiceCinturaTalla ?? prev.indiceCinturaTalla ?? "",
-          circunferenciaBrazoCm: data.circunferenciaBrazoCm ?? prev.circunferenciaBrazoCm ?? "",
-          circunferenciaCinturaCm: data.circunferenciaCinturaCm ?? prev.circunferenciaCinturaCm ?? "",
-          circunferenciaCaderaCm: data.circunferenciaCaderaCm ?? prev.circunferenciaCaderaCm ?? "",
-          circunferenciaPiernaCm: data.circunferenciaPiernaCm ?? prev.circunferenciaPiernaCm ?? "",
-          tensionArterial: data.tensionArterial ?? prev.tensionArterial ?? { sys: "", dia: "" },
-
-          // keep previous extras
-          ...prev,
-        }));
-        setError(null);
-      }
-    } catch (err) {
-      console.error("[FichaUsuario] loadUser error:", err);
-      setError(err?.message || "Error al cargar la ficha.");
-      setUserData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [uid, normalizeMenu, emptyDayMenu]);
-
+  // Load user doc
   useEffect(() => {
-    loadUser();
-  }, [uid, loadUser]);
+    let mounted = true;
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        if (!uid) {
+          console.debug("[FichaUsuario] UID not ready");
+          setLoading(false);
+          return;
+        }
+        if (!db) {
+          setError("Error interno: Firestore no inicializado.");
+          setLoading(false);
+          console.error("[FichaUsuario] db missing");
+          return;
+        }
+        console.debug("[FichaUsuario] loading user", uid);
+        const snap = await getDoc(doc(db, "users", uid));
+        if (!mounted) return;
+        if (!snap.exists()) {
+          console.info("[FichaUsuario] user doc not found:", uid);
+          setUserData(null);
+          setEditable((prev) => ({ ...prev, menu: Array.from({ length: 7 }, () => ({ ...emptyDayMenu() })), _selectedDay: 0 }));
+          setError(`No hay ficha para este usuario (UID: ${uid}).`);
+        } else {
+          const data = snap.data();
+          setUserData(data);
+          setEditable((prev) => ({
+            nombre: data.nombre || "",
+            apellidos: data.apellidos || "",
+            nacimiento: data.nacimiento || "",
+            telefono: data.telefono || "",
+            dietaactual: data.dietaactual || "",
+            dietaOtros: data.dietaOtros || "",
+            restricciones: data.restricciones || "",
+            ejercicios: !!data.ejercicios,
+            recetas: !!data.recetas,
+            ejerciciosDescripcion: data.ejerciciosDescripcion || "",
+            recetasDescripcion: data.recetasDescripcion || "",
+            menu: normalizeMenu(data.menu),
+            _selectedDay: 0,
+            ...prev,
+          }));
+          setError(null);
+        }
+      } catch (err) {
+        console.error("[FichaUsuario] load error:", err);
+        setError(err?.message || "Error al cargar la ficha.");
+        setUserData(null);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, [uid, normalizeMenu, emptyDayMenu]);
 
   // Autosize textareas
   const autosizeTextareas = useCallback(() => {
@@ -236,7 +217,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     });
   };
 
-  // Autosave with debounce for weekly menu
+  // Autosave with debounce
   useEffect(() => {
     if (!uid) return;
     if (!editable.menu) return;
@@ -361,97 +342,27 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     }
   };
 
-  // Util: safe parse float or null
-  const parseNum = (v) => {
-    if (v === "" || v === null || v === undefined) return null;
-    const n = Number(String(v).replace(",", "."));
-    return Number.isFinite(n) ? n : null;
-  };
-
-  // Validaciones básicas before weight save
-  const validateMeasures = (pesoValue, editableState) => {
-    const p = parseNum(pesoValue);
-    if (p !== null && (p <= 0 || p > 500)) return "Peso fuera de rango (0-500 kg).";
-    const mgPct = parseNum(editableState?.masaGrasaPct);
-    if (mgPct !== null && (mgPct < 0 || mgPct > 100)) return "Masa grasa (%) debe estar entre 0 y 100.";
-    return null;
-  };
-
-  // Enhanced submitPeso: guarda peso + medidas (top-level y en históricos)
-  const submitPeso = async (e, options = { addToHistorico: true }) => {
-    if (e && e.preventDefault) e.preventDefault();
+  // Peso submit
+  const submitPeso = async (e) => {
+    e?.preventDefault();
     if (!uid) {
       setError("Usuario objetivo no disponible.");
       return;
     }
-    // Build editable snapshot for validation and payload reading
-    const ed = { ...editable };
-
-    const pesoValue = parseNum(peso);
-    const vError = validateMeasures(pesoValue, ed);
-    if (vError) {
-      setError(vError);
+    const p = parseFloat(String(peso).replace(",", "."));
+    if (!Number.isFinite(p) || p <= 0) {
+      setError("Introduce un peso válido (> 0).");
       return;
     }
-
     setSavingPeso(true);
     setError(null);
 
-    // compute masaGrasaKg / masaMagraKg if possible
-    let masaGrasaKg = parseNum(ed.masaGrasaKg);
-    let masaMagraKg = parseNum(ed.masaMagraKg);
-    const masaGrasaPct = parseNum(ed.masaGrasaPct);
-
-    if (pesoValue !== null && masaGrasaPct !== null && (masaGrasaKg === null || masaMagraKg === null)) {
-      const mgKgCalc = +(pesoValue * (masaGrasaPct / 100));
-      masaGrasaKg = Math.round(mgKgCalc * 100) / 100;
-      masaMagraKg = Math.round((pesoValue - mgKgCalc) * 100) / 100;
-    }
-
-    // Measures payload
-    const measuresPayload = {
-      fecha: fechaPeso,
-      pesoActual: pesoValue !== null ? pesoValue : null,
-      masaGrasaPct: masaGrasaPct,
-      masaGrasaKg: masaGrasaKg,
-      masaMagraKg: masaMagraKg,
-      masaMuscularKg: parseNum(ed.masaMuscularKg),
-      aguaTotalKg: parseNum(ed.aguaTotalKg),
-      aguaTotalPct: parseNum(ed.aguaTotalPct),
-      masaOseaKg: parseNum(ed.masaOseaKg),
-      mbKcal: parseNum(ed.mbKcal),
-      grasaVisceralNivel: parseNum(ed.grasaVisceralNivel),
-      imc: parseNum(ed.imc),
-      edadMetabolica: parseNum(ed.edadMetabolica),
-      indiceCinturaTalla: parseNum(ed.indiceCinturaTalla),
-      circunferenciaBrazoCm: parseNum(ed.circunferenciaBrazoCm),
-      circunferenciaCinturaCm: parseNum(ed.circunferenciaCinturaCm),
-      circunferenciaCaderaCm: parseNum(ed.circunferenciaCaderaCm),
-      circunferenciaPiernaCm: parseNum(ed.circunferenciaPiernaCm),
-      tensionArterial: {
-        sys: ed.tensionArterial?.sys || "",
-        dia: ed.tensionArterial?.dia || "",
-      },
-      createdAt: serverTimestamp(),
-    };
-
-    // Clean nulls to avoid writing nulls if you prefer
-    const cleaned = {};
-    Object.keys(measuresPayload).forEach((k) => {
-      const v = measuresPayload[k];
-      if (v !== null && v !== undefined) cleaned[k] = v;
-    });
-
-    const entryMedida = { ...cleaned };
-    const entryPeso = { fecha: fechaPeso, peso: measuresPayload.pesoActual, createdAt: serverTimestamp() };
+    const entry = { peso: p, fecha: fechaPeso, createdAt: Date.now() };
 
     try {
-      // Attempt update (merge)
       await updateDoc(doc(db, "users", uid), {
-        ...cleaned,
-        medidasHistorico: options.addToHistorico ? arrayUnion(entryMedida) : undefined,
-        pesoHistorico: options.addToHistorico ? arrayUnion(entryPeso) : undefined,
-        pesoActual: measuresPayload.pesoActual,
+        pesoHistorico: arrayUnion(entry),
+        pesoActual: p,
         updatedAt: serverTimestamp(),
       });
     } catch (err) {
@@ -459,13 +370,10 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       const notFoundCodes = ["not-found", "notFound", "404"];
       const isNotFound = err?.code ? notFoundCodes.some((c) => String(err.code).toLowerCase().includes(String(c).toLowerCase())) : false;
       if (isNotFound) {
-        // fallback: create doc
         try {
           await setDoc(doc(db, "users", uid), {
-            ...cleaned,
-            medidasHistorico: options.addToHistorico ? [entryMedida] : [],
-            pesoHistorico: options.addToHistorico ? [entryPeso] : [],
-            pesoActual: measuresPayload.pesoActual,
+            pesoHistorico: [entry],
+            pesoActual: p,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           }, { merge: true });
@@ -482,40 +390,12 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       }
     }
 
-    // Reload user data and update editable with latest values
     try {
       const snap = await getDoc(doc(db, "users", uid));
-      if (snap.exists()) {
-        const data = snap.data();
-        setUserData(data);
-        // Merge the new measures into editable so the form shows them
-        setEditable((prev) => ({
-          ...prev,
-          pesoActual: data.pesoActual ?? prev.pesoActual ?? "",
-          masaGrasaPct: data.masaGrasaPct ?? prev.masaGrasaPct ?? "",
-          masaGrasaKg: data.masaGrasaKg ?? prev.masaGrasaKg ?? "",
-          masaMagraKg: data.masaMagraKg ?? prev.masaMagraKg ?? "",
-          masaMuscularKg: data.masaMuscularKg ?? prev.masaMuscularKg ?? "",
-          aguaTotalKg: data.aguaTotalKg ?? prev.aguaTotalKg ?? "",
-          aguaTotalPct: data.aguaTotalPct ?? prev.aguaTotalPct ?? "",
-          masaOseaKg: data.masaOseaKg ?? prev.masaOseaKg ?? "",
-          mbKcal: data.mbKcal ?? prev.mbKcal ?? "",
-          grasaVisceralNivel: data.grasaVisceralNivel ?? prev.grasaVisceralNivel ?? "",
-          imc: data.imc ?? prev.imc ?? "",
-          edadMetabolica: data.edadMetabolica ?? prev.edadMetabolica ?? "",
-          indiceCinturaTalla: data.indiceCinturaTalla ?? prev.indiceCinturaTalla ?? "",
-          circunferenciaBrazoCm: data.circunferenciaBrazoCm ?? prev.circunferenciaBrazoCm ?? "",
-          circunferenciaCinturaCm: data.circunferenciaCinturaCm ?? prev.circunferenciaCinturaCm ?? "",
-          circunferenciaCaderaCm: data.circunferenciaCaderaCm ?? prev.circunferenciaCaderaCm ?? "",
-          circunferenciaPiernaCm: data.circunferenciaPiernaCm ?? prev.circunferenciaPiernaCm ?? "",
-          tensionArterial: data.tensionArterial ?? prev.tensionArterial ?? { sys: "", dia: "" },
-        }));
-      }
-      // reset peso input
+      if (snap.exists()) setUserData(snap.data());
       setPeso("");
       setFechaPeso(todayISO);
       setError(null);
-      // switch to pesaje tab to reflect changes
       const idx = tabs.findIndex((t) => t.id === "pesaje");
       if (idx >= 0) setTabIndex(idx);
     } catch (err3) {
@@ -526,7 +406,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     }
   };
 
-  // sign out handler
+  // sign out handler (declared to avoid ESLint no-undef)
   const handleSignOut = async () => {
     try {
       await signOut(auth);
@@ -536,7 +416,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     }
   };
 
-  // Derived data for chart and histórico (use medidasHistorico when available to show full data)
+  // Derived data for chart
   const timestampToMs = (t) => {
     if (!t) return null;
     if (typeof t === "number") return t;
@@ -545,24 +425,16 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     return null;
   };
 
-  const rawHistory = Array.isArray(userData?.medidasHistorico) && userData.medidasHistorico.length > 0
-    ? userData.medidasHistorico
-    : Array.isArray(userData?.pesoHistorico) ? userData.pesoHistorico : [];
-
-  const mapped = rawHistory.map((p) => {
+  const ph = Array.isArray(userData?.pesoHistorico) ? [...userData.pesoHistorico] : [];
+  const mapped = ph.map((p) => {
     const msFecha = p?.fecha ? Date.parse(p.fecha) : null;
     const msCreated = timestampToMs(p?.createdAt);
     const _t = msFecha || msCreated || 0;
     return { ...p, _t };
   });
-
   const sortedAsc = mapped.sort((a, b) => (a._t || 0) - (b._t || 0));
   const labels = sortedAsc.map((s) => s.fecha || (s._t ? new Date(s._t).toLocaleDateString() : ""));
-  const dataPesosClean = sortedAsc.map((s) => {
-    const v = s.peso ?? s.pesoActual ?? null;
-    return v != null ? Number(v) : null;
-  }).filter((v) => v != null);
-
+  const dataPesos = sortedAsc.map((s) => s.peso);
   const rowsDesc = [...sortedAsc].reverse();
 
   const exercisesFolder = (userData && userData.driveEjerciciosFolderId) ? userData.driveEjerciciosFolderId : DRIVE_FOLDER_EXERCISES;
@@ -589,7 +461,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     datasets: [
       {
         label: "Peso (kg)",
-        data: sortedAsc.map((s) => (s.peso ?? s.pesoActual ?? null)),
+        data: dataPesos,
         borderColor: "#16a34a",
         backgroundColor: "rgba(34,197,94,0.12)",
         tension: 0.25,
@@ -697,168 +569,35 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           </div>
         )}
 
-        {/* Pesaje reorganizado */}
         {tabIndex === 2 && (
           <div className="card" style={{ padding: 12 }}>
             <h3>Pesaje</h3>
             <div className="panel-section">
-              <form onSubmit={(e) => submitPeso(e, { addToHistorico: true })} style={{ display: "flex", gap: 8, flexDirection: "column" }}>
-                {/* Fecha y Peso (primera fila) */}
-                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-                  <div style={{ minWidth: 180 }}>
-                    <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>Fecha</label>
-                    <input className="input" type="date" value={fechaPeso} onChange={(e) => setFechaPeso(e.target.value)} />
-                  </div>
-
-                  <div style={{ minWidth: 180 }}>
-                    <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>Peso (kg)</label>
-                    <input className="input" type="number" step="0.1" placeholder="Peso (kg)" value={peso} onChange={(e) => setPeso(e.target.value)} />
-                  </div>
-
-                  <div style={{ flex: "1 1 200px", minWidth: 200 }}>
-                    <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>IMC (opcional)</label>
-                    <input className="input" type="number" step="0.1" value={editable.imc || ""} onChange={(e) => setEditable(s => ({ ...s, imc: e.target.value }))} />
-                  </div>
-                </div>
-
-                {/* Grid de medidas: usa auto-fit para más columnas en pantallas grandes */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginTop: 12 }}>
-                  <div className="field">
-                    <label>Masa Grasa (%)</label>
-                    <input className="input" type="number" step="0.1" value={editable.masaGrasaPct || ""} onChange={(e) => setEditable(s => ({ ...s, masaGrasaPct: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>Masa Grasa (kg)</label>
-                    <input className="input" type="number" step="0.01" value={editable.masaGrasaKg || ""} onChange={(e) => setEditable(s => ({ ...s, masaGrasaKg: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>Masa Magra (kg)</label>
-                    <input className="input" type="number" step="0.01" value={editable.masaMagraKg || ""} onChange={(e) => setEditable(s => ({ ...s, masaMagraKg: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>Masa Muscular (kg)</label>
-                    <input className="input" type="number" step="0.01" value={editable.masaMuscularKg || ""} onChange={(e) => setEditable(s => ({ ...s, masaMuscularKg: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>Masa ósea (kg)</label>
-                    <input className="input" type="number" step="0.01" value={editable.masaOseaKg || ""} onChange={(e) => setEditable(s => ({ ...s, masaOseaKg: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>Agua total (kg)</label>
-                    <input className="input" type="number" step="0.01" value={editable.aguaTotalKg || ""} onChange={(e) => setEditable(s => ({ ...s, aguaTotalKg: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>% Agua total</label>
-                    <input className="input" type="number" step="0.1" value={editable.aguaTotalPct || ""} onChange={(e) => setEditable(s => ({ ...s, aguaTotalPct: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>MB (kcal)</label>
-                    <input className="input" type="number" step="1" value={editable.mbKcal || ""} onChange={(e) => setEditable(s => ({ ...s, mbKcal: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>Nivel grasa visceral</label>
-                    <input className="input" type="number" step="1" value={editable.grasaVisceralNivel || ""} onChange={(e) => setEditable(s => ({ ...s, grasaVisceralNivel: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>Edad metabólica</label>
-                    <input className="input" type="number" step="1" value={editable.edadMetabolica || ""} onChange={(e) => setEditable(s => ({ ...s, edadMetabolica: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>Índice cintura / talla</label>
-                    <input className="input" type="number" step="0.01" value={editable.indiceCinturaTalla || ""} onChange={(e) => setEditable(s => ({ ...s, indiceCinturaTalla: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>C. Cintura (cm)</label>
-                    <input className="input" type="number" step="0.1" value={editable.circunferenciaCinturaCm || ""} onChange={(e) => setEditable(s => ({ ...s, circunferenciaCinturaCm: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>C. Cadera (cm)</label>
-                    <input className="input" type="number" step="0.1" value={editable.circunferenciaCaderaCm || ""} onChange={(e) => setEditable(s => ({ ...s, circunferenciaCaderaCm: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>C. Brazo (cm)</label>
-                    <input className="input" type="number" step="0.1" value={editable.circunferenciaBrazoCm || ""} onChange={(e) => setEditable(s => ({ ...s, circunferenciaBrazoCm: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>C. Pierna (cm)</label>
-                    <input className="input" type="number" step="0.1" value={editable.circunferenciaPiernaCm || ""} onChange={(e) => setEditable(s => ({ ...s, circunferenciaPiernaCm: e.target.value }))} />
-                  </div>
-
-                  <div className="field" style={{ minWidth: 220 }}>
-                    <label>TA Sys / Dia (mmHg)</label>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <input
-                        className="input"
-                        type="number"
-                        placeholder="SYS"
-                        value={editable.tensionArterial?.sys || ""}
-                        onChange={(e) => setEditable(s => ({ ...s, tensionArterial: { ...(s.tensionArterial || {}), sys: e.target.value } }))}
-                      />
-                      <input
-                        className="input"
-                        type="number"
-                        placeholder="DIA"
-                        value={editable.tensionArterial?.dia || ""}
-                        onChange={(e) => setEditable(s => ({ ...s, tensionArterial: { ...(s.tensionArterial || {}), dia: e.target.value } }))}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Botones finales: Guardar abajo del todo */}
-                <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-                  <button type="submit" className="btn primary" disabled={savingPeso}>{savingPeso ? "Guardando..." : "Registrar peso y medidas"}</button>
+              <form onSubmit={submitPeso} style={{ display: "flex", gap: 8, flexDirection: "column" }}>
+                <input className="input" type="number" step="0.1" placeholder="Peso (kg)" value={peso} onChange={(e) => setPeso(e.target.value)} />
+                <input className="input" type="date" value={fechaPeso} onChange={(e) => setFechaPeso(e.target.value)} />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button type="submit" className="btn primary" disabled={savingPeso}>{savingPeso ? "Guardando..." : "Registrar peso"}</button>
                   <button type="button" className="btn ghost" onClick={() => { setPeso(""); setFechaPeso(todayISO); }}>Limpiar</button>
                 </div>
               </form>
 
-              {/* Histórico: mostrar todas las medidas por fila */}
-              <div style={{ marginTop: 20 }}>
-                <h4>Histórico de medidas</h4>
-                {rowsDesc.length === 0 ? <div className="mensaje">No hay registros.</div> : (
+              <div style={{ marginTop: 16 }}>
+                <h4>Histórico de pesajes</h4>
+                {rowsDesc.length === 0 ? <div className="mensaje">No hay registros de peso.</div> : (
                   <div style={{ overflowX: "auto" }}>
                     <table className="hist-table" style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
                         <tr>
-                          <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Fecha</th>
-                          <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Peso (kg)</th>
-                          <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Masa Gras (%)</th>
-                          <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Masa Gras (kg)</th>
-                          <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Masa Magra (kg)</th>
-                          <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Masa Musc (kg)</th>
-                          <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Agua (%)</th>
-                          <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>IMC</th>
-                          <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>C. Cintura (cm)</th>
-                          <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>TA (SYS/DIA)</th>
+                          <th style={{ textAlign: "left", padding: 8, borderBottom: "1px solid #ddd" }}>Fecha</th>
+                          <th style={{ textAlign: "right", padding: 8, borderBottom: "1px solid #ddd" }}>Peso (kg)</th>
                         </tr>
                       </thead>
                       <tbody>
                         {rowsDesc.map((r, i) => (
-                          <tr key={`${r._t || i}-${r.peso ?? r.pesoActual ?? i}`}>
+                          <tr key={`${r._t || i}-${r.peso}`}>
                             <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.fecha || (r._t ? new Date(r._t).toLocaleDateString() : "-")}</td>
-                            <td style={{ padding: 8, textAlign: "right", borderBottom: "1px solid #f2f2f2" }}>{r.peso ?? r.pesoActual ?? "-"}</td>
-                            <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.masaGrasaPct ?? "-"}</td>
-                            <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.masaGrasaKg ?? "-"}</td>
-                            <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.masaMagraKg ?? "-"}</td>
-                            <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.masaMuscularKg ?? "-"}</td>
-                            <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.aguaTotalPct ?? "-"}</td>
-                            <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.imc ?? "-"}</td>
-                            <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.circunferenciaCinturaCm ?? "-"}</td>
-                            <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.tensionArterial ? `${r.tensionArterial.sys || "-"} / ${r.tensionArterial.dia || "-"}` : "-"}</td>
+                            <td style={{ padding: 8, textAlign: "right", borderBottom: "1px solid #f2f2f2" }}>{r.peso}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -868,8 +607,8 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
               </div>
 
               <div style={{ marginTop: 16 }}>
-                <h4>Tendencia (solo peso)</h4>
-                {sortedAsc.length > 0 && dataPesosClean.length > 0 ? <Line data={chartData} options={chartOptions} /> : <div className="mensaje">No hay datos para el gráfico.</div>}
+                <h4>Tendencia</h4>
+                {dataPesos.length > 0 ? <Line data={chartData} options={chartOptions} /> : <div className="mensaje">No hay datos para el gráfico.</div>}
               </div>
             </div>
           </div>
