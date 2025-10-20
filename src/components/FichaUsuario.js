@@ -31,8 +31,12 @@ ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Title, T
  * - targetUid: si se pasa, carga/edita la ficha de ese usuario (modo admin).
  * - adminMode: si true muestra indicación de admin.
  *
- * Nota: el botón "Cerrar sesión" se muestra solo si se está viendo la propia ficha
- * (es decir, cuando no hay targetUid o targetUid === authUid).
+ * Modificado: en la pestaña "Dieta semanal" se muestra ahora un editor
+ * diario con dos columnas:
+ *  - izquierda: columna fija con las etiquetas (Desayuno, Almuerzo, Comida, Merienda, Cena, Consejos)
+ *  - derecha: columna editable con textarea para cada etiqueta, alineadas por fila.
+ *
+ * Mantiene compatibilidad con el formato antiguo y el guardado en Firestore.
  */
 
 export default function FichaUsuario({ targetUid = null, adminMode = false }) {
@@ -52,6 +56,16 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     { value: "aprendiendo_a_comer", label: "Aprendiendo a comer" },
     { value: "otros", label: "Otros" },
   ];
+
+  const MEALS = [
+    { key: "desayuno", label: "Desayuno" },
+    { key: "almuerzo", label: "Almuerzo" },
+    { key: "comida", label: "Comida" },
+    { key: "merienda", label: "Merienda" },
+    { key: "cena", label: "Cena" },
+  ];
+
+  const ALL_SECTIONS = [...MEALS, { key: "consejos", label: "Consejos del día" }];
 
   const DRIVE_FOLDER_EXERCISES = "1EN-1h1VcV4K4kG2JgmRpxFSY-izas-9c";
   const DRIVE_FOLDER_RECIPES = "1FBwJtFBj0gWr0W9asHdGrkR7Q1FzkKK3";
@@ -87,6 +101,42 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     return null;
   };
 
+  // Helper: create an empty menu object for a day
+  const emptyDayMenu = () => ({
+    desayuno: "",
+    almuerzo: "",
+    comida: "",
+    merienda: "",
+    cena: "",
+    consejos: "",
+  });
+
+  // Normalize menu data: support legacy array of strings or array of objects
+  const normalizeMenu = (rawMenu) => {
+    const defaultMenu = Array.from({ length: 7 }, () => ({ ...emptyDayMenu() }));
+    if (!Array.isArray(rawMenu)) return defaultMenu;
+    // If items are strings => treat as 'comida' (legacy)
+    const isStringArray = rawMenu.every((it) => typeof it === "string" || it == null);
+    if (isStringArray) {
+      return Array.from({ length: 7 }, (_, i) => {
+        const val = rawMenu[i] || "";
+        return { ...emptyDayMenu(), comida: val };
+      });
+    }
+    // If items are objects, ensure fields exist
+    return Array.from({ length: 7 }, (_, i) => {
+      const it = rawMenu[i] || {};
+      return {
+        desayuno: it.desayuno || "",
+        almuerzo: it.almuerzo || "",
+        comida: it.comida || (it.menu || "") || "",
+        merienda: it.merienda || "",
+        cena: it.cena || "",
+        consejos: it.consejos || "",
+      };
+    });
+  };
+
   useEffect(() => {
     const load = async () => {
       if (!uid) {
@@ -102,6 +152,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         if (snap.exists()) {
           const data = snap.data();
           setUserData(data);
+          // Build editable state
           setEditable((prev) => ({
             nombre: data.nombre || "",
             apellidos: data.apellidos || "",
@@ -114,8 +165,9 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
             recetas: !!data.recetas,
             ejerciciosDescripcion: data.ejerciciosDescripcion || "",
             recetasDescripcion: data.recetasDescripcion || "",
-            menu: Array.isArray(data.menu) ? [...data.menu] : Array(7).fill(""),
+            menu: normalizeMenu(data.menu),
             _selectedDay: 0,
+            _selectedMeal: "comida",
             ...prev,
           }));
         } else {
@@ -193,15 +245,34 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     }
     setError(null);
     try {
+      // Ensure menu is an array of 7 objects
+      const menuToSave = Array.isArray(editable.menu) ? editable.menu : Array.from({ length: 7 }, () => ({ ...emptyDayMenu() }));
       await updateDoc(doc(db, "users", uid), {
-        menu: Array.isArray(editable.menu) ? editable.menu : Array(7).fill(""),
+        menu: menuToSave,
         updatedAt: serverTimestamp(),
       });
       const snap = await getDoc(doc(db, "users", uid));
       if (snap.exists()) setUserData(snap.data());
+      setError(null);
     } catch (err) {
       console.error("save semana:", err);
-      setError("No se pudo guardar el menú semanal.");
+      // Fallback to setDoc if updateDoc fails (document missing)
+      const notFoundCodes = ["not-found", "notFound", "404"];
+      const isNotFound = err?.code ? notFoundCodes.some((c) => String(err.code).toLowerCase().includes(String(c).toLowerCase())) : false;
+      if (isNotFound) {
+        try {
+          await setDoc(doc(db, "users", uid), {
+            menu: Array.isArray(editable.menu) ? editable.menu : Array.from({ length: 7 }, () => ({ ...emptyDayMenu() })),
+            updatedAt: serverTimestamp(),
+            createdAt: serverTimestamp(),
+          }, { merge: true });
+        } catch (err2) {
+          console.error("save semana (setDoc) fallback error:", err2);
+          setError(err2?.message || "No se pudo guardar el menú semanal (fallback).");
+        }
+      } else {
+        setError(err?.message || "No se pudo guardar el menú semanal.");
+      }
     }
   };
 
@@ -339,6 +410,18 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     ],
   };
   const chartOptions = { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: false } } };
+
+  // Handlers for weekly menu editing
+  const dayNames = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+  const selDay = editable._selectedDay || 0;
+
+  const setMenuField = (dayIndex, field, value) => {
+    setEditable((s) => {
+      const menu = Array.isArray(s.menu) ? [...s.menu] : Array.from({ length: 7 }, () => ({ ...emptyDayMenu() }));
+      menu[dayIndex] = { ...menu[dayIndex], [field]: value };
+      return { ...s, menu };
+    });
+  };
 
   return (
     <div>
@@ -488,23 +571,74 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         {tabIndex === 3 && (
           <div className="card">
             <h3>Dieta semanal</h3>
-            <div className="panel-section">
-              <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 8 }}>
-                {["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"].map((d, i) => (
-                  <button key={d} className={editable._selectedDay === i ? "tab tab-active" : "tab"} onClick={() => setEditable((s) => ({ ...s, _selectedDay: i }))}>{d}</button>
-                ))}
+
+            {/* Days selector */}
+            <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 8 }}>
+              {dayNames.map((d, i) => (
+                <button
+                  key={d}
+                  className={editable._selectedDay === i ? "tab tab-active" : "tab"}
+                  onClick={() => setEditable((s) => ({ ...s, _selectedDay: i }))}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
+
+            {/* New daily menu: two columns, left fixed labels, right editable fields aligned per row */}
+            <div className="weekly-menu" style={{ marginTop: 16 }}>
+              <div className="weekly-day-header" style={{ marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <strong>{dayNames[selDay]}</strong>
+                  <div style={{ fontSize: 13, color: "#666" }}>Edita el menú diario</div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="btn ghost" onClick={() => {
+                    // quick clear all fields for current day
+                    const cleared = { ...emptyDayMenu() };
+                    setEditable((s) => {
+                      const menu = Array.isArray(s.menu) ? [...s.menu] : Array.from({ length: 7 }, () => ({ ...emptyDayMenu() }));
+                      menu[selDay] = cleared;
+                      return { ...s, menu };
+                    });
+                  }}>Limpiar día</button>
+                  <button className="btn primary" onClick={saveSemana}>Guardar día</button>
+                </div>
               </div>
 
-              <div style={{ marginTop: 12 }}>
-                <label>Menú para {["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"][editable._selectedDay || 0]}</label>
-                <textarea className="input" rows={4} value={(editable.menu && editable.menu[editable._selectedDay || 0]) || ""} onChange={(e) => {
-                  const m = Array.isArray(editable.menu) ? [...editable.menu] : Array(7).fill("");
-                  m[editable._selectedDay || 0] = e.target.value;
-                  setEditable((s) => ({ ...s, menu: m }));
-                }} />
-                <div style={{ marginTop: 8 }}>
-                  <button className="btn primary" onClick={saveSemana}>Guardar menú</button>
+              <div className="weekly-menu-grid" role="group" aria-label={`Editor de menú para ${dayNames[selDay]}`}>
+                {/* Left column: fixed labels */}
+                <div className="weekly-left">
+                  {ALL_SECTIONS.map((sec) => (
+                    <div key={sec.key} className="weekly-label">{sec.label}</div>
+                  ))}
                 </div>
+
+                {/* Right column: aligned textareas */}
+                <div className="weekly-right">
+                  {ALL_SECTIONS.map((sec) => (
+                    <div key={sec.key} className="weekly-field">
+                      <textarea
+                        className="input weekly-textarea"
+                        rows={4}
+                        value={(Array.isArray(editable.menu) && editable.menu[selDay] ? editable.menu[selDay][sec.key] : "") || ""}
+                        onChange={(e) => setMenuField(selDay, sec.key, e.target.value)}
+                        placeholder={sec.key === "consejos" ? "Consejos, recomendaciones o notas para el día..." : `Escribe ${sec.label.toLowerCase()}...`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+                <button className="btn ghost" onClick={() => {
+                  const prev = Math.max(0, selDay - 1);
+                  setEditable((s) => ({ ...s, _selectedDay: prev }));
+                }}>Día anterior</button>
+                <button className="btn ghost" onClick={() => {
+                  const next = Math.min(6, selDay + 1);
+                  setEditable((s) => ({ ...s, _selectedDay: next }));
+                }}>Siguiente día</button>
               </div>
             </div>
           </div>

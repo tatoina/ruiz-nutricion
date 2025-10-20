@@ -1,21 +1,20 @@
 import React, { useEffect, useState, useRef } from "react";
 import { auth, db } from "../Firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { onAuthStateChanged, signOut, getIdTokenResult } from "firebase/auth";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import FichaUsuario from "./FichaUsuario";
 
 /**
- * AdminUsers — con panel izquierdo redimensionable.
- * - Arrastra el divisor vertical para cambiar el ancho del panel izquierdo.
- * - El ancho se guarda en localStorage (clave: adminLeftWidth).
- * - Si el usuario NO es admin, ahora se muestra un botón claro para ir a /mi-ficha.
+ * AdminUsers — panel admin con columna izquierda redimensionable.
+ * - Soporta detection de admin por custom claim "admin" y por lista de emails.
+ * - Left panel resizable, ancho persistido en localStorage (adminLeftWidth).
+ * - Fallback para consultas Firestore si falta índice compuesto.
  */
 
 export default function AdminUsers() {
-  const ADMIN_EMAIL = "admin@admin.es";
+  const ADMIN_EMAILS = ["admin@admin.es"]; // ajusta si hace falta
   const DESKTOP_MIN_WIDTH = 900;
-  const INDEX_CREATE_URL = "https://console.firebase.google.com/v1/r/project/nutricionapp-b7b7d/firestore/indexes?create_composite=ClBwcm9qZWN0cy9udXRyaWNpb25hcHAtYjdiN2QvZGF0YWJhc2VzLyhkZWZhdWx0KS9jb2xsZWN0aW9uR3JvdXBzL3VzZXJzL2luZGV4ZXMvXxABGg0KCWFwZWxsaWRvcxABGgoKBm5vbWJyZRABGgwKCF9fbmFtZV9fEAE";
 
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState(null);
@@ -32,22 +31,48 @@ export default function AdminUsers() {
   // Resizer state
   const containerRef = useRef(null);
   const isResizingRef = useRef(false);
+  const leftWidthRef = useRef(null);
   const [leftWidth, setLeftWidth] = useState(() => {
     const saved = parseInt(localStorage.getItem("adminLeftWidth"), 10);
     return Number.isFinite(saved) && saved > 0 ? saved : 360;
   });
+  leftWidthRef.current = leftWidth;
   const MIN_LEFT = 240;
   const MAX_LEFT = 720;
 
+  // Debug log helper
+  const logDebug = (...args) => {
+    // Descomenta la siguiente línea para ver logs
+    console.debug("[AdminUsers DEBUG]", ...args);
+  };
+
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
       setCurrentUser(u);
-      setIsAdmin(!!u && u.email === ADMIN_EMAIL);
+      if (!u) {
+        setIsAdmin(false);
+        logDebug("No user");
+        return;
+      }
+      try {
+        const token = await getIdTokenResult(u, true);
+        const hasClaimAdmin = !!token?.claims?.admin;
+        const byEmail = ADMIN_EMAILS.includes((u.email || "").toLowerCase());
+        const resolvedIsAdmin = hasClaimAdmin || byEmail;
+        setIsAdmin(resolvedIsAdmin);
+        logDebug("Auth:", { uid: u.uid, email: u.email, claims: token?.claims, byEmail, resolvedIsAdmin });
+      } catch (err) {
+        console.error("getIdTokenResult error:", err);
+        const byEmail = ADMIN_EMAILS.includes((u.email || "").toLowerCase());
+        setIsAdmin(byEmail);
+        logDebug("Fallback isAdmin by email:", { email: u.email, byEmail });
+      }
     });
     return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load users ordered by apellidos,nombre (fallback to client sort if index missing)
+  // Load users ordered by apellidos,nombre (fallback if index missing)
   useEffect(() => {
     let mounted = true;
     const loadUsers = async () => {
@@ -60,7 +85,6 @@ export default function AdminUsers() {
       setError(null);
       setIndexRequired(false);
       try {
-        // Intentamos la consulta con índice compuesto
         const q = query(collection(db, "users"), orderBy("apellidos", "asc"), orderBy("nombre", "asc"));
         const snap = await getDocs(q);
         if (!mounted) return;
@@ -76,7 +100,6 @@ export default function AdminUsers() {
             const snap = await getDocs(collection(db, "users")); // sin orderBy
             if (!mounted) return;
             const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-            // ordenar en memoria por apellidos then nombre (case-insensitive)
             list.sort((a, b) => {
               const A = (a.apellidos || "").toString().trim().toLowerCase();
               const B = (b.apellidos || "").toString().trim().toLowerCase();
@@ -87,7 +110,6 @@ export default function AdminUsers() {
             });
             setUsers(list);
             setSelectedIndex(list.length ? 0 : -1);
-            setError(null);
           } catch (err2) {
             console.error("Fallback fetch users error:", err2);
             const msg2 = err2?.code ? `${err2.code}: ${err2.message}` : (err2?.message || String(err2));
@@ -107,35 +129,28 @@ export default function AdminUsers() {
     return () => { mounted = false; };
   }, [isAdmin]);
 
-  useEffect(() => {
-    const onResize = () => setIsDesktop(window.innerWidth >= DESKTOP_MIN_WIDTH);
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
-  // Resizer handlers (mouse & touch)
+  // resize handlers
   useEffect(() => {
     const onMouseMove = (e) => {
       if (!isResizingRef.current) return;
       if (!containerRef.current) return;
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const newWidth = Math.round(e.clientX - containerRect.left);
+      const rect = containerRef.current.getBoundingClientRect();
+      const newWidth = Math.round(e.clientX - rect.left);
       const clamped = Math.max(MIN_LEFT, Math.min(MAX_LEFT, newWidth));
       setLeftWidth(clamped);
     };
     const onMouseUp = () => {
       if (isResizingRef.current) {
         isResizingRef.current = false;
-        localStorage.setItem("adminLeftWidth", String(leftWidth));
-        // remove selecting text on some browsers
+        localStorage.setItem("adminLeftWidth", String(leftWidthRef.current || leftWidth));
         document.body.style.userSelect = "";
       }
     };
     const onTouchMove = (e) => {
       if (!isResizingRef.current || !containerRef.current) return;
       const touch = e.touches[0];
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const newWidth = Math.round(touch.clientX - containerRect.left);
+      const rect = containerRef.current.getBoundingClientRect();
+      const newWidth = Math.round(touch.clientX - rect.left);
       const clamped = Math.max(MIN_LEFT, Math.min(MAX_LEFT, newWidth));
       setLeftWidth(clamped);
     };
@@ -144,7 +159,6 @@ export default function AdminUsers() {
     window.addEventListener("mouseup", onMouseUp);
     window.addEventListener("touchmove", onTouchMove, { passive: false });
     window.addEventListener("touchend", onMouseUp);
-
     return () => {
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
@@ -155,13 +169,11 @@ export default function AdminUsers() {
 
   const startResizing = (e) => {
     isResizingRef.current = true;
-    // prevent text selection while dragging
     document.body.style.userSelect = "none";
   };
   const startResizingTouch = (e) => {
     isResizingRef.current = true;
     document.body.style.userSelect = "none";
-    // stop propagation so page doesn't scroll
     e.preventDefault();
   };
   const resetLeftWidth = () => {
@@ -169,6 +181,12 @@ export default function AdminUsers() {
     setLeftWidth(def);
     localStorage.setItem("adminLeftWidth", String(def));
   };
+
+  useEffect(() => {
+    const onResize = () => setIsDesktop(window.innerWidth >= DESKTOP_MIN_WIDTH);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const prevUser = () => {
     setSelectedIndex((s) => Math.max(0, (s || 0) - 1));
@@ -220,34 +238,31 @@ export default function AdminUsers() {
   }
 
   if (!isAdmin) {
-    // <-- Aquí mostramos un botón claro para ir a la propia ficha en lugar de solo el mensaje
     return (
       <div className="layout admin-fullscreen">
         <div className="card" style={{ maxWidth: 720, margin: "40px auto", textAlign: "center" }}>
           <h3 style={{ marginTop: 8 }}>Sin permisos de administrador</h3>
           <p style={{ color: "#666" }}>
             Tu cuenta (<strong>{currentUser.email}</strong>) no tiene permisos para acceder al panel de administración.
-            Si quieres revisar o editar tu propia ficha, puedes abrir tu ficha de usuario.
           </p>
           <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12 }}>
             <button className="btn primary" onClick={() => navigate("/mi-ficha")}>Ver mi ficha</button>
             <button className="btn ghost" onClick={() => handleSignOut()}>Cerrar sesión</button>
+          </div>
+
+          <div style={{ marginTop: 12, color: "#666", fontSize: 13 }}>
+            Si crees que deberías tener acceso, verifica:
+            <ul style={{ textAlign: "left", display: "inline-block", marginTop: 8 }}>
+              <li>Que estás con el email correcto (compara con: {ADMIN_EMAILS.join(", ")})</li>
+              <li>O que tu usuario tenga el custom claim <code>admin: true</code> (recomendado)</li>
+            </ul>
           </div>
         </div>
       </div>
     );
   }
 
-  if (!isDesktop) {
-    return (
-      <div className="layout admin-fullscreen">
-        <div className="card">
-          <p style={{ padding: 16 }}>El panel de administración sólo está disponible en escritorio. Por favor, usa un PC.</p>
-        </div>
-      </div>
-    );
-  }
-
+  // admin allowed even on small screens for convenience
   return (
     <div className="admin-fullscreen" ref={containerRef}>
       <div className="card header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -306,12 +321,12 @@ export default function AdminUsers() {
             )}
           </div>
 
-          {/* Si el índice es requerido mostramos el enlace directo para crear el índice */}
+          {/* If index required */}
           {indexRequired && (
             <div style={{ marginTop: 10, fontSize: 13 }}>
               <div style={{ color: "#666" }}>Para un rendimiento óptimo crea este índice compuesto en Firestore:</div>
-              <a href={INDEX_CREATE_URL} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 6 }}>
-                Crear índice compuesto (apellidos ASC, nombre ASC)
+              <a href={`https://console.firebase.google.com/project/${db.app.options.projectId}/firestore/indexes`} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 6 }}>
+                Ir a índices de Firestore
               </a>
             </div>
           )}

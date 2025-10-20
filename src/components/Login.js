@@ -1,15 +1,27 @@
-// ...existing code...
 import React, { useState } from "react";
 import "./estilos.css";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../Firebase";
 import logo from "../assets/logo.png";
+import pkg from "../../package.json";
 
 export default function Login({ onLogin, onShowRegister }) {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Fecha formateada en español, por ejemplo: "Lunes, 20 de octubre de 2025"
+  const today = new Date();
+  const dateStr = today.toLocaleDateString("es-ES", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).replace(/^./, (c) => c.toUpperCase());
+
+  // Version: intenta leer REACT_APP_VERSION, si no existe usa package.json
+  const appVersion = process.env.REACT_APP_VERSION || (pkg && pkg.version) || "dev";
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -28,6 +40,12 @@ export default function Login({ onLogin, onShowRegister }) {
 
   return (
     <div className="login-page">
+      {/* Cabecera superior izquierda con fecha y versión */}
+      <div className="login-header" aria-hidden="true">
+        <div className="login-date">{dateStr}</div>
+        <div className="app-version">v{appVersion}</div>
+      </div>
+
       <div className="login-card card">
         <img src={logo} alt="App logo" className="login-logo" />
 
@@ -59,7 +77,7 @@ export default function Login({ onLogin, onShowRegister }) {
           {error && <div className="mensaje error" style={{ marginTop: 10 }}>{error}</div>}
 
           <div className="actions" style={{ marginTop: 12 }}>
-            <button type="submit" className="btn primary" style={{ flex: 1 }}>
+            <button type="submit" className="btn primary full-width">
               {loading ? "Entrando..." : "Entrar"}
             </button>
           </div>
@@ -68,9 +86,8 @@ export default function Login({ onLogin, onShowRegister }) {
         <div className="login-footer" style={{ marginTop: 14 }}>
           <button
             type="button"
-            className="btn primary"
+            className="btn primary full-width"
             onClick={onShowRegister}
-            style={{ width: "86%", maxWidth: 360 }}
           >
             Registrarse
           </button>
@@ -79,4 +96,3 @@ export default function Login({ onLogin, onShowRegister }) {
     </div>
   );
 }
-// ...existing code...
