@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { signOut } from "firebase/auth";
-import { auth, db } from "../firebase";
+import { auth, db } from "./firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { Chart } from "react-chartjs-2";
 import { Bar } from "react-chartjs-2";
