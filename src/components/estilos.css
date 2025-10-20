@@ -272,7 +272,7 @@ button, .tab { -webkit-tap-highlight-color: rgba(0,0,0,0); }
   .login-logo{width:88px;height:88px;padding:4px;border-width:5px;margin-bottom:12px}
   .btn{padding:10px 12px}
 }
-```// filepath: c:\Users\usuario\nutri-app\src\components\estilos.css
+
 :root{
   --bg: linear-gradient(135deg,#e9fbb3 0%,#d1f5a1 40%,#b7f0a8 100%);
   --card-bg: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(245,255,246,0.95));
