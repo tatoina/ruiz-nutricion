@@ -27,23 +27,19 @@ import DriveFolderViewer from "./DriveFolderViewer";
 ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Title, Tooltip, Legend);
 
 /**
- * FichaUsuario.jsx — Ajuste: reordenado y columnas adaptativas para Pesaje
+ * FichaUsuario.jsx — versión corregida
  *
- * Cambios principales:
- * - Pesaje: ahora el orden es Fecha -> Peso -> resto de medidas.
- * - Layout de medidas usa grid con "auto-fit/minmax" para mostrar más columnas en pantallas grandes
- *   y reducir automáticamente en pantallas pequeñas.
- * - Botón de guardar está al final del formulario.
- * - Histórico muestra columnas en el nuevo orden.
- * - El gráfico sigue mostrando únicamente la serie de peso.
+ * Cambios aplicados en esta versión:
+ * - handleSignOut está declarado antes de cualquier uso (evita errores eslint no-undef).
+ * - La pestaña por defecto es "Dieta semanal" y Perfil se muestra solo si se pulsa "Perfil".
+ * - Perfil NO contiene el editor semanal (el editor semanal está en la pestaña "Dieta semanal").
+ * - saveProfile no guarda el campo `menu`; saveSemana/autosave siguen encargándose del menú semanal.
  *
- * Sustituye el fichero actual por este contenido. Haz backup/commit antes de pegar.
+ * Sustituye el fichero actual por este contenido.
  */
 
 export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const tabs = [
-    { id: "personales", label: "Personales" },
-    { id: "dieta", label: "Dieta" },
     { id: "pesaje", label: "Pesaje" },
     { id: "semana", label: "Dieta semanal" },
     { id: "ejercicios", label: "Ejercicios" },
@@ -76,7 +72,9 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const [userData, setUserData] = useState(null);
   const [editable, setEditable] = useState({});
   const [loading, setLoading] = useState(true);
-  const [tabIndex, setTabIndex] = useState(0);
+  // Por defecto mostrar Dieta semanal
+  const [tabIndex, setTabIndex] = useState(1);
+  const [showProfile, setShowProfile] = useState(false);
   const [error, setError] = useState(null);
 
   const [peso, setPeso] = useState("");
@@ -98,6 +96,16 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     });
     return () => unsub();
   }, []);
+
+  // Handler de cierre de sesión — declarado aquí (antes de cualquier JSX que lo use)
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error("[FichaUsuario] signOut error:", err);
+      setError("No se pudo cerrar sesión.");
+    }
+  };
 
   const uid = targetUid || authUid;
 
@@ -133,7 +141,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     });
   }, [emptyDayMenu]);
 
-  // Load user doc (factored as loadUser so we can call it after saves)
+  // Load user doc (incluye menu)
   const loadUser = useCallback(async () => {
     if (!uid) return;
     setLoading(true);
@@ -145,20 +153,15 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         console.error("[FichaUsuario] db missing");
         return;
       }
-      console.debug("[FichaUsuario] loading user", uid);
       const snap = await getDoc(doc(db, "users", uid));
       if (!snap.exists()) {
-        console.info("[FichaUsuario] user doc not found:", uid);
         setUserData(null);
         setEditable((prev) => ({ ...prev, menu: Array.from({ length: 7 }, () => ({ ...emptyDayMenu() })), _selectedDay: 0 }));
         setError(`No hay ficha para este usuario (UID: ${uid}).`);
       } else {
         const data = snap.data();
         setUserData(data);
-
-        // Merge fields, keeping any existing editable values (non-destructive)
         setEditable((prev) => ({
-          // personales
           nombre: data.nombre || prev.nombre || "",
           apellidos: data.apellidos || prev.apellidos || "",
           nacimiento: data.nacimiento || prev.nacimiento || "",
@@ -193,10 +196,8 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           circunferenciaPiernaCm: data.circunferenciaPiernaCm ?? prev.circunferenciaPiernaCm ?? "",
           tensionArterial: data.tensionArterial ?? prev.tensionArterial ?? { sys: "", dia: "" },
 
-          // keep previous extras
           ...prev,
         }));
-        setError(null);
       }
     } catch (err) {
       console.error("[FichaUsuario] loadUser error:", err);
@@ -236,16 +237,14 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     });
   };
 
-  // Autosave with debounce for weekly menu
+  // Autosave weekly menu
   useEffect(() => {
     if (!uid) return;
     if (!editable.menu) return;
-
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
-
     setSaveStatus("pending");
     saveTimerRef.current = setTimeout(async () => {
       setSaveStatus("saving");
@@ -258,27 +257,9 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         setSaveStatus("saved");
         setTimeout(() => setSaveStatus("idle"), 1200);
       } catch (err) {
-        console.error("[FichaUsuario] autosave error:", err);
-        const notFoundCodes = ["not-found", "notFound", "404"];
-        const isNotFound = err?.code ? notFoundCodes.some((c) => String(err.code).toLowerCase().includes(String(c).toLowerCase())) : false;
-        if (isNotFound) {
-          try {
-            await setDoc(doc(db, "users", uid), {
-              menu: Array.isArray(editable.menu) ? editable.menu : Array.from({ length: 7 }, () => ({ ...emptyDayMenu() })),
-              updatedAt: serverTimestamp(),
-              createdAt: serverTimestamp(),
-            }, { merge: true });
-            setSaveStatus("saved");
-            setTimeout(() => setSaveStatus("idle"), 1200);
-          } catch (err2) {
-            console.error("[FichaUsuario] autosave fallback error:", err2);
-            setSaveStatus("error");
-            setError(err2?.message || "No se pudo guardar el menú.");
-          }
-        } else {
-          setSaveStatus("error");
-          setError(err?.message || "No se pudo guardar el menú.");
-        }
+        console.error("[FichaUsuario] autosave menu error:", err);
+        setSaveStatus("error");
+        setError(err?.message || "No se pudo guardar el menú.");
       }
     }, 1200);
 
@@ -290,19 +271,13 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     };
   }, [editable.menu, uid, emptyDayMenu]);
 
-  // Manual save
+  // Manual save semana
   const saveSemana = async () => {
-    if (!uid) {
-      setError("Usuario objetivo no disponible.");
-      return;
-    }
+    if (!uid) { setError("Usuario objetivo no disponible."); return; }
     setSaveStatus("saving");
     try {
       const menuToSave = Array.isArray(editable.menu) ? editable.menu : Array.from({ length: 7 }, () => ({ ...emptyDayMenu() }));
-      await updateDoc(doc(db, "users", uid), {
-        menu: menuToSave,
-        updatedAt: serverTimestamp(),
-      });
+      await updateDoc(doc(db, "users", uid), { menu: menuToSave, updatedAt: serverTimestamp() });
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 1200);
       const snap = await getDoc(doc(db, "users", uid));
@@ -314,50 +289,32 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     }
   };
 
-  // Save personal fields
-  const savePersonal = async () => {
-    if (!uid) {
-      setError("Usuario objetivo no disponible.");
-      return;
-    }
+  // Save profile (NO incluye menu)
+  const saveProfile = async () => {
+    if (!uid) { setError("Usuario objetivo no disponible."); return; }
     setError(null);
     try {
-      await updateDoc(doc(db, "users", uid), {
+      const payload = {
         nombre: editable.nombre || "",
         apellidos: editable.apellidos || "",
         nacimiento: editable.nacimiento || "",
         telefono: editable.telefono || "",
-        updatedAt: serverTimestamp(),
-      });
-      const snap = await getDoc(doc(db, "users", uid));
-      if (snap.exists()) setUserData(snap.data());
-    } catch (err) {
-      console.error("[FichaUsuario] savePersonal error:", err);
-      setError("No se pudieron guardar los datos personales.");
-    }
-  };
-
-  // Save dieta meta
-  const saveDieta = async () => {
-    if (!uid) {
-      setError("Usuario objetivo no disponible.");
-      return;
-    }
-    setError(null);
-    try {
-      await updateDoc(doc(db, "users", uid), {
         dietaactual: editable.dietaactual || "",
         dietaOtros: editable.dietaactual === "otros" ? (editable.dietaOtros || "") : "",
         restricciones: editable.restricciones || "",
         ejercicios: !!editable.ejercicios,
         recetas: !!editable.recetas,
+        ejerciciosDescripcion: editable.ejerciciosDescripcion || "",
+        recetasDescripcion: editable.recetasDescripcion || "",
         updatedAt: serverTimestamp(),
-      });
+      };
+      await updateDoc(doc(db, "users", uid), payload);
       const snap = await getDoc(doc(db, "users", uid));
       if (snap.exists()) setUserData(snap.data());
+      setError(null);
     } catch (err) {
-      console.error("[FichaUsuario] saveDieta error:", err);
-      setError("No se pudo guardar la dieta.");
+      console.error("[FichaUsuario] saveProfile error:", err);
+      setError("No se pudieron guardar los datos del perfil.");
     }
   };
 
@@ -368,7 +325,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     return Number.isFinite(n) ? n : null;
   };
 
-  // Validaciones básicas before weight save
+  // Validations for pesaje
   const validateMeasures = (pesoValue, editableState) => {
     const p = parseNum(pesoValue);
     if (p !== null && (p <= 0 || p > 500)) return "Peso fuera de rango (0-500 kg).";
@@ -377,27 +334,18 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     return null;
   };
 
-  // Enhanced submitPeso: guarda peso + medidas (top-level y en históricos)
-  const submitPeso = async (e, options = { addToHistorico: true }) => {
+  // submitPeso (identico a versión anterior)
+  const submitPeso = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
-    if (!uid) {
-      setError("Usuario objetivo no disponible.");
-      return;
-    }
-    // Build editable snapshot for validation and payload reading
+    if (!uid) { setError("Usuario objetivo no disponible."); return; }
     const ed = { ...editable };
-
     const pesoValue = parseNum(peso);
     const vError = validateMeasures(pesoValue, ed);
-    if (vError) {
-      setError(vError);
-      return;
-    }
+    if (vError) { setError(vError); return; }
 
     setSavingPeso(true);
     setError(null);
 
-    // compute masaGrasaKg / masaMagraKg if possible
     let masaGrasaKg = parseNum(ed.masaGrasaKg);
     let masaMagraKg = parseNum(ed.masaMagraKg);
     const masaGrasaPct = parseNum(ed.masaGrasaPct);
@@ -408,7 +356,6 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       masaMagraKg = Math.round((pesoValue - mgKgCalc) * 100) / 100;
     }
 
-    // Measures payload
     const measuresPayload = {
       fecha: fechaPeso,
       pesoActual: pesoValue !== null ? pesoValue : null,
@@ -435,7 +382,6 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       createdAt: serverTimestamp(),
     };
 
-    // Clean nulls to avoid writing nulls if you prefer
     const cleaned = {};
     Object.keys(measuresPayload).forEach((k) => {
       const v = measuresPayload[k];
@@ -446,11 +392,10 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     const entryPeso = { fecha: fechaPeso, peso: measuresPayload.pesoActual, createdAt: serverTimestamp() };
 
     try {
-      // Attempt update (merge)
       await updateDoc(doc(db, "users", uid), {
         ...cleaned,
-        medidasHistorico: options.addToHistorico ? arrayUnion(entryMedida) : undefined,
-        pesoHistorico: options.addToHistorico ? arrayUnion(entryPeso) : undefined,
+        medidasHistorico: arrayUnion(entryMedida),
+        pesoHistorico: arrayUnion(entryPeso),
         pesoActual: measuresPayload.pesoActual,
         updatedAt: serverTimestamp(),
       });
@@ -459,12 +404,11 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       const notFoundCodes = ["not-found", "notFound", "404"];
       const isNotFound = err?.code ? notFoundCodes.some((c) => String(err.code).toLowerCase().includes(String(c).toLowerCase())) : false;
       if (isNotFound) {
-        // fallback: create doc
         try {
           await setDoc(doc(db, "users", uid), {
             ...cleaned,
-            medidasHistorico: options.addToHistorico ? [entryMedida] : [],
-            pesoHistorico: options.addToHistorico ? [entryPeso] : [],
+            medidasHistorico: [entryMedida],
+            pesoHistorico: [entryPeso],
             pesoActual: measuresPayload.pesoActual,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -482,13 +426,11 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       }
     }
 
-    // Reload user data and update editable with latest values
     try {
       const snap = await getDoc(doc(db, "users", uid));
       if (snap.exists()) {
         const data = snap.data();
         setUserData(data);
-        // Merge the new measures into editable so the form shows them
         setEditable((prev) => ({
           ...prev,
           pesoActual: data.pesoActual ?? prev.pesoActual ?? "",
@@ -511,11 +453,9 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           tensionArterial: data.tensionArterial ?? prev.tensionArterial ?? { sys: "", dia: "" },
         }));
       }
-      // reset peso input
       setPeso("");
       setFechaPeso(todayISO);
       setError(null);
-      // switch to pesaje tab to reflect changes
       const idx = tabs.findIndex((t) => t.id === "pesaje");
       if (idx >= 0) setTabIndex(idx);
     } catch (err3) {
@@ -523,16 +463,6 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       setError("Guardado, pero no se pudo actualizar la vista.");
     } finally {
       setSavingPeso(false);
-    }
-  };
-
-  // sign out handler
-  const handleSignOut = async () => {
-    try {
-      await signOut(auth);
-    } catch (err) {
-      console.error("[FichaUsuario] signOut error:", err);
-      setError("No se pudo cerrar sesión.");
     }
   };
 
@@ -601,7 +531,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const chartOptions = { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: false } } };
 
   return (
-    <div ref={rootRef}>
+    <div ref={rootRef} className={`ficha-root ${adminMode ? "admin-wide" : ""}`}>
       <div style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between", padding: 12 }}>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <div className="avatar">{(userData.nombre?.[0] || userData.email?.[0] || "U").toUpperCase()}</div>
@@ -612,7 +542,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         </div>
 
         <div className="header-actions">
-          <button className="btn ghost" onClick={() => setTabIndex(0)}>Perfil</button>
+          <button className="btn ghost" onClick={() => { setShowProfile(true); }}>Perfil</button>
           {(!targetUid || targetUid === authUid) && (
             <button className="btn danger" onClick={handleSignOut}>Cerrar sesión</button>
           )}
@@ -621,17 +551,22 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
       <nav className="tabs" role="tablist" aria-label="Secciones" style={{ marginTop: 12 }}>
         {tabs.map((t, i) => (
-          <button key={t.id} className={i === tabIndex ? "tab tab-active" : "tab"} onClick={() => setTabIndex(i)}>
+          <button
+            key={t.id}
+            className={!showProfile && i === tabIndex ? "tab tab-active" : "tab"}
+            onClick={() => { setShowProfile(false); setTabIndex(i); }}
+          >
             {t.label}
           </button>
         ))}
       </nav>
 
       <div style={{ marginTop: 12 }}>
-        {tabIndex === 0 && (
+        {showProfile ? (
           <div className="card" style={{ padding: 12 }}>
-            <h3>Datos personales</h3>
+            <h3>Perfil</h3>
             <div className="panel-section">
+              <h4 style={{ marginTop: 0 }}>Datos personales</h4>
               <div className="field">
                 <label>Nombre</label>
                 <input className="input" value={editable.nombre || ""} onChange={(e) => setEditable((s) => ({ ...s, nombre: e.target.value }))} />
@@ -648,17 +583,10 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                 <label>Teléfono</label>
                 <input className="input" type="tel" value={editable.telefono || ""} onChange={(e) => setEditable((s) => ({ ...s, telefono: e.target.value }))} />
               </div>
-              <div style={{ marginTop: 12 }}>
-                <button className="btn primary" onClick={savePersonal}>Guardar</button>
-              </div>
-            </div>
-          </div>
-        )}
 
-        {tabIndex === 1 && (
-          <div className="card" style={{ padding: 12 }}>
-            <h3>Datos de dieta</h3>
-            <div className="panel-section">
+              <hr style={{ margin: "12px 0", border: "none", borderTop: "1px solid #eef7ee" }} />
+
+              <h4>Dieta</h4>
               <div className="field">
                 <label>Tipo de dieta</label>
                 <select className="input" value={editable.dietaactual || ""} onChange={(e) => setEditable((s) => ({ ...s, dietaactual: e.target.value }))}>
@@ -690,314 +618,290 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                 </select>
               </div>
 
-              <div style={{ marginTop: 12 }}>
-                <button className="btn primary" onClick={saveDieta}>Guardar</button>
+              {(editable.ejercicios || userData?.ejercicios) ? null : (
+                <div className="field">
+                  <label>Descripción ejercicios</label>
+                  <textarea className="input" rows={3} value={editable.ejerciciosDescripcion || ""} onChange={(e) => setEditable((s) => ({ ...s, ejerciciosDescripcion: e.target.value }))} />
+                </div>
+              )}
+
+              {(editable.recetas || userData?.recetas) ? null : (
+                <div className="field">
+                  <label>Descripción recetas</label>
+                  <textarea className="input" rows={3} value={editable.recetasDescripcion || ""} onChange={(e) => setEditable((s) => ({ ...s, recetasDescripcion: e.target.value }))} />
+                </div>
+              )}
+
+              <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+                <button className="btn primary" onClick={saveProfile}>Guardar perfil</button>
+                <button className="btn ghost" onClick={() => { loadUser(); }}>Revertir cambios</button>
               </div>
             </div>
           </div>
-        )}
+        ) : (
+          <>
+            {/* Pestañas: Pesaje / Dieta semanal / Ejercicios / Recetas */}
+            {tabIndex === 0 && (
+              <div className="card" style={{ padding: 12 }}>
+                <h3>Pesaje</h3>
+                <div className="panel-section">
+                  {/* formulario y histórico del pesaje (igual que anteriormente) */}
+                  <form onSubmit={submitPeso} style={{ display: "flex", gap: 8, flexDirection: "column" }}>
+                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+                      <div style={{ minWidth: 180 }}>
+                        <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>Fecha</label>
+                        <input className="input" type="date" value={fechaPeso} onChange={(e) => setFechaPeso(e.target.value)} />
+                      </div>
 
-        {/* Pesaje reorganizado */}
-        {tabIndex === 2 && (
-          <div className="card" style={{ padding: 12 }}>
-            <h3>Pesaje</h3>
-            <div className="panel-section">
-              <form onSubmit={(e) => submitPeso(e, { addToHistorico: true })} style={{ display: "flex", gap: 8, flexDirection: "column" }}>
-                {/* Fecha y Peso (primera fila) */}
-                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
-                  <div style={{ minWidth: 180 }}>
-                    <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>Fecha</label>
-                    <input className="input" type="date" value={fechaPeso} onChange={(e) => setFechaPeso(e.target.value)} />
-                  </div>
+                      <div style={{ minWidth: 180 }}>
+                        <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>Peso (kg)</label>
+                        <input className="input" type="number" step="0.1" placeholder="Peso (kg)" value={peso} onChange={(e) => setPeso(e.target.value)} />
+                      </div>
 
-                  <div style={{ minWidth: 180 }}>
-                    <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>Peso (kg)</label>
-                    <input className="input" type="number" step="0.1" placeholder="Peso (kg)" value={peso} onChange={(e) => setPeso(e.target.value)} />
-                  </div>
-
-                  <div style={{ flex: "1 1 200px", minWidth: 200 }}>
-                    <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>IMC (opcional)</label>
-                    <input className="input" type="number" step="0.1" value={editable.imc || ""} onChange={(e) => setEditable(s => ({ ...s, imc: e.target.value }))} />
-                  </div>
-                </div>
-
-                {/* Grid de medidas: usa auto-fit para más columnas en pantallas grandes */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginTop: 12 }}>
-                  <div className="field">
-                    <label>Masa Grasa (%)</label>
-                    <input className="input" type="number" step="0.1" value={editable.masaGrasaPct || ""} onChange={(e) => setEditable(s => ({ ...s, masaGrasaPct: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>Masa Grasa (kg)</label>
-                    <input className="input" type="number" step="0.01" value={editable.masaGrasaKg || ""} onChange={(e) => setEditable(s => ({ ...s, masaGrasaKg: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>Masa Magra (kg)</label>
-                    <input className="input" type="number" step="0.01" value={editable.masaMagraKg || ""} onChange={(e) => setEditable(s => ({ ...s, masaMagraKg: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>Masa Muscular (kg)</label>
-                    <input className="input" type="number" step="0.01" value={editable.masaMuscularKg || ""} onChange={(e) => setEditable(s => ({ ...s, masaMuscularKg: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>Masa ósea (kg)</label>
-                    <input className="input" type="number" step="0.01" value={editable.masaOseaKg || ""} onChange={(e) => setEditable(s => ({ ...s, masaOseaKg: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>Agua total (kg)</label>
-                    <input className="input" type="number" step="0.01" value={editable.aguaTotalKg || ""} onChange={(e) => setEditable(s => ({ ...s, aguaTotalKg: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>% Agua total</label>
-                    <input className="input" type="number" step="0.1" value={editable.aguaTotalPct || ""} onChange={(e) => setEditable(s => ({ ...s, aguaTotalPct: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>MB (kcal)</label>
-                    <input className="input" type="number" step="1" value={editable.mbKcal || ""} onChange={(e) => setEditable(s => ({ ...s, mbKcal: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>Nivel grasa visceral</label>
-                    <input className="input" type="number" step="1" value={editable.grasaVisceralNivel || ""} onChange={(e) => setEditable(s => ({ ...s, grasaVisceralNivel: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>Edad metabólica</label>
-                    <input className="input" type="number" step="1" value={editable.edadMetabolica || ""} onChange={(e) => setEditable(s => ({ ...s, edadMetabolica: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>Índice cintura / talla</label>
-                    <input className="input" type="number" step="0.01" value={editable.indiceCinturaTalla || ""} onChange={(e) => setEditable(s => ({ ...s, indiceCinturaTalla: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>C. Cintura (cm)</label>
-                    <input className="input" type="number" step="0.1" value={editable.circunferenciaCinturaCm || ""} onChange={(e) => setEditable(s => ({ ...s, circunferenciaCinturaCm: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>C. Cadera (cm)</label>
-                    <input className="input" type="number" step="0.1" value={editable.circunferenciaCaderaCm || ""} onChange={(e) => setEditable(s => ({ ...s, circunferenciaCaderaCm: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>C. Brazo (cm)</label>
-                    <input className="input" type="number" step="0.1" value={editable.circunferenciaBrazoCm || ""} onChange={(e) => setEditable(s => ({ ...s, circunferenciaBrazoCm: e.target.value }))} />
-                  </div>
-
-                  <div className="field">
-                    <label>C. Pierna (cm)</label>
-                    <input className="input" type="number" step="0.1" value={editable.circunferenciaPiernaCm || ""} onChange={(e) => setEditable(s => ({ ...s, circunferenciaPiernaCm: e.target.value }))} />
-                  </div>
-
-                  <div className="field" style={{ minWidth: 220 }}>
-                    <label>TA Sys / Dia (mmHg)</label>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <input
-                        className="input"
-                        type="number"
-                        placeholder="SYS"
-                        value={editable.tensionArterial?.sys || ""}
-                        onChange={(e) => setEditable(s => ({ ...s, tensionArterial: { ...(s.tensionArterial || {}), sys: e.target.value } }))}
-                      />
-                      <input
-                        className="input"
-                        type="number"
-                        placeholder="DIA"
-                        value={editable.tensionArterial?.dia || ""}
-                        onChange={(e) => setEditable(s => ({ ...s, tensionArterial: { ...(s.tensionArterial || {}), dia: e.target.value } }))}
-                      />
+                      <div style={{ flex: "1 1 200px", minWidth: 200 }}>
+                        <label style={{ display: "block", fontSize: 13, marginBottom: 6 }}>IMC (opcional)</label>
+                        <input className="input" type="number" step="0.1" value={editable.imc || ""} onChange={(e) => setEditable(s => ({ ...s, imc: e.target.value }))} />
+                      </div>
                     </div>
+
+                    <div className="pesaje-grid" style={{ marginTop: 12 }}>
+                      {/* campos de medidas */}
+                      <div className="field">
+                        <label>Masa Grasa (%)</label>
+                        <input className="input" type="number" step="0.1" value={editable.masaGrasaPct || ""} onChange={(e) => setEditable(s => ({ ...s, masaGrasaPct: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>Masa Grasa (kg)</label>
+                        <input className="input" type="number" step="0.01" value={editable.masaGrasaKg || ""} onChange={(e) => setEditable(s => ({ ...s, masaGrasaKg: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>Masa Magra (kg)</label>
+                        <input className="input" type="number" step="0.01" value={editable.masaMagraKg || ""} onChange={(e) => setEditable(s => ({ ...s, masaMagraKg: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>Masa Muscular (kg)</label>
+                        <input className="input" type="number" step="0.01" value={editable.masaMuscularKg || ""} onChange={(e) => setEditable(s => ({ ...s, masaMuscularKg: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>Masa ósea (kg)</label>
+                        <input className="input" type="number" step="0.01" value={editable.masaOseaKg || ""} onChange={(e) => setEditable(s => ({ ...s, masaOseaKg: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>Agua total (kg)</label>
+                        <input className="input" type="number" step="0.01" value={editable.aguaTotalKg || ""} onChange={(e) => setEditable(s => ({ ...s, aguaTotalKg: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>% Agua total</label>
+                        <input className="input" type="number" step="0.1" value={editable.aguaTotalPct || ""} onChange={(e) => setEditable(s => ({ ...s, aguaTotalPct: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>MB (kcal)</label>
+                        <input className="input" type="number" step="1" value={editable.mbKcal || ""} onChange={(e) => setEditable(s => ({ ...s, mbKcal: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>Nivel grasa visceral</label>
+                        <input className="input" type="number" step="1" value={editable.grasaVisceralNivel || ""} onChange={(e) => setEditable(s => ({ ...s, grasaVisceralNivel: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>Edad metabólica</label>
+                        <input className="input" type="number" step="1" value={editable.edadMetabolica || ""} onChange={(e) => setEditable(s => ({ ...s, edadMetabolica: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>Índice cintura / talla</label>
+                        <input className="input" type="number" step="0.01" value={editable.indiceCinturaTalla || ""} onChange={(e) => setEditable(s => ({ ...s, indiceCinturaTalla: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>C. Cintura (cm)</label>
+                        <input className="input" type="number" step="0.1" value={editable.circunferenciaCinturaCm || ""} onChange={(e) => setEditable(s => ({ ...s, circunferenciaCinturaCm: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>C. Cadera (cm)</label>
+                        <input className="input" type="number" step="0.1" value={editable.circunferenciaCaderaCm || ""} onChange={(e) => setEditable(s => ({ ...s, circunferenciaCaderaCm: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>C. Brazo (cm)</label>
+                        <input className="input" type="number" step="0.1" value={editable.circunferenciaBrazoCm || ""} onChange={(e) => setEditable(s => ({ ...s, circunferenciaBrazoCm: e.target.value }))} />
+                      </div>
+                      <div className="field">
+                        <label>C. Pierna (cm)</label>
+                        <input className="input" type="number" step="0.1" value={editable.circunferenciaPiernaCm || ""} onChange={(e) => setEditable(s => ({ ...s, circunferenciaPiernaCm: e.target.value }))} />
+                      </div>
+                      <div className="field" style={{ minWidth: 220 }}>
+                        <label>TA Sys / Dia (mmHg)</label>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <input
+                            className="input"
+                            type="number"
+                            placeholder="SYS"
+                            value={editable.tensionArterial?.sys || ""}
+                            onChange={(e) => setEditable(s => ({ ...s, tensionArterial: { ...(s.tensionArterial || {}), sys: e.target.value } }))}
+                          />
+                          <input
+                            className="input"
+                            type="number"
+                            placeholder="DIA"
+                            value={editable.tensionArterial?.dia || ""}
+                            onChange={(e) => setEditable(s => ({ ...s, tensionArterial: { ...(s.tensionArterial || {}), dia: e.target.value } }))}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
+                      <button type="submit" className="btn primary" disabled={savingPeso}>{savingPeso ? "Guardando..." : "Registrar peso y medidas"}</button>
+                      <button type="button" className="btn ghost" onClick={() => { setPeso(""); setFechaPeso(todayISO); }}>Limpiar</button>
+                    </div>
+                  </form>
+
+                  <div style={{ marginTop: 20 }}>
+                    <h4>Histórico de medidas</h4>
+                    {rowsDesc.length === 0 ? <div className="mensaje">No hay registros.</div> : (
+                      <div style={{ overflowX: "auto" }}>
+                        <table className="hist-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                          <thead>
+                            <tr>
+                              <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Fecha</th>
+                              <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Peso (kg)</th>
+                              <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Masa Gras (%)</th>
+                              <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Masa Gras (kg)</th>
+                              <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Masa Magra (kg)</th>
+                              <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Masa Musc (kg)</th>
+                              <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Agua (%)</th>
+                              <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>IMC</th>
+                              <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>C. Cintura (cm)</th>
+                              <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>TA (SYS/DIA)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rowsDesc.map((r, i) => (
+                              <tr key={`${r._t || i}-${r.peso ?? r.pesoActual ?? i}`}>
+                                <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.fecha || (r._t ? new Date(r._t).toLocaleDateString() : "-")}</td>
+                                <td style={{ padding: 8, textAlign: "right", borderBottom: "1px solid #f2f2f2" }}>{r.peso ?? r.pesoActual ?? "-"}</td>
+                                <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.masaGrasaPct ?? "-"}</td>
+                                <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.masaGrasaKg ?? "-"}</td>
+                                <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.masaMagraKg ?? "-"}</td>
+                                <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.masaMuscularKg ?? "-"}</td>
+                                <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.aguaTotalPct ?? "-"}</td>
+                                <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.imc ?? "-"}</td>
+                                <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.circunferenciaCinturaCm ?? "-"}</td>
+                                <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.tensionArterial ? `${r.tensionArterial.sys || "-"} / ${r.tensionArterial.dia || "-"}` : "-"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ marginTop: 16 }}>
+                    <h4>Tendencia (solo peso)</h4>
+                    {sortedAsc.length > 0 && dataPesosClean.length > 0 ? <Line data={chartData} options={chartOptions} /> : <div className="mensaje">No hay datos para el gráfico.</div>}
                   </div>
                 </div>
+              </div>
+            )}
 
-                {/* Botones finales: Guardar abajo del todo */}
-                <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-                  <button type="submit" className="btn primary" disabled={savingPeso}>{savingPeso ? "Guardando..." : "Registrar peso y medidas"}</button>
-                  <button type="button" className="btn ghost" onClick={() => { setPeso(""); setFechaPeso(todayISO); }}>Limpiar</button>
-                </div>
-              </form>
+            {tabIndex === 1 && (
+              <div className="card" style={{ padding: 12 }}>
+                <h3>Dieta semanal</h3>
+                <div className="panel-section">
+                  <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+                    {["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"].map((d, i) => (
+                      <button key={d} className={selDay === i ? "tab tab-active" : "tab"} onClick={() => setEditable((s) => ({ ...s, _selectedDay: i }))}>{d}</button>
+                    ))}
+                  </div>
 
-              {/* Histórico: mostrar todas las medidas por fila */}
-              <div style={{ marginTop: 20 }}>
-                <h4>Histórico de medidas</h4>
-                {rowsDesc.length === 0 ? <div className="mensaje">No hay registros.</div> : (
-                  <div style={{ overflowX: "auto" }}>
-                    <table className="hist-table" style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr>
-                          <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Fecha</th>
-                          <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Peso (kg)</th>
-                          <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Masa Gras (%)</th>
-                          <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Masa Gras (kg)</th>
-                          <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Masa Magra (kg)</th>
-                          <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Masa Musc (kg)</th>
-                          <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>Agua (%)</th>
-                          <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>IMC</th>
-                          <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>C. Cintura (cm)</th>
-                          <th style={{ padding: 8, borderBottom: "1px solid #ddd" }}>TA (SYS/DIA)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rowsDesc.map((r, i) => (
-                          <tr key={`${r._t || i}-${r.peso ?? r.pesoActual ?? i}`}>
-                            <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.fecha || (r._t ? new Date(r._t).toLocaleDateString() : "-")}</td>
-                            <td style={{ padding: 8, textAlign: "right", borderBottom: "1px solid #f2f2f2" }}>{r.peso ?? r.pesoActual ?? "-"}</td>
-                            <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.masaGrasaPct ?? "-"}</td>
-                            <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.masaGrasaKg ?? "-"}</td>
-                            <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.masaMagraKg ?? "-"}</td>
-                            <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.masaMuscularKg ?? "-"}</td>
-                            <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.aguaTotalPct ?? "-"}</td>
-                            <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.imc ?? "-"}</td>
-                            <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.circunferenciaCinturaCm ?? "-"}</td>
-                            <td style={{ padding: 8, borderBottom: "1px solid #f2f2f2" }}>{r.tensionArterial ? `${r.tensionArterial.sys || "-"} / ${r.tensionArterial.dia || "-"}` : "-"}</td>
-                          </tr>
+                  <div style={{ marginTop: 12 }}>
+                    <div className="weekly-menu-grid" style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 12 }}>
+                      <div className="weekly-left">
+                        {ALL_SECTIONS.map((sec) => <div key={sec.key} className="weekly-label">{sec.label}</div>)}
+                      </div>
+                      <div className="weekly-right">
+                        {ALL_SECTIONS.map((sec) => (
+                          <div key={sec.key} className="weekly-field">
+                            <textarea
+                              className="input weekly-textarea"
+                              rows={3}
+                              value={(Array.isArray(editable.menu) && editable.menu[selDay] ? editable.menu[selDay][sec.key] : "") || ""}
+                              onChange={(e) => {
+                                setMenuField(selDay, sec.key, e.target.value);
+                                const ta = e.target;
+                                ta.style.height = "auto";
+                                ta.style.height = Math.max(56, ta.scrollHeight + 2) + "px";
+                              }}
+                            />
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-
-              <div style={{ marginTop: 16 }}>
-                <h4>Tendencia (solo peso)</h4>
-                {sortedAsc.length > 0 && dataPesosClean.length > 0 ? <Line data={chartData} options={chartOptions} /> : <div className="mensaje">No hay datos para el gráfico.</div>}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {tabIndex === 3 && (
-          <div className="card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 12 }}>
-              <div>
-                <h3 style={{ margin: 0 }}>Dieta semanal</h3>
-                <div style={{ fontSize: 13, color: "#666" }}>Rellena el menú del día</div>
-              </div>
-              <div style={{ fontSize: 13, color: "#666", paddingRight: 12 }}>{saveLabel}</div>
-            </div>
-
-            <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "0 12px 8px 12px" }}>
-              {["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"].map((d, i) => (
-                <button key={d} className={selDay === i ? "tab tab-active" : "tab"} onClick={() => setEditable((s) => ({ ...s, _selectedDay: i }))}>{d}</button>
-              ))}
-            </div>
-
-            <div className="weekly-menu" style={{ marginTop: 12, padding: "0 12px 18px 12px" }}>
-              <div className="weekly-day-header" style={{ marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 12px" }}>
-                <div><strong>{["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"][selDay]}</strong></div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button className="btn ghost" onClick={() => {
-                    const cleared = { ...emptyDayMenu() };
-                    setEditable((s) => {
-                      const menu = Array.isArray(s.menu) ? [...s.menu] : Array.from({ length: 7 }, () => ({ ...emptyDayMenu() }));
-                      menu[selDay] = cleared;
-                      return { ...s, menu };
-                    });
-                  }}>Limpiar día</button>
-                  <button className="btn primary" onClick={saveSemana}>Guardar día</button>
-                </div>
-              </div>
-
-              <div className="weekly-menu-grid" role="group" aria-label={`Editor de menú para ${["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"][selDay]}`}>
-                <div className="weekly-left" aria-hidden="true">
-                  {ALL_SECTIONS.map((sec) => <div key={sec.key} className="weekly-label">{sec.label}</div>)}
-                </div>
-
-                <div className="weekly-right">
-                  {ALL_SECTIONS.map((sec) => (
-                    <div key={sec.key} className="weekly-field">
-                      <div className="weekly-field-label" aria-hidden="true">{sec.label}</div>
-                      <textarea
-                        className={`input weekly-textarea ${sec.key === "consejos" ? "consejos" : ""}`}
-                        rows={3}
-                        value={(Array.isArray(editable.menu) && editable.menu[selDay] ? editable.menu[selDay][sec.key] : "") || ""}
-                        onChange={(e) => {
-                          setMenuField(selDay, sec.key, e.target.value);
-                          // immediate autosize for user's typing
-                          const ta = e.target;
-                          ta.style.height = "auto";
-                          ta.style.height = Math.max(56, ta.scrollHeight + 2) + "px";
-                        }}
-                        placeholder={sec.key === "consejos" ? "Consejos, recomendaciones o notas para el día..." : `Escribe ${sec.label.toLowerCase()}...`}
-                      />
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
 
-              <div style={{ marginTop: 10, display: "flex", gap: 8, padding: "0 12px 12px 12px" }}>
-                <button className="btn ghost" onClick={() => {
-                  const prev = Math.max(0, selDay - 1);
-                  setEditable((s) => ({ ...s, _selectedDay: prev }));
-                }}>Día anterior</button>
-                <button className="btn ghost" onClick={() => {
-                  const next = Math.min(6, selDay + 1);
-                  setEditable((s) => ({ ...s, _selectedDay: next }));
-                }}>Siguiente día</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {tabIndex === 4 && (
-          <div className="card" style={{ padding: 12 }}>
-            <h3>Ejercicios</h3>
-            <div className="panel-section">
-              {(editable.ejercicios || userData?.ejercicios) ? (
-                <DriveFolderViewer folderId={exercisesFolder} height={520} />
-              ) : (
-                <div className="field">
-                  <label>Descripción</label>
-                  <textarea className="input" rows={4} value={editable.ejerciciosDescripcion || ""} onChange={(e) => setEditable((s) => ({ ...s, ejerciciosDescripcion: e.target.value }))} />
-                  <div style={{ marginTop: 8 }}>
-                    <button className="btn primary" onClick={async () => {
-                      try {
-                        await updateDoc(doc(db, "users", uid), { ejerciciosDescripcion: editable.ejerciciosDescripcion || "", updatedAt: serverTimestamp() });
-                      } catch (err) {
-                        console.error(err);
-                        setError("No se pudo guardar la descripción de ejercicios.");
-                      }
-                    }}>Guardar descripción</button>
+                  <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+                    <button className="btn ghost" onClick={() => {
+                      const prev = Math.max(0, selDay - 1);
+                      setEditable((s) => ({ ...s, _selectedDay: prev }));
+                    }}>Día anterior</button>
+                    <button className="btn ghost" onClick={() => {
+                      const next = Math.min(6, selDay + 1);
+                      setEditable((s) => ({ ...s, _selectedDay: next }));
+                    }}>Siguiente día</button>
                   </div>
                 </div>
-              )}
-            </div>
-          </div>
-        )}
+              </div>
+            )}
 
-        {tabIndex === 5 && (
-          <div className="card" style={{ padding: 12 }}>
-            <h3>Recetas</h3>
-            <div className="panel-section">
-              {(editable.recetas || userData?.recetas) ? (
-                <DriveFolderViewer folderId={recipesFolder} height={520} />
-              ) : (
-                <div className="field">
-                  <label>Descripción</label>
-                  <textarea className="input" rows={4} value={editable.recetasDescripcion || ""} onChange={(e) => setEditable((s) => ({ ...s, recetasDescripcion: e.target.value }))} />
-                  <div style={{ marginTop: 8 }}>
-                    <button className="btn primary" onClick={async () => {
-                      try {
-                        await updateDoc(doc(db, "users", uid), { recetasDescripcion: editable.recetasDescripcion || "", updatedAt: serverTimestamp() });
-                      } catch (err) {
-                        console.error(err);
-                        setError("No se pudo guardar la descripción de recetas.");
-                      }
-                    }}>Guardar descripción</button>
-                  </div>
+            {tabIndex === 2 && (
+              <div className="card" style={{ padding: 12 }}>
+                <h3>Ejercicios</h3>
+                <div className="panel-section">
+                  {(editable.ejercicios || userData?.ejercicios) ? (
+                    <DriveFolderViewer folderId={exercisesFolder} height={520} />
+                  ) : (
+                    <div className="field">
+                      <label>Descripción</label>
+                      <textarea className="input" rows={4} value={editable.ejerciciosDescripcion || ""} onChange={(e) => setEditable((s) => ({ ...s, ejerciciosDescripcion: e.target.value }))} />
+                      <div style={{ marginTop: 8 }}>
+                        <button className="btn primary" onClick={async () => {
+                          try {
+                            await updateDoc(doc(db, "users", uid), { ejerciciosDescripcion: editable.ejerciciosDescripcion || "", updatedAt: serverTimestamp() });
+                          } catch (err) {
+                            console.error(err);
+                            setError("No se pudo guardar la descripción de ejercicios.");
+                          }
+                        }}>Guardar descripción</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
+            )}
+
+            {tabIndex === 3 && (
+              <div className="card" style={{ padding: 12 }}>
+                <h3>Recetas</h3>
+                <div className="panel-section">
+                  {(editable.recetas || userData?.recetas) ? (
+                    <DriveFolderViewer folderId={recipesFolder} height={520} />
+                  ) : (
+                    <div className="field">
+                      <label>Descripción</label>
+                      <textarea className="input" rows={4} value={editable.recetasDescripcion || ""} onChange={(e) => setEditable((s) => ({ ...s, recetasDescripcion: e.target.value }))} />
+                      <div style={{ marginTop: 8 }}>
+                        <button className="btn primary" onClick={async () => {
+                          try {
+                            await updateDoc(doc(db, "users", uid), { recetasDescripcion: editable.recetasDescripcion || "", updatedAt: serverTimestamp() });
+                          } catch (err) {
+                            console.error(err);
+                            setError("No se pudo guardar la descripción de recetas.");
+                          }
+                        }}>Guardar descripción</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 

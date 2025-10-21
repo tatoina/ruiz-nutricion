@@ -137,7 +137,11 @@ body{
 
 /* Panel / content */
 .panel{padding:14px}
-.panel-section{max-width:820px;margin:0 auto;padding:14px}
+.panel-section{
+  max-width:820px;
+  margin:0 auto;
+  padding:14px;
+}
 .panel-section h3{margin:0 0 12px;color:var(--accent-600);font-size:16px}
 .field{display:flex;flex-direction:column;margin-bottom:12px}
 .field label{font-size:13px;color:var(--muted);margin-bottom:8px}
@@ -172,7 +176,7 @@ textarea{resize:vertical}
 }
 .login-logo{ width:110px; height:110px; display:block; margin:0 auto 16px; object-fit:contain; border-radius:50%; background:transparent; padding:6px; box-shadow:0 12px 30px rgba(6,95,70,0.08), 0 2px 6px rgba(0,0,0,0.06); border:6px solid rgba(255,255,255,0.92); }
 .login-form{display:flex;flex-direction:column;gap:10px;align-items:stretch}
-.input{display:block;width:100%;padding:12px;border-radius:12px;border:1px solid rgba(6,95,70,0.06);background:rgba(255,255,255,0.95);font-size:15px;outline:none}
+.input{display:block;width:100%;padding:12px;border-radius:12px;border:1px solid rgba(6,95,70,0.06);background:rgba(255,255,255,0.95);font-size:15px}
 
 /* messages */
 .mensaje{ background:linear-gradient(90deg,#ffffe6,#f7ffd0); padding:10px; border-radius:10px; color:#32521a; text-align:center; }
@@ -285,4 +289,111 @@ button, .tab { -webkit-tap-highlight-color: rgba(0,0,0,0); }
   .card { border-radius: 12px; overflow: visible; }
   .panel-section { padding: 12px; }
   .tabs { padding-left: 12px; padding-right: 12px; }
+}
+
+/* ===== FICHA USUARIO / PES AJE ADAPTACIONES (integradas) ===== */
+
+/* ficha root: default and admin-wide */
+.ficha-root {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+/* admin-wide: allow using full viewport width and remove container limits */
+.ficha-root.admin-wide {
+  max-width: none;
+  width: 100%;
+  margin: 0;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+/* Increase specificity to override possible global layout/container rules */
+.layout .ficha-root.admin-wide {
+  max-width: none !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+
+/* Ensure card inside ficha-root does not keep earlier max-widths/margins */
+.ficha-root.admin-wide .card {
+  margin: 0;
+  max-width: none;
+  border-radius: 12px;
+}
+
+/* Make the pesaje card start aligned under its heading (no extra inner padding that indents) */
+.card.pesaje-section-wrapper > h3 {
+  margin-left: 0;
+  padding-left: 0;
+}
+
+/* Panel-section inside pesaje should not be constrained to the usual max-width */
+.card.pesaje-section-wrapper .panel-section {
+  max-width: none;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+/* pesaje-grid: responsive grid for inputs (many columns on wide screens) */
+.pesaje-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+/* force many columns on very large desktop screens (admin on PC) */
+@media (min-width: 1400px) {
+  .pesaje-grid {
+    grid-template-columns: repeat(8, 1fr);
+  }
+}
+
+/* fallback slightly fewer columns on mid-large screens */
+@media (min-width: 1200px) and (max-width: 1399px) {
+  .pesaje-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
+/* ensure the pesaje section starts from the left edge of the ficha-root container */
+.ficha-root.admin-wide .pesaje-section-wrapper {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Historical table tweaks */
+.hist-table th, .hist-table td {
+  padding: 8px;
+  font-size: 13px;
+  border-bottom: 1px solid #eee;
+  white-space: nowrap;
+}
+
+/* Mobile adjustments (keep readable) */
+@media (max-width: 900px) {
+  .pesaje-grid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+  .hist-table th, .hist-table td {
+    font-size: 12px;
+    padding: 6px;
+  }
+}
+
+/* If a global selector like .layout or .container still constrains width, this highly-specific rule will override it inside ficha-root.admin-wide */
+.layout .admin-right .ficha-root.admin-wide,
+.layout .ficha-root.admin-wide,
+.container .ficha-root.admin-wide {
+  max-width: none !important;
+  width: 100% !important;
+  padding-left: 12px !important;
+  padding-right: 12px !important;
 }
