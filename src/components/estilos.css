@@ -205,13 +205,16 @@ button, .tab { -webkit-tap-highlight-color: rgba(0,0,0,0); }
 
 /* ===== Admin ===== */
 .admin-fullscreen { max-width: none !important; width: 100%; margin: 0 auto; padding: 14px; box-sizing: border-box; min-height: 100vh; background: var(--bg); }
+
+/* Admin columns defaults */
 .admin-columns { display: flex; gap: 12px; align-items: flex-start; }
+
 /* default left panel width on desktop; on mobile overridden below */
-.admin-left { width: 360px; flex-shrink: 0; height: calc(100vh - 160px); overflow-y: auto; padding: 12px; box-sizing: border-box; }
+.admin-left { min-width: 220px; height: calc(100vh - 160px); overflow-y: auto; padding: 12px; box-sizing: border-box; }
 .admin-right { flex: 1; height: calc(100vh - 160px); overflow: auto; padding: 12px; box-sizing: border-box; }
 .admin-left ul li:hover { background: rgba(0,0,0,0.02); }
 
-/* Resizer vertical between panels */
+/* Resizer vertical between panels (legacy fallback) */
 .resizer { width: 8px; cursor: col-resize; background: transparent; user-select: none; -webkit-user-select: none; display: inline-block; height: calc(100vh - 160px); margin: 0; transition: background-color 120ms ease; }
 .resizer:hover { background: rgba(0,0,0,0.04); }
 .resizer::after { content: ""; display: block; width: 2px; height: 48px; background: rgba(0,0,0,0.08); margin: 10px auto; border-radius: 2px; }
@@ -396,4 +399,126 @@ button, .tab { -webkit-tap-highlight-color: rgba(0,0,0,0); }
   width: 100% !important;
   padding-left: 12px !important;
   padding-right: 12px !important;
+}
+
+/* Añadido: pequeñas utilidades para la navegación de día */
+.day-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.day-label {
+  font-weight: 800;
+  color: var(--accent-600);
+  font-size: 15px;
+}
+
+/* ==== FIX para permitir redimensionado dinámico de .admin-left ====
+   Reemplaza reglas que forzaban width/flex con !important.
+   Este bloque permite que AdminResizer aplique estilos inline (width/flex)
+   mientras mantiene reglas defensivas y el estado collapsed. */
+
+/* Aseguramos layout en columnas (no forzamos ancho) */
+.admin-columns {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+/* No forzar width/flex con !important: dejamos min-width por seguridad */
+.admin-left {
+  display: block;
+  visibility: visible;
+  opacity: 1;
+  min-width: 220px;
+  box-sizing: border-box;
+  z-index: 50;
+  /* NO fijar width o flex con !important aquí, para permitir inline overrides */
+}
+
+/* Right panel sigue siendo flexible */
+.admin-right {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 1;
+}
+
+/* Mantener la expansión de ficha-root SOLO dentro de admin-right (permanece específico) */
+.admin-right > .ficha-root.admin-wide,
+.admin-right .ficha-root.admin-wide {
+  max-width: none !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+
+/* Estado collapsed: seguir forzando el colapso con !important (toggle por AdminResizer) */
+.admin-left.collapsed {
+  width: 64px !important;
+  min-width: 64px !important;
+  overflow: hidden !important;
+}
+
+/* Si hay estilos inline que intentaron ocultar el panel, defendemos la visibilidad */
+.admin-left[style*="display:none"],
+.admin-left[style*="visibility:hidden"] {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Evitar clipping por overflow en contenedores padre */
+.admin-columns, .admin-left, .admin-right {
+  overflow: visible !important;
+}
+
+/* Reglas para AdminResizer — estilo del resizer/collapse (mantener al final por especificidad) */
+
+/* collapsed state for admin-left (reiterado por seguridad) */
+.admin-left.collapsed {
+  width: 64px !important;
+  min-width: 64px !important;
+  overflow: hidden !important;
+}
+
+/* ocultar/animar contenido dentro del left panel (usa wrapper .admin-left-content) */
+.admin-left .admin-left-content {
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+.admin-left.collapsed .admin-left-content {
+  opacity: 0;
+  transform: translateX(-6px);
+  pointer-events: none;
+}
+
+/* resizer styling */
+.resizer--draggable {
+  width: 10px;
+  cursor: col-resize;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.resizer--draggable .resizer-toggle {
+  font-weight: 800;
+  min-width: 30px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+/* small screens adjustments */
+@media (max-width: 900px) {
+  .resizer--draggable { width: 8px; }
+  .resizer--draggable .resizer-toggle { display: none; }
 }
