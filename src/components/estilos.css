@@ -543,3 +543,77 @@ button, .tab { -webkit-tap-highlight-color: rgba(0,0,0,0); }
     grid-template-columns: 1fr;
   }
 }
+/* ===== Pesaje: layout centrado y grid responsivo =====
+   Añádelo al final de src/components/estilos.css
+*/
+
+.pesaje-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 12px;
+  box-sizing: border-box;
+}
+
+.pesaje-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr)); /* 3 columnas en escritorio */
+  gap: 14px;
+  align-items: end;
+}
+
+/* Cada celda del grid muestra label arriba y control debajo */
+.pesaje-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Etiqueta y control */
+.pesaje-grid label {
+  font-size: 13px;
+  color: #374151; /* gris oscuro */
+  margin-bottom: 4px;
+}
+.pesaje-grid .input,
+.pesaje-grid input,
+.pesaje-grid textarea,
+.pesaje-grid select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  font-size: 15px;
+}
+
+/* Forzar que los botones tengan buen tamaño táctil */
+.pesaje-grid .btn {
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
+/* Elementos que deben ocupar la fila completa */
+.pesaje-grid .full-row {
+  grid-column: 1 / -1;
+}
+
+/* Tensión arterial: entradas lado a lado, adaptables */
+.tension-group {
+  display: flex;
+  gap: 8px;
+}
+.tension-group .input {
+  flex: 1;
+}
+
+/* Breakpoints */
+@media (max-width: 1100px) {
+  .pesaje-grid {
+    grid-template-columns: repeat(2, minmax(200px, 1fr)); /* tablet: 2 columnas */
+  }
+}
+@media (max-width: 700px) {
+  .pesaje-grid {
+    grid-template-columns: 1fr; /* móvil: 1 columna */
+  }
+}
