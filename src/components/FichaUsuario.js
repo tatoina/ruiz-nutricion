@@ -705,7 +705,6 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
               <div className="card" style={{ padding: 12 }}>
                 <h3>Pesaje / Composición</h3>
                 <div className="panel-section">
-                  <form onSubmit={submitPeso}>
                     <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end", marginBottom: 12 }}>
                       <button className="btn primary" type="submit" disabled={savingPeso}>{savingPeso ? "Guardando..." : "Guardar medidas"}</button>
                       <button type="button" className="btn ghost" onClick={() => { setPeso(""); setFechaPeso(todayISO); }}>Limpiar</button>
@@ -818,7 +817,6 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                         </div>
                       </div>
                     </div>
-                  </form>
 
                   <hr style={{ margin: "12px 0" }} />
                   <h4>Histórico de medidas</h4>
