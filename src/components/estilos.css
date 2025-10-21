@@ -522,3 +522,24 @@ button, .tab { -webkit-tap-highlight-color: rgba(0,0,0,0); }
   .resizer--draggable { width: 8px; }
   .resizer--draggable .resizer-toggle { display: none; }
 }
+/* Responsive grid para la pestaña "Pesaje" */
+.pesaje-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr)); /* 3 columnas en escritorio */
+  gap: 12px;
+  align-items: end;
+}
+
+/* Tablet / pantallas medianas → 2 columnas */
+@media (max-width: 1100px) {
+  .pesaje-grid {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+}
+
+/* Móvil → 1 columna */
+@media (max-width: 700px) {
+  .pesaje-grid {
+    grid-template-columns: 1fr;
+  }
+}
