@@ -1,4 +1,3 @@
-// src/components/Login.jsx
 import React, { useState } from "react";
 import "./estilos.css";
 import { signInWithEmailAndPassword } from "firebase/auth";
@@ -33,10 +32,31 @@ export default function Login({ onLogin, onShowRegister }) {
     setLoading(true);
     try {
       const cred = await signInWithEmailAndPassword(auth, email.trim(), pass);
+      const user = cred?.user;
+      const normalizedEmail = String(user?.email || "").trim().toLowerCase();
+      console.debug("[LOGIN] signIn success", { uid: user?.uid, email: user?.email, normalizedEmail });
+
       if (onLogin && typeof onLogin === "function") {
-        onLogin(cred.user);
+        try {
+          // Pass the firebase user object (callback or wrapper will normalize as needed)
+          onLogin(user);
+          console.debug("[LOGIN] onLogin callback invoked.");
+        } catch (cbErr) {
+          console.error("[LOGIN] onLogin callback threw:", cbErr);
+          // As fallback, navigate based on email
+          if (normalizedEmail === "admin@admin.es") {
+            navigate("/admin");
+          } else {
+            navigate("/mi-ficha");
+          }
+        }
       } else {
-        navigate("/mi-ficha");
+        // Fallback navigation if no callback provided
+        if (normalizedEmail === "admin@admin.es") {
+          navigate("/admin");
+        } else {
+          navigate("/mi-ficha");
+        }
       }
     } catch (err) {
       setError(err?.message || "Error al iniciar sesión");
