@@ -33,9 +33,9 @@ ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Title, T
  * - Mientras el panel Perfil esté abierto, NO se muestran las pestañas ni el contenido principal.
  * - Pestañas: Pesaje, Dieta semanal, Ejercicios, Recetas.
  * - Pesaje: campos completos, histórico y gráfico.
- * - Dieta semanal: editor por día con autosave.
+ * - Dieta semanal: ahora cada etiqueta (Desayuno, Almuerzo...) aparece encima del textarea.
  *
- * Asegúrate de añadir las reglas .pesaje-container / .pesaje-grid a estilos.css para la maquetación.
+ * Nota: Añade / actualiza las reglas de estilos en estilos.css si es necesario.
  */
 
 export default function FichaUsuario({ targetUid = null, adminMode = false }) {
@@ -86,7 +86,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
   // autosave / helpers
   const saveTimerRef = useRef(null);
-  const [saveStatus, setSaveStatus] = useState("idle");
+  const [saveStatus, setSaveStatus] = useState("idle"); // idle | pending | saving | saved | error
   const rootRef = useRef(null);
 
   // compute today's index (Monday=0 ... Sunday=6)
@@ -139,7 +139,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     });
   }, [emptyDayMenu]);
 
-  // Load user doc
+  // Load user doc and populate editable with all pesaje + dieta fields
   useEffect(() => {
     let mounted = true;
     const load = async () => {
@@ -331,6 +331,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         apellidos: editable.apellidos || "",
         nacimiento: editable.nacimiento || "",
         telefono: editable.telefono || "",
+        // dieta fields
         dietaactual: editable.dietaactual || "",
         dietaOtros: editable.dietaactual === "otros" ? (editable.dietaOtros || "") : "",
         restricciones: editable.restricciones || "",
@@ -595,7 +596,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         </div>
       </div>
 
-      {/* PERFIL panel: personales + dieta. Mientras esté abierto, ocultamos tabs y contenido principal */}
+      {/* PERFIL panel (contiene personales + dieta). Mientras esté abierto, ocultamos las tabs y el contenido */}
       {showProfile && (
         <div className="card" style={{ padding: 12, margin: "0 12px 12px 12px" }}>
           <h3>Perfil</h3>
@@ -689,7 +690,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         </div>
       )}
 
-      {/* Mientras showProfile === true ocultamos nav y contenido principal */}
+      {/* Mientras showProfile === true ocultamos NAV y contenido principal */}
       {!showProfile && (
         <>
           <nav className="tabs" role="tablist" aria-label="Secciones" style={{ marginTop: 12 }}>
@@ -705,7 +706,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
               <div className="card" style={{ padding: 12 }}>
                 <h3>Pesaje / Composición</h3>
                 <div className="panel-section">
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end", marginBottom: 12 }}>
+                    <div className="pesaje-actions" style={{ marginBottom: 12 }}>
                       <button className="btn primary" type="submit" disabled={savingPeso}>{savingPeso ? "Guardando..." : "Guardar medidas"}</button>
                       <button type="button" className="btn ghost" onClick={() => { setPeso(""); setFechaPeso(todayISO); }}>Limpiar</button>
                       <div style={{ marginLeft: 8, color: "#6b7280" }}>{saveLabel}</div>
@@ -817,6 +818,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                         </div>
                       </div>
                     </div>
+                  
 
                   <hr style={{ margin: "12px 0" }} />
                   <h4>Histórico de medidas</h4>
@@ -918,28 +920,25 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                   </div>
 
                   <div style={{ marginTop: 6 }}>
-                    <div className="weekly-menu-grid" style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 12 }}>
-                      <div className="weekly-left">
-                        {ALL_SECTIONS.map((sec) => <div key={sec.key} className="weekly-label">{sec.label}</div>)}
-                      </div>
-                      <div className="weekly-right">
-                        {ALL_SECTIONS.map((sec) => (
-                          <div key={sec.key} className="weekly-field">
-                            <textarea
-                              className="input weekly-textarea"
-                              rows={3}
-                              value={(Array.isArray(editable.menu) && editable.menu[selDay] ? editable.menu[selDay][sec.key] : "") || ""}
-                              onChange={(e) => {
-                                setMenuField(selDay, sec.key, e.target.value);
-                                const ta = e.target;
-                                ta.style.height = "auto";
-                                ta.style.height = Math.max(56, ta.scrollHeight + 2) + "px";
-                              }}
-                              placeholder={sec.key === "consejos" ? "Consejos o notas..." : ""}
-                            />
-                          </div>
-                        ))}
-                      </div>
+                    {/* Nuevo layout: cada campo tiene su label encima del textarea, un bloque por sección */}
+                    <div className="weekly-menu-grid">
+                      {ALL_SECTIONS.map((sec) => (
+                        <div key={sec.key} className="weekly-field">
+                          <label>{sec.label}</label>
+                          <textarea
+                            className="input weekly-textarea"
+                            rows={3}
+                            value={(Array.isArray(editable.menu) && editable.menu[selDay] ? editable.menu[selDay][sec.key] : "") || ""}
+                            onChange={(e) => {
+                              setMenuField(selDay, sec.key, e.target.value);
+                              const ta = e.target;
+                              ta.style.height = "auto";
+                              ta.style.height = Math.max(56, ta.scrollHeight + 2) + "px";
+                            }}
+                            placeholder={sec.key === "consejos" ? "Consejos o notas..." : ""}
+                          />
+                        </div>
+                      ))}
                     </div>
                   </div>
 
