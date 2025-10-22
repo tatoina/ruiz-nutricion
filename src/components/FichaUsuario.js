@@ -1,4 +1,3 @@
-// src/components/FichaUsuario.jsx
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import "./estilos.css";
 import { auth, db } from "../Firebase";
@@ -29,13 +28,11 @@ ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Title, T
 /**
  * FichaUsuario.jsx
  *
- * - Perfil integrado en botón "Perfil" (muestra sólo personales + dieta).
- * - Mientras el panel Perfil esté abierto, NO se muestran las pestañas ni el contenido principal.
- * - Pestañas: Pesaje, Dieta semanal, Ejercicios, Recetas.
- * - Pesaje: campos completos, histórico y gráfico.
- * - Dieta semanal: ahora cada etiqueta (Desayuno, Almuerzo...) aparece encima del textarea.
+ * - Restaura la vista completa de Pesaje (campos + gráfico).
+ * - Mejora el histórico de medidas: tabla legible, sticky header, export CSV, filas expandibles.
+ * - Mantiene Dieta semanal y demás funcionalidades previas (autosave, guardar versión).
  *
- * Nota: Añade / actualiza las reglas de estilos en estilos.css si es necesario.
+ * Sustituye completamente src/components/FichaUsuario.jsx por este fichero.
  */
 
 export default function FichaUsuario({ targetUid = null, adminMode = false }) {
@@ -44,15 +41,6 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     { id: "semana", label: "Dieta semanal" },
     { id: "ejercicios", label: "Ejercicios" },
     { id: "recetas", label: "Recetas" },
-  ];
-
-  const dietaOptions = [
-    { value: "", label: "-- Selecciona --" },
-    { value: "perdida_grasa", label: "Pérdida de grasa" },
-    { value: "antiinflamatoria", label: "Antiinflamatoria" },
-    { value: "ganancia_muscular", label: "Ganancia muscular" },
-    { value: "aprendiendo_a_comer", label: "Aprendiendo a comer" },
-    { value: "otros", label: "Otros" },
   ];
 
   const ALL_SECTIONS = [
@@ -318,6 +306,27 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     }
   };
 
+  // Save a version of the menu into menuHistorico array
+  const saveVersionMenu = async () => {
+    if (!uid) {
+      setError("Usuario objetivo no disponible.");
+      return;
+    }
+    try {
+      const menuToSave = Array.isArray(editable.menu) ? editable.menu : Array.from({ length: 7 }, () => ({ ...emptyDayMenu() }));
+      await updateDoc(doc(db, "users", uid), {
+        menuHistorico: arrayUnion({ createdAt: serverTimestamp(), menu: menuToSave }),
+        updatedAt: serverTimestamp(),
+      });
+      // refresh userData
+      const snap = await getDoc(doc(db, "users", uid));
+      if (snap.exists()) setUserData(snap.data());
+    } catch (err) {
+      console.error("[FichaUsuario] saveVersionMenu error:", err);
+      setError(err?.message || "No se pudo guardar la versión del menú.");
+    }
+  };
+
   // Save combined profile: personales + dieta
   const saveProfile = async () => {
     if (!uid) {
@@ -331,7 +340,6 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         apellidos: editable.apellidos || "",
         nacimiento: editable.nacimiento || "",
         telefono: editable.telefono || "",
-        // dieta fields
         dietaactual: editable.dietaactual || "",
         dietaOtros: editable.dietaactual === "otros" ? (editable.dietaOtros || "") : "",
         restricciones: editable.restricciones || "",
@@ -508,7 +516,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     }
   };
 
-  // Chart helpers
+  // Chart helpers & history mapping utils
   const timestampToMs = (t) => {
     if (!t) return null;
     if (typeof t === "number") return t;
@@ -517,32 +525,49 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     return null;
   };
 
-  const rawHistory = Array.isArray(userData?.medidasHistorico) && userData.medidasHistorico.length > 0
-    ? userData.medidasHistorico
-    : Array.isArray(userData?.pesoHistorico) ? userData.pesoHistorico : [];
+  const formatDate = (tMs) => {
+    if (!tMs) return "";
+    const d = new Date(Number(tMs));
+    return d.toLocaleString();
+  };
 
-  const mapped = rawHistory.map((p) => {
-    let msFecha = null;
-    if (p?.fecha) {
-      if (typeof p.fecha === "string") {
-        msFecha = Date.parse(p.fecha) || null;
-      } else {
-        msFecha = timestampToMs(p.fecha);
+  // ==== rowsDesc (histórico de medidas) ====
+  const rowsDesc = (() => {
+    const rawHistory =
+      Array.isArray(userData?.medidasHistorico) && userData.medidasHistorico.length > 0
+        ? userData.medidasHistorico
+        : Array.isArray(userData?.pesoHistorico)
+        ? userData.pesoHistorico
+        : [];
+    const mapped = rawHistory.map((p) => {
+      let msFecha = null;
+      if (p?.fecha) {
+        if (typeof p.fecha === "string") {
+          msFecha = Date.parse(p.fecha) || null;
+        } else {
+          msFecha = timestampToMs(p.fecha);
+        }
       }
-    }
-    const msCreated = timestampToMs(p?.createdAt);
-    const _t = msFecha || msCreated || 0;
-    return { ...p, _t };
-  });
+      const msCreated = timestampToMs(p?.createdAt);
+      const _t = msFecha || msCreated || 0;
+      return { ...p, _t };
+    });
+    // ordenar descendente (más reciente primero)
+    return mapped.sort((a, b) => (b._t || 0) - (a._t || 0));
+  })();
 
-  const sortedAsc = mapped.sort((a, b) => (a._t || 0) - (b._t || 0));
-  const labels = sortedAsc.map((s) => s.fecha || (s._t ? new Date(s._t).toLocaleDateString() : ""));
+  // Chart data (recreate from rowsDesc) - ascending for chart
+  const mappedForChart = rowsDesc
+    .map((p) => ({ ...p }))
+    .sort((a, b) => (a._t || 0) - (b._t || 0));
+
+  const labels = mappedForChart.map((s) => s.fecha || (s._t ? new Date(s._t).toLocaleDateString() : ""));
   const chartData = {
     labels,
     datasets: [
       {
         label: "Peso (kg)",
-        data: sortedAsc.map((s) => (s.peso ?? s.pesoActual ?? null)),
+        data: mappedForChart.map((s) => (s.peso ?? s.pesoActual ?? null)),
         borderColor: "#16a34a",
         backgroundColor: "rgba(34,197,94,0.12)",
         tension: 0.25,
@@ -553,14 +578,105 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   };
   const chartOptions = { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: false } } };
 
-  const rowsDesc = [...sortedAsc].reverse();
+  // Menu history mapped (used in Dieta semanal)
+  const menuHistoryRaw = Array.isArray(userData?.menuHistorico) ? userData.menuHistorico : [];
+  const menuHistoryMapped = menuHistoryRaw
+    .map((m) => {
+      const ms = timestampToMs(m?.createdAt || m?.when || m?.fecha);
+      return { ...m, _t: ms || 0 };
+    })
+    .sort((a, b) => (b._t || 0) - (a._t || 0));
 
-  const exercisesFolder = (userData && userData.driveEjerciciosFolderId) ? userData.driveEjerciciosFolderId : DRIVE_FOLDER_EXERCISES;
-  const recipesFolder = (userData && userData.driveRecetasFolderId) ? userData.driveRecetasFolderId : DRIVE_FOLDER_RECIPES;
-
-  // selDay
+  // Dieta semana selected day name
   const selDay = Number.isFinite(editable._selectedDay) ? editable._selectedDay : todayIndex;
+  const dayName = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"][selDay];
+
   const saveLabel = saveStatus === "pending" ? "Guardando..." : saveStatus === "saving" ? "Guardando..." : saveStatus === "saved" ? "Guardado" : saveStatus === "error" ? "Error al guardar" : "";
+
+  // UI states for improved historic table
+  const [histLimit, setHistLimit] = useState(10);
+  const [expandedRows, setExpandedRows] = useState({});
+
+  const toggleExpandRow = (idx) => {
+    setExpandedRows((s) => ({ ...s, [idx]: !s[idx] }));
+  };
+
+  const renderCell = (val) => {
+    if (val === null || val === undefined || val === "") return "—";
+    const s = String(val);
+    if (s.length <= 120) return s;
+    return s.slice(0, 120) + "…";
+  };
+
+  const exportHistoryCSV = () => {
+    try {
+      if (!Array.isArray(rowsDesc) || rowsDesc.length === 0) return;
+      const headers = [
+        "Fecha",
+        "Peso",
+        "Masa grasa %",
+        "Masa grasa (kg)",
+        "Masa magra (kg)",
+        "Masa muscular (kg)",
+        "Agua (kg)",
+        "% Agua",
+        "Masa ósea (kg)",
+        "MB (kcal)",
+        "Grasa visceral",
+        "IMC",
+        "Edad metabólica",
+        "C. Brazo (cm)",
+        "C. Cintura (cm)",
+        "C. Cadera (cm)",
+        "C. Pierna (cm)",
+        "Índice C/T",
+        "TA (SYS/DIA)",
+        "Notas"
+      ];
+      const rows = rowsDesc.map((r) => {
+        const ta = (r.tensionArterial || {});
+        return [
+          r.fecha || (r._t ? new Date(r._t).toLocaleString() : ""),
+          r.peso ?? r.pesoActual ?? "",
+          r.masaGrasaPct ?? "",
+          r.masaGrasaKg ?? "",
+          r.masaMagraKg ?? "",
+          r.masaMuscularKg ?? "",
+          r.aguaTotalKg ?? "",
+          r.aguaTotalPct ?? "",
+          r.masaOseaKg ?? "",
+          r.mbKcal ?? "",
+          r.grasaVisceralNivel ?? "",
+          r.imc ?? "",
+          r.edadMetabolica ?? "",
+          r.circunferenciaBrazoCm ?? "",
+          r.circunferenciaCinturaCm ?? "",
+          r.circunferenciaCaderaCm ?? "",
+          r.circunferenciaPiernaCm ?? "",
+          r.indiceCinturaTalla ?? "",
+          `${ta.sys || ""}${ta.dia ? ` / ${ta.dia}` : ""}`,
+          (r.notas || "").replace(/\n/g, " ")
+        ];
+      });
+
+      const csv = [
+        headers.join(","),
+        ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      ].join("\n");
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `historial_medidas_${new Date().toISOString().slice(0,10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Export CSV error:", err);
+    }
+  };
 
   if (loading) return <div className="card"><p style={{ padding: 16 }}>Cargando ficha...</p></div>;
   if (!userData) {
@@ -596,7 +712,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         </div>
       </div>
 
-      {/* PERFIL panel (contiene personales + dieta). Mientras esté abierto, ocultamos las tabs y el contenido */}
+      {/* PERFIL panel (contiene personales + dieta). */}
       {showProfile && (
         <div className="card" style={{ padding: 12, margin: "0 12px 12px 12px" }}>
           <h3>Perfil</h3>
@@ -627,7 +743,12 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
               <div className="field">
                 <label>Tipo de dieta</label>
                 <select className="input" value={editable.dietaactual || ""} onChange={(e) => setEditable((s) => ({ ...s, dietaactual: e.target.value }))}>
-                  {dietaOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                  <option value="">-- Selecciona --</option>
+                  <option value="perdida_grasa">Pérdida de grasa</option>
+                  <option value="antiinflamatoria">Antiinflamatoria</option>
+                  <option value="ganancia_muscular">Ganancia muscular</option>
+                  <option value="aprendiendo_a_comer">Aprendiendo a comer</option>
+                  <option value="otros">Otros</option>
                 </select>
                 {editable.dietaactual === "otros" && (
                   <input className="input" placeholder="Describe la dieta" value={editable.dietaOtros || ""} onChange={(e) => setEditable((s) => ({ ...s, dietaOtros: e.target.value }))} />
@@ -690,7 +811,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         </div>
       )}
 
-      {/* Mientras showProfile === true ocultamos NAV y contenido principal */}
+      {/* CONTENIDO PRINCIPAL */}
       {!showProfile && (
         <>
           <nav className="tabs" role="tablist" aria-label="Secciones" style={{ marginTop: 12 }}>
@@ -702,10 +823,12 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           </nav>
 
           <div style={{ marginTop: 12 }}>
+            {/* PES AJE */}
             {tabIndex === 0 && (
-              <div className="card" style={{ padding: 12 }}>
+              <div className="card pesaje-section-wrapper" style={{ padding: 12 }}>
                 <h3>Pesaje / Composición</h3>
                 <div className="panel-section">
+                  
                     <div className="pesaje-actions" style={{ marginBottom: 12 }}>
                       <button className="btn primary" type="submit" disabled={savingPeso}>{savingPeso ? "Guardando..." : "Guardar medidas"}</button>
                       <button type="button" className="btn ghost" onClick={() => { setPeso(""); setFechaPeso(todayISO); }}>Limpiar</button>
@@ -822,11 +945,35 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
                   <hr style={{ margin: "12px 0" }} />
                   <h4>Histórico de medidas</h4>
-                  <div style={{ overflowX: "auto", marginTop: 8 }}>
-                    <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+
+                  {/* HISTÓRICO MEJORADO */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <label style={{ fontSize: 13, color: "#6b7280" }}>Mostrar</label>
+                      <select
+                        value={histLimit}
+                        onChange={(e) => setHistLimit(Number(e.target.value))}
+                        className="input"
+                        style={{ width: 90, padding: "6px 8px", height: 36 }}
+                      >
+                        <option value={10}>10</option>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button className="btn ghost" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>Ir arriba</button>
+                      <button className="btn ghost" onClick={exportHistoryCSV} title="Exportar historial a CSV">Exportar CSV</button>
+                    </div>
+                  </div>
+
+                  <div style={{ overflowX: "auto", marginTop: 8 }} className="hist-table-wrapper">
+                    <table className="table hist-table" style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
                         <tr>
-                          <th>Fecha</th>
+                          <th className="col-fixed">Fecha</th>
                           <th>Peso</th>
                           <th>Masa grasa %</th>
                           <th>Masa grasa (kg)</th>
@@ -845,40 +992,71 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                           <th>C. Pierna</th>
                           <th>Índice C/T</th>
                           <th>TA (SYS/DIA)</th>
-                          <th>Notas</th>
+                          <th style={{ width: 220 }}>Notas / Detalle</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {rowsDesc.length === 0 ? (
+                        {(!rowsDesc || rowsDesc.length === 0) ? (
                           <tr><td colSpan={20} style={{ padding: 12 }}>Sin registros</td></tr>
                         ) : (
-                          rowsDesc.map((r, i) => (
-                            <tr key={i}>
-                              <td style={{ whiteSpace: "nowrap" }}>{r.fecha || (r._t ? new Date(r._t).toLocaleString() : "")}</td>
-                              <td>{r.peso ?? r.pesoActual ?? "—"}</td>
-                              <td>{r.masaGrasaPct ?? "—"}</td>
-                              <td>{r.masaGrasaKg ?? "—"}</td>
-                              <td>{r.masaMagraKg ?? "—"}</td>
-                              <td>{r.masaMuscularKg ?? "—"}</td>
-                              <td>{r.aguaTotalKg ?? "—"}</td>
-                              <td>{r.aguaTotalPct ?? "—"}</td>
-                              <td>{r.masaOseaKg ?? "—"}</td>
-                              <td>{r.mbKcal ?? "—"}</td>
-                              <td>{r.grasaVisceralNivel ?? "—"}</td>
-                              <td>{r.imc ?? "—"}</td>
-                              <td>{r.edadMetabolica ?? "—"}</td>
-                              <td>{r.circunferenciaBrazoCm ?? "—"}</td>
-                              <td>{r.circunferenciaCinturaCm ?? "—"}</td>
-                              <td>{r.circunferenciaCaderaCm ?? "—"}</td>
-                              <td>{r.circunferenciaPiernaCm ?? "—"}</td>
-                              <td>{r.indiceCinturaTalla ?? "—"}</td>
-                              <td>{(r.tensionArterial?.sys ?? "") + (r.tensionArterial?.dia ? ` / ${r.tensionArterial.dia}` : "")}</td>
-                              <td>{r.notas || ""}</td>
-                            </tr>
-                          ))
+                          rowsDesc.slice(0, histLimit).map((r, i) => {
+                            const ta = (r.tensionArterial || {});
+                            const key = `${r._t || i}-${i}`;
+                            return (
+                              <React.Fragment key={key}>
+                                <tr className="hist-row" style={{ cursor: "pointer" }} onClick={() => toggleExpandRow(i)}>
+                                  <td className="col-fixed" style={{ whiteSpace: "nowrap", padding: 10 }}>
+                                    {r.fecha || (r._t ? new Date(r._t).toLocaleString() : "")}
+                                  </td>
+                                  <td style={{ padding: 10 }}>{r.peso ?? r.pesoActual ?? "—"}</td>
+                                  <td style={{ padding: 10 }}>{r.masaGrasaPct ?? "—"}</td>
+                                  <td style={{ padding: 10 }}>{r.masaGrasaKg ?? "—"}</td>
+                                  <td style={{ padding: 10 }}>{r.masaMagraKg ?? "—"}</td>
+                                  <td style={{ padding: 10 }}>{r.masaMuscularKg ?? "—"}</td>
+                                  <td style={{ padding: 10 }}>{r.aguaTotalKg ?? "—"}</td>
+                                  <td style={{ padding: 10 }}>{r.aguaTotalPct ?? "—"}</td>
+                                  <td style={{ padding: 10 }}>{r.masaOseaKg ?? "—"}</td>
+                                  <td style={{ padding: 10 }}>{r.mbKcal ?? "—"}</td>
+                                  <td style={{ padding: 10 }}>{r.grasaVisceralNivel ?? "—"}</td>
+                                  <td style={{ padding: 10 }}>{r.imc ?? "—"}</td>
+                                  <td style={{ padding: 10 }}>{r.edadMetabolica ?? "—"}</td>
+                                  <td style={{ padding: 10 }}>{r.circunferenciaBrazoCm ?? "—"}</td>
+                                  <td style={{ padding: 10 }}>{r.circunferenciaCinturaCm ?? "—"}</td>
+                                  <td style={{ padding: 10 }}>{r.circunferenciaCaderaCm ?? "—"}</td>
+                                  <td style={{ padding: 10 }}>{r.circunferenciaPiernaCm ?? "—"}</td>
+                                  <td style={{ padding: 10 }}>{r.indiceCinturaTalla ?? "—"}</td>
+                                  <td style={{ padding: 10 }}>{`${ta.sys || ""}${ta.dia ? ` / ${ta.dia}` : ""}`}</td>
+                                  <td style={{ padding: 10, maxWidth: 340 }}>{renderCell(r.notas)}</td>
+                                </tr>
+
+                                {expandedRows[i] && (
+                                  <tr className="hist-row-detail">
+                                    <td colSpan={20} style={{ padding: 12, background: "rgba(6,95,70,0.02)" }}>
+                                      <div style={{ display: "flex", gap: 16, flexDirection: "column" }}>
+                                        <div style={{ fontSize: 13, color: "#064e3b", fontWeight: 700 }}>Detalle completo</div>
+                                        <div style={{ fontSize: 13, color: "#0f172a", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                                          {JSON.stringify(r, null, 2)}
+                                        </div>
+                                        <div style={{ display: "flex", gap: 8 }}>
+                                          <button className="btn ghost" onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(JSON.stringify(r)).catch(()=>{}); }}>Copiar JSON</button>
+                                          <button className="btn ghost" onClick={(e) => { e.stopPropagation(); /* placeholder para restaurar */ }}>Restaurar valores</button>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })
                         )}
                       </tbody>
                     </table>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center" }}>
+                    <button className="btn ghost" onClick={() => setHistLimit((s) => Math.max(10, s - 10))}>Mostrar menos</button>
+                    <button className="btn ghost" onClick={() => setHistLimit((s) => s + 10)}>Mostrar más</button>
+                    <div style={{ marginLeft: "auto", color: "#6b7280", fontSize: 13 }}>{rowsDesc.length} registros totales</div>
                   </div>
 
                   <hr style={{ margin: "12px 0" }} />
@@ -892,7 +1070,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
               </div>
             )}
 
-            {/* Dieta semanal */}
+            {/* DIETA SEMANAL */}
             {tabIndex === 1 && (
               <div className="card" style={{ padding: 12 }}>
                 <h3>Dieta semanal</h3>
@@ -907,7 +1085,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                     </button>
 
                     <div className="day-label" style={{ fontWeight: 800, color: "var(--accent-600)" }}>
-                      {["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"][selDay]}
+                      {dayName}
                     </div>
 
                     <button
@@ -920,7 +1098,6 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                   </div>
 
                   <div style={{ marginTop: 6 }}>
-                    {/* Nuevo layout: cada campo tiene su label encima del textarea, un bloque por sección */}
                     <div className="weekly-menu-grid">
                       {ALL_SECTIONS.map((sec) => (
                         <div key={sec.key} className="weekly-field">
@@ -933,7 +1110,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                               setMenuField(selDay, sec.key, e.target.value);
                               const ta = e.target;
                               ta.style.height = "auto";
-                              ta.style.height = Math.max(56, ta.scrollHeight + 2) + "px";
+                              ta.style.height = Math.max(72, ta.scrollHeight + 2) + "px";
                             }}
                             placeholder={sec.key === "consejos" ? "Consejos o notas..." : ""}
                           />
@@ -942,11 +1119,55 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                     </div>
                   </div>
 
-                  <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
-                    <button className="btn ghost" onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.max(0, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) - 1) }))}>Día anterior</button>
-                    <button className="btn ghost" onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.min(6, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) + 1) }))}>Siguiente día</button>
+                  <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center" }}>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button className="btn ghost" onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.max(0, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) - 1) }))}>Día anterior</button>
+                      <button className="btn ghost" onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.min(6, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) + 1) }))}>Siguiente día</button>
+                    </div>
+
+                    <div style={{ marginLeft: 8, color: "#6b7280" }}>{saveLabel}</div>
                     <div style={{ flex: 1 }} />
-                    <button className="btn primary" onClick={saveSemana}>Guardar menú</button>
+
+                    <button className="btn ghost" onClick={saveSemana}>Guardar menú</button>
+                    <button className="btn primary" onClick={saveVersionMenu} title="Guarda una versión histórica del menú actual">Guardar versión</button>
+                  </div>
+
+                  <hr style={{ margin: "12px 0" }} />
+                  <h4>Histórico de menús ({dayName})</h4>
+                  <div style={{ overflowX: "auto", marginTop: 8 }}>
+                    {menuHistoryMapped.length === 0 ? (
+                      <div style={{ padding: 12, color: "#374151" }}>No hay versiones históricas guardadas. Pulsa "Guardar versión" para crear un registro.</div>
+                    ) : (
+                      <table className="menu-hist-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                        <thead>
+                          <tr>
+                            <th style={{ textAlign: "left", padding: 8 }}>Fecha</th>
+                            <th style={{ textAlign: "left", padding: 8 }}>Desayuno</th>
+                            <th style={{ textAlign: "left", padding: 8 }}>Almuerzo</th>
+                            <th style={{ textAlign: "left", padding: 8 }}>Comida</th>
+                            <th style={{ textAlign: "left", padding: 8 }}>Merienda</th>
+                            <th style={{ textAlign: "left", padding: 8 }}>Cena</th>
+                            <th style={{ textAlign: "left", padding: 8 }}>Consejos</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {menuHistoryMapped.map((entry, i) => {
+                            const dayMenu = Array.isArray(entry.menu) ? (entry.menu[selDay] || {}) : (entry.menu || {});
+                            return (
+                              <tr key={i} style={{ borderTop: "1px solid #eee" }}>
+                                <td style={{ whiteSpace: "nowrap", padding: 8, verticalAlign: "top" }}>{formatDate(entry._t)}</td>
+                                <td style={{ padding: 8, verticalAlign: "top" }}>{renderCell(dayMenu.desayuno)}</td>
+                                <td style={{ padding: 8, verticalAlign: "top" }}>{renderCell(dayMenu.almuerzo)}</td>
+                                <td style={{ padding: 8, verticalAlign: "top" }}>{renderCell(dayMenu.comida)}</td>
+                                <td style={{ padding: 8, verticalAlign: "top" }}>{renderCell(dayMenu.merienda)}</td>
+                                <td style={{ padding: 8, verticalAlign: "top" }}>{renderCell(dayMenu.cena)}</td>
+                                <td style={{ padding: 8, verticalAlign: "top" }}>{renderCell(dayMenu.consejos)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
                 </div>
               </div>
@@ -958,7 +1179,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                 <h3>Ejercicios</h3>
                 <div className="panel-section">
                   {(editable.ejercicios || userData?.ejercicios) ? (
-                    <DriveFolderViewer folderId={exercisesFolder} height={520} />
+                    <DriveFolderViewer folderId={DRIVE_FOLDER_EXERCISES} height={520} />
                   ) : (
                     <div className="field">
                       <label>Descripción</label>
@@ -985,7 +1206,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                 <h3>Recetas</h3>
                 <div className="panel-section">
                   {(editable.recetas || userData?.recetas) ? (
-                    <DriveFolderViewer folderId={recipesFolder} height={520} />
+                    <DriveFolderViewer folderId={DRIVE_FOLDER_RECIPES} height={520} />
                   ) : (
                     <div className="field">
                       <label>Descripción</label>

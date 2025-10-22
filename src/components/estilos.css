@@ -395,3 +395,95 @@ button, .tab { -webkit-tap-highlight-color: rgba(0,0,0,0); }
 /* utilities */
 .day-nav { display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:12px; }
 .day-label { font-weight:800; color:var(--accent-600); font-size:15px; }
+/* ===== Historial de medidas: tabla profesional y legible =====
+   - Sticky header
+   - Primera columna (Fecha) fija
+   - Filas expandibles con detalle JSON/Notas
+   - Export CSV y paginación simple "Mostrar más"
+   Añade este bloque al final de src/components/estilos.css
+*/
+
+.hist-table-wrapper {
+  width: 100%;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(250,255,250,0.98));
+  padding: 6px;
+  box-sizing: border-box;
+}
+
+/* Base de la tabla */
+.hist-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  color: #073018;
+}
+
+/* Sticky header */
+.hist-table thead th {
+  position: sticky;
+  top: 0;
+  background: linear-gradient(180deg, #ffffff, #f7fff9);
+  z-index: 5;
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid #e6eef0;
+  font-weight: 700;
+}
+
+/* Primera columna fija (Fecha) */
+.hist-table th.col-fixed,
+.hist-table td.col-fixed {
+  position: sticky;
+  left: 0;
+  z-index: 6;
+  background: linear-gradient(90deg, rgba(255,255,255,0.98), rgba(250,255,250,0.98));
+  border-right: 1px solid #f1f5f4;
+}
+
+/* Celdas cuerpo */
+.hist-table tbody td {
+  padding: 10px;
+  vertical-align: top;
+  border-bottom: 1px solid #f1f5f4;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.35;
+}
+
+/* Zebra striping */
+.hist-table tbody tr:nth-child(odd) { background: rgba(6,95,70,0.01); }
+.hist-table tbody tr:hover { background: rgba(6,95,70,0.03); }
+
+/* Detalle expandido row */
+.hist-row-detail td {
+  background: rgba(6,95,70,0.03);
+  padding: 12px;
+}
+
+/* Botones en la cabecera y utilidades */
+.hist-table .btn { font-size: 13px; padding: 8px 10px; height: 36px; }
+.hist-table-wrapper .btn { margin-bottom: 6px; }
+
+/* Mobile: permite scroll horizontal y adapta padding */
+@media (max-width: 900px) {
+  .hist-table thead th, .hist-table tbody td { padding: 8px; font-size: 13px; }
+  .hist-table td.col-fixed { left: 0; min-width: 140px; }
+  .hist-table-wrapper { padding: 4px; }
+  .hist-row-detail td { padding: 10px; font-size: 13px; }
+}
+
+/* Small utility: limit the width of the "Notas" column visually */
+.hist-table td:nth-last-child(1) {
+  max-width: 420px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Accessibility: make table headers readable */
+.hist-table thead th { color: #064e3b; }
