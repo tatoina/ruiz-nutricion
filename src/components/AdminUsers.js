@@ -273,9 +273,10 @@ export default function AdminUsers() {
             Autenticado como: <strong>{currentUser.email}</strong> — isAdmin: <strong>{String(isAdmin)}</strong>
           </div>
         </div>
-
+        
         <div>
-          <button className="btn danger" onClick={handleSignOut}>Cerrar sesión</button>
+          <div> <button className="btn primary" onClick={() => navigate("/register")}>Nuevo cliente</button></div>
+          <div> <button className="btn danger" onClick={handleSignOut}>Cerrar sesión</button></div>
         </div>
       </div>
 

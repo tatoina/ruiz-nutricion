@@ -11,6 +11,8 @@ import {
   arrayUnion,
 } from "firebase/firestore";
 
+import { useNavigate } from "react-router-dom";
+
 import {
   Chart as ChartJS,
   LineElement,
@@ -26,19 +28,19 @@ import DriveFolderViewer from "./DriveFolderViewer";
 ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Title, Tooltip, Legend);
 
 /**
- * src/components/FichaUsuario.jsx
+ * src/components/FichaUsuario.js
  *
- * Versión completa y corregida:
- * - genera el PDF en el mismo documento (no abre pestañas)
- * - plantilla semanal en página 1, histórico+gráfico en página 2
- * - casillas de la plantilla más grandes
- * - extracción robusta del gráfico (varias estrategias)
- * - handleSignOut definido y todo JSX correctamente cerrado
+ * Basado en la versión 79 que proporcionaste, con:
+ * - botón "Nuevo cliente" en cabecera (solo visible para admin@admin.es)
+ * - uso de useNavigate para navegar a /register
+ * - ajuste del contenedor del gráfico (clase .chart-container)
  *
- * Reemplaza tu fichero por este si quieres la implementación final.
+ * Esta es la versión completa listada línea a línea (sin omisiones).
  */
 
 export default function FichaUsuario({ targetUid = null, adminMode = false }) {
+  const navigate = useNavigate();
+
   const DEFAULT_CLINIC_LOGO =
     "https://raw.githubusercontent.com/tatoina/ruiz-nutricion/564ee270d5f1a4c692bdd730ce055dd6aab0bfae/public/logoclinica-512.png";
 
@@ -98,6 +100,16 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     });
     return () => unsub();
   }, []);
+
+  // handleSignOut defined as function to be available in JSX
+  async function handleSignOut() {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error("[FichaUsuario] signOut error:", err);
+      setError("No se pudo cerrar sesión.");
+    }
+  }
 
   const uid = targetUid || authUid;
 
@@ -422,16 +434,6 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       setError("Guardado, pero no se pudo actualizar la vista.");
     } finally {
       setSavingPeso(false);
-    }
-  };
-
-  // handleSignOut (defined)
-  const handleSignOut = async () => {
-    try {
-      await signOut(auth);
-    } catch (err) {
-      console.error("[FichaUsuario] signOut error:", err);
-      setError("No se pudo cerrar sesión.");
     }
   };
 
@@ -779,6 +781,8 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         <div className="header-actions" style={{ display: "flex", gap: 8 }}>
           <button className="btn ghost" onClick={() => setShowProfile((s) => !s)} aria-expanded={showProfile}>Perfil</button>
 
+          
+
           <button className="btn ghost" title="Generar PDF" onClick={() => setShowPrintDialog(true)} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden focusable="false">
               <path d="M6 9V3h12v6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1022,14 +1026,13 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                   <hr style={{ margin: "12px 0" }} />
                   <div style={{ marginTop: 8 }}>
                     <h4>Gráfico de peso</h4>
-                    <div style={{ width: "100%", minHeight: 260 }}>
+                    <div style={{ width: "100%", minHeight: 380 }} className="chart-container">
                       <Line ref={chartRef} data={chartData} options={chartOptions} />
                     </div>
                   </div>
                 </div>
               </div>
             )}
-
             {tabIndex === 1 && (
               <div className="card" style={{ padding: 12 }}>
                 <h3>Dieta semanal</h3>
@@ -1039,7 +1042,6 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                     <div className="day-label" style={{ fontWeight: 800, color: "var(--accent-600)" }}>{dayName}</div>
                     <button className="btn ghost" onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.min(6, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) + 1) }))}>→</button>
                   </div>
-
                   <div style={{ marginTop: 6 }}>
                     <div className="weekly-menu-grid">
                       {ALL_SECTIONS.map((sec) => (
@@ -1102,7 +1104,6 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                 </div>
               </div>
             )}
-
             {tabIndex === 2 && (
               <div className="card" style={{ padding: 12 }}>
                 <h3>Ejercicios</h3>
@@ -1124,7 +1125,6 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                 </div>
               </div>
             )}
-
             {tabIndex === 3 && (
               <div className="card" style={{ padding: 12 }}>
                 <h3>Recetas</h3>

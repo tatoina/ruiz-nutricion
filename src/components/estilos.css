@@ -400,7 +400,7 @@ button, .tab { -webkit-tap-highlight-color: rgba(0,0,0,0); }
    - Primera columna (Fecha) fija
    - Filas expandibles con detalle JSON/Notas
    - Export CSV y paginación simple "Mostrar más"
-   Añade este bloque al final de src/components/estilos.css
+   - Añadido al final: ajustes de escala para ficha (más legible)
 */
 
 .hist-table-wrapper {
@@ -522,4 +522,71 @@ button, .tab { -webkit-tap-highlight-color: rgba(0,0,0,0); }
    These rules are helpers if you use a local print preview container. */
 @media print {
   .no-print { display: none !important; }
+}
+
+/* =========================================================
+   ADICIÓN: Ajustes de escala y legibilidad para FichaUsuario
+   - Aumenta tamaño base, paddings, avatar, inputs y altura del gráfico.
+   - No rompe reglas previas; actúa como refuerzo.
+   ========================================================= */
+
+.ficha-root {
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+/* Header / avatar / titles ligeramente más grandes */
+.ficha-root .avatar {
+  width: 64px;
+  height: 64px;
+  font-size: 28px;
+}
+.ficha-root .title { font-size: 20px; }
+.ficha-root .subtitle { font-size: 14px; }
+
+/* Inputs y botones más cómodos */
+.ficha-root .input { font-size: 15px; padding: 10px 12px; }
+.ficha-root .btn { font-size: 14px; padding: 10px 14px; }
+
+/* Gráfico: más altura para visibilidad */
+.chart-container, .chart-print, .chart-print img {
+  min-height: 420px;
+  max-height: 420px;
+  height: 420px;
+}
+
+/* Plantilla semanal: celdas más altas */
+.print-calendar th, .print-calendar td {
+  padding: 26px 18px;
+}
+.print-calendar td {
+  min-height: 200px;
+}
+
+/* Tablas históricas: mayor legibilidad */
+.hist-table-wrapper th, .hist-table-wrapper td, .print-hist-table th, .print-hist-table td {
+  font-size: 13px;
+  padding: 12px;
+}
+
+/* En pantallas grandes usar un ancho más generoso para la ficha */
+@media (min-width: 1200px) {
+  .ficha-root.admin-wide .card {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+}
+/* Añadido al final: estilos para la barra administrativa superior */
+.admin-top {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 12px;
+  gap: 8px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(245,255,246,0.98));
+  border-bottom: 1px solid rgba(6,95,70,0.04);
+  box-sizing: border-box;
+}
+@media (min-width:720px){
+  .admin-top { padding: 14px 18px; }
 }

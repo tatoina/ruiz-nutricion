@@ -6,7 +6,7 @@ import logo from "../assets/logo.png";
 import pkg from "../../package.json";
 import { useNavigate } from "react-router-dom";
 
-export default function Login({ onLogin, onShowRegister }) {
+export default function Login({ onLogin /* onShowRegister no usado ahora */ }) {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [loading, setLoading] = useState(false);
@@ -66,48 +66,8 @@ export default function Login({ onLogin, onShowRegister }) {
     }
   };
 
-  // Extremely defensive handler for "Registrarse".
-  // - Always logs the click.
-  // - If parent provides onShowRegister, call it and prevent navigation.
-  // - Otherwise allow anchor to navigate. If navigate fails, fallback to window.location.
-  const handleShowRegister = (e) => {
-    console.debug("[LOGIN] Registrarse clicked", { onShowRegisterType: typeof onShowRegister });
-    // If parent provided a handler, call it and prevent default navigation
-    if (typeof onShowRegister === "function") {
-      try {
-        e && e.preventDefault();
-        onShowRegister();
-        console.debug("[LOGIN] onShowRegister() called.");
-        return;
-      } catch (err) {
-        console.error("[LOGIN] onShowRegister threw:", err);
-        // fallthrough to try navigate
-      }
-    }
-
-    // Try react-router navigate
-    try {
-      e && e.preventDefault();
-      navigate("/register");
-      console.debug("[LOGIN] navigate('/register') called.");
-      return;
-    } catch (err) {
-      console.error("[LOGIN] navigate failed:", err);
-    }
-
-    // Final fallback: allow default anchor (no preventDefault) or force full-page redirect
-    try {
-      // If event present and default prevented earlier, skip; otherwise do assign
-      if (e && e.defaultPrevented) {
-        console.debug("[LOGIN] default already prevented; not assigning location.");
-      } else {
-        window.location.assign("/register");
-        console.debug("[LOGIN] window.location.assign('/register') used as fallback.");
-      }
-    } catch (err) {
-      console.error("[LOGIN] fallback redirect failed:", err);
-    }
-  };
+  // Registrarse se ha movido a la cabecera (sólo visible para admin).
+  // Por eso eliminamos el link/btn de registro dentro de esta vista de login.
 
   return (
     <div className="login-page">
@@ -130,6 +90,7 @@ export default function Login({ onLogin, onShowRegister }) {
             onChange={(e) => setEmail(e.target.value)}
             required
             autoComplete="email"
+            autoFocus
           />
 
           <label htmlFor="pass" className="sr-only">Contraseña</label>
@@ -144,30 +105,23 @@ export default function Login({ onLogin, onShowRegister }) {
             autoComplete="current-password"
           />
 
-          {error && <div className="mensaje error" style={{ marginTop: 10 }}>{error}</div>}
+          {error && (
+            <div className="mensaje error" role="alert" aria-live="polite" style={{ marginTop: 10 }}>
+              {error}
+            </div>
+          )}
 
           <div className="actions" style={{ marginTop: 12 }}>
-            <button type="submit" className="btn primary full-width" disabled={loading}>
+            <button
+              type="submit"
+              className="btn primary full-width"
+              disabled={loading}
+              aria-busy={loading ? "true" : "false"}
+            >
               {loading ? "Entrando..." : "Entrar"}
             </button>
           </div>
         </form>
-
-        <div className="login-footer" style={{ marginTop: 14 }}>
-          {/* Use an anchor so browser navigation always works if JS handlers fail.
-              handleShowRegister will call e.preventDefault() when it wants to intercept. */}
-          <a
-            href="/register"
-            className="btn ghost full-width"
-            onClick={handleShowRegister}
-            role="button"
-            aria-label="Registrarse"
-            data-test="login-register"
-            style={{ display: "inline-block", textDecoration: "none", textAlign: "center" }}
-          >
-            Registrarse
-          </a>
-        </div>
       </div>
     </div>
   );
