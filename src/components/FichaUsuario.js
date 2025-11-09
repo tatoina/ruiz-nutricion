@@ -93,6 +93,23 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
   const chartRef = useRef(null);
 
+  // Estado para controlar qué métricas mostrar en el gráfico
+  const [chartMetrics, setChartMetrics] = useState({
+    peso: true,
+    imc: true,
+    masaGrasaPct: false,
+    masaGrasaKg: false,
+    masaMagraKg: false,
+    masaMuscularKg: false,
+    aguaTotalKg: false,
+    aguaTotalPct: false,
+    masaOseaKg: false,
+    grasaVisceralNivel: false,
+  });
+
+  const [histLimit, setHistLimit] = useState(10);
+  const [expandedRowsStateLocal, setExpandedRowsStateLocal] = useState({});
+
   const todayIndex = (() => {
     const d = new Date();
     const day = d.getDay();
@@ -367,8 +384,10 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       if (v !== null && v !== undefined) cleaned[k] = v;
     });
 
-    const entryMedida = { ...cleaned };
-    const entryPeso = { fecha: fechaPeso, peso: measuresPayload.pesoActual, createdAt: serverTimestamp() };
+    // Usar Date.now() en lugar de serverTimestamp() dentro de arrayUnion
+    const now = new Date();
+    const entryMedida = { ...cleaned, createdAt: now };
+    const entryPeso = { fecha: fechaPeso, peso: measuresPayload.pesoActual, createdAt: now };
 
     try {
       await updateDoc(doc(db, "users", uid), {
@@ -386,8 +405,8 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         try {
           await setDoc(doc(db, "users", uid), {
             ...cleaned,
-            medidasHistorico: [entryMedida],
-            pesoHistorico: [entryPeso],
+            medidasHistorico: [{ ...cleaned, createdAt: now }],
+            pesoHistorico: [{ fecha: fechaPeso, peso: measuresPayload.pesoActual, createdAt: now }],
             pesoActual: measuresPayload.pesoActual,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -443,6 +462,159 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     }
   };
 
+  // Función para borrar un pesaje del histórico
+  const deletePesaje = async (index) => {
+    if (!window.confirm("¿Estás seguro de que deseas eliminar este registro de pesaje?")) {
+      return;
+    }
+
+    try {
+      const snap = await getDoc(doc(db, "users", uid));
+      if (!snap.exists()) {
+        setError("No se encontró el usuario.");
+        return;
+      }
+
+      const data = snap.data();
+      const medidasArray = Array.isArray(data?.medidasHistorico) ? [...data.medidasHistorico] : [];
+      const pesoArray = Array.isArray(data?.pesoHistorico) ? [...data.pesoHistorico] : [];
+
+      // Eliminar por índice del array ordenado
+      if (index >= 0 && index < rowsDesc.length) {
+        const recordToDelete = rowsDesc[index];
+        
+        // Buscar y eliminar en medidasHistorico
+        const medidasIndex = medidasArray.findIndex((m) => 
+          m.fecha === recordToDelete.fecha && m._t === recordToDelete._t
+        );
+        if (medidasIndex !== -1) {
+          medidasArray.splice(medidasIndex, 1);
+        }
+
+        // Buscar y eliminar en pesoHistorico
+        const pesoIndex = pesoArray.findIndex((p) => 
+          p.fecha === recordToDelete.fecha && p._t === recordToDelete._t
+        );
+        if (pesoIndex !== -1) {
+          pesoArray.splice(pesoIndex, 1);
+        }
+
+        // Actualizar Firestore
+        await updateDoc(doc(db, "users", uid), {
+          medidasHistorico: medidasArray,
+          pesoHistorico: pesoArray,
+          updatedAt: serverTimestamp(),
+        });
+
+        // Recargar datos
+        const newSnap = await getDoc(doc(db, "users", uid));
+        if (newSnap.exists()) {
+          setUserData(newSnap.data());
+        }
+
+        alert("Registro eliminado correctamente");
+      }
+    } catch (err) {
+      console.error("Error al eliminar pesaje:", err);
+      setError(err?.message || "No se pudo eliminar el registro.");
+    }
+  };
+
+  // Estado para el modal de edición
+  const [editingRecord, setEditingRecord] = useState(null);
+  const [editingIndex, setEditingIndex] = useState(null);
+
+  // Función para abrir el modal de edición
+  const openEditModal = (record, index) => {
+    setEditingIndex(index);
+    setEditingRecord({
+      fecha: record.fecha || "",
+      peso: record.peso ?? record.pesoActual ?? "",
+      masaGrasaPct: record.masaGrasaPct ?? "",
+      masaGrasaKg: record.masaGrasaKg ?? "",
+      masaMagraKg: record.masaMagraKg ?? "",
+      masaMuscularKg: record.masaMuscularKg ?? "",
+      aguaTotalKg: record.aguaTotalKg ?? "",
+      aguaTotalPct: record.aguaTotalPct ?? "",
+      masaOseaKg: record.masaOseaKg ?? "",
+      mbKcal: record.mbKcal ?? "",
+      grasaVisceralNivel: record.grasaVisceralNivel ?? "",
+      imc: record.imc ?? "",
+      edadMetabolica: record.edadMetabolica ?? "",
+      indiceCinturaTalla: record.indiceCinturaTalla ?? "",
+      circunferenciaBrazoCm: record.circunferenciaBrazoCm ?? "",
+      circunferenciaCinturaCm: record.circunferenciaCinturaCm ?? "",
+      circunferenciaCaderaCm: record.circunferenciaCaderaCm ?? "",
+      circunferenciaPiernaCm: record.circunferenciaPiernaCm ?? "",
+      tensionArterial: record.tensionArterial || { sys: "", dia: "" },
+      notas: record.notas ?? "",
+      _t: record._t,
+      createdAt: record.createdAt,
+    });
+  };
+
+  // Función para guardar la edición
+  const saveEditedRecord = async () => {
+    if (!editingRecord) return;
+
+    try {
+      const snap = await getDoc(doc(db, "users", uid));
+      if (!snap.exists()) {
+        setError("No se encontró el usuario.");
+        return;
+      }
+
+      const data = snap.data();
+      const medidasArray = Array.isArray(data?.medidasHistorico) ? [...data.medidasHistorico] : [];
+      const pesoArray = Array.isArray(data?.pesoHistorico) ? [...data.pesoHistorico] : [];
+
+      const recordToUpdate = rowsDesc[editingIndex];
+
+      // Actualizar en medidasHistorico
+      const medidasIndex = medidasArray.findIndex((m) => 
+        m.fecha === recordToUpdate.fecha && m._t === recordToUpdate._t
+      );
+      if (medidasIndex !== -1) {
+        medidasArray[medidasIndex] = {
+          ...editingRecord,
+          createdAt: recordToUpdate.createdAt,
+        };
+      }
+
+      // Actualizar en pesoHistorico
+      const pesoIndex = pesoArray.findIndex((p) => 
+        p.fecha === recordToUpdate.fecha && p._t === recordToUpdate._t
+      );
+      if (pesoIndex !== -1) {
+        pesoArray[pesoIndex] = {
+          fecha: editingRecord.fecha,
+          peso: editingRecord.peso,
+          createdAt: recordToUpdate.createdAt,
+        };
+      }
+
+      // Actualizar Firestore
+      await updateDoc(doc(db, "users", uid), {
+        medidasHistorico: medidasArray,
+        pesoHistorico: pesoArray,
+        updatedAt: serverTimestamp(),
+      });
+
+      // Recargar datos
+      const newSnap = await getDoc(doc(db, "users", uid));
+      if (newSnap.exists()) {
+        setUserData(newSnap.data());
+      }
+
+      setEditingRecord(null);
+      setEditingIndex(null);
+      alert("Registro actualizado correctamente");
+    } catch (err) {
+      console.error("Error al actualizar pesaje:", err);
+      setError(err?.message || "No se pudo actualizar el registro.");
+    }
+  };
+
   // chart helpers
   const timestampToMs = (t) => {
     if (!t) return null;
@@ -474,14 +646,74 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       const msCreated = timestampToMs(p?.createdAt);
       const _t = msFecha || msCreated || 0;
       return { ...p, _t };
+    })
+    // Filtrar solo registros con fecha o peso válidos
+    .filter((p) => {
+      const hasFecha = p.fecha && p.fecha.trim() !== "";
+      const hasPeso = (p.peso !== null && p.peso !== undefined && p.peso !== "") || 
+                      (p.pesoActual !== null && p.pesoActual !== undefined && p.pesoActual !== "");
+      return hasFecha || hasPeso;
     });
     return mapped.sort((a, b) => (b._t || 0) - (a._t || 0));
   })();
 
   const mappedForChart = rowsDesc.map((p) => ({ ...p })).sort((a, b) => (a._t || 0) - (b._t || 0));
   const labels = mappedForChart.map((s) => s.fecha || (s._t ? new Date(s._t).toLocaleDateString() : ""));
-  const chartData = { labels, datasets: [{ label: "Peso (kg)", data: mappedForChart.map((s) => (s.peso ?? s.pesoActual ?? null)), borderColor: "#16a34a", backgroundColor: "rgba(34,197,94,0.12)", tension: 0.25, fill: true, pointRadius: 4 }] };
-  const chartOptions = { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: false } } };
+  
+  // Configuración de métricas disponibles para el gráfico
+  const metricsConfig = {
+    peso: { label: "Peso (kg)", field: (s) => s.peso ?? s.pesoActual ?? null, color: "#16a34a", bgColor: "rgba(34,197,94,0.12)" },
+    imc: { label: "IMC", field: (s) => s.imc ?? null, color: "#2563eb", bgColor: "rgba(37,99,235,0.12)" },
+    masaGrasaPct: { label: "Masa grasa (%)", field: (s) => s.masaGrasaPct ?? null, color: "#dc2626", bgColor: "rgba(220,38,38,0.12)" },
+    masaGrasaKg: { label: "Masa grasa (kg)", field: (s) => s.masaGrasaKg ?? null, color: "#ea580c", bgColor: "rgba(234,88,12,0.12)" },
+    masaMagraKg: { label: "Masa magra (kg)", field: (s) => s.masaMagraKg ?? null, color: "#65a30d", bgColor: "rgba(101,163,13,0.12)" },
+    masaMuscularKg: { label: "Masa muscular (kg)", field: (s) => s.masaMuscularKg ?? null, color: "#0891b2", bgColor: "rgba(8,145,178,0.12)" },
+    aguaTotalKg: { label: "Agua (kg)", field: (s) => s.aguaTotalKg ?? null, color: "#0284c7", bgColor: "rgba(2,132,199,0.12)" },
+    aguaTotalPct: { label: "Agua (%)", field: (s) => s.aguaTotalPct ?? null, color: "#0ea5e9", bgColor: "rgba(14,165,233,0.12)" },
+    masaOseaKg: { label: "Masa ósea (kg)", field: (s) => s.masaOseaKg ?? null, color: "#64748b", bgColor: "rgba(100,116,139,0.12)" },
+    grasaVisceralNivel: { label: "Grasa visceral", field: (s) => s.grasaVisceralNivel ?? null, color: "#dc2626", bgColor: "rgba(220,38,38,0.12)" },
+  };
+
+  // Crear datasets dinámicamente según las métricas seleccionadas
+  const datasets = Object.keys(chartMetrics)
+    .filter(key => chartMetrics[key])
+    .map(key => {
+      const config = metricsConfig[key];
+      return {
+        label: config.label,
+        data: mappedForChart.map(config.field),
+        borderColor: config.color,
+        backgroundColor: config.bgColor,
+        tension: 0.25,
+        fill: false,
+        pointRadius: 4,
+      };
+    });
+
+  const chartData = { labels, datasets };
+  const chartOptions = { 
+    responsive: true, 
+    plugins: { 
+      legend: { 
+        display: true,
+        position: 'top',
+      } 
+    }, 
+    scales: { 
+      y: { 
+        beginAtZero: false,
+        ticks: {
+          callback: function(value) {
+            return value.toFixed(1);
+          }
+        }
+      } 
+    },
+    interaction: {
+      mode: 'index',
+      intersect: false,
+    }
+  };
 
   const menuHistoryRaw = Array.isArray(userData?.menuHistorico) ? userData.menuHistorico : [];
   const menuHistoryMapped = menuHistoryRaw.map((m) => ({ ...m, _t: timestampToMs(m?.createdAt || m?.when || m?.fecha) || 0 })).sort((a, b) => (b._t || 0) - (a._t || 0));
@@ -490,9 +722,6 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const dayName = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"][selDay];
 
   const saveLabel = saveStatus === "pending" ? "Guardando..." : saveStatus === "saving" ? "Guardando..." : saveStatus === "saved" ? "Guardado" : saveStatus === "error" ? "Error al guardar" : "";
-
-  const [histLimit, setHistLimit] = useState(10);
-  const [expandedRowsStateLocal, setExpandedRowsStateLocal] = useState({});
 
   const toggleExpandRowLocal = (idx) => setExpandedRowsStateLocal((s) => ({ ...s, [idx]: !s[idx] }));
 
@@ -918,9 +1147,9 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                     )}
                     <button 
                       className="btn primary" 
-                      type="submit" 
+                      type="button" 
                       disabled={savingPeso} 
-                      onClick={submitPeso}
+                      onClick={(e) => submitPeso(e)}
                       style={{
                         backgroundColor: "#4299e1",
                         color: "white",
@@ -1025,18 +1254,19 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                           <th>Índice C/T</th>
                           <th>TA (SYS/DIA)</th>
                           <th style={{ width: 220 }}>Notas / Detalle</th>
+                          <th style={{ width: 120 }}>Acciones</th>
                         </tr>
                       </thead>
                       <tbody>
                         {(!rowsDesc || rowsDesc.length === 0) ? (
-                          <tr><td colSpan={20} style={{ padding: 12 }}>Sin registros</td></tr>
+                          <tr><td colSpan={21} style={{ padding: 12 }}>Sin registros</td></tr>
                         ) : (
                           rowsDesc.slice(0, histLimit).map((r, i) => {
                             const ta = r.tensionArterial || {};
                             const key = `${r._t || i}-${i}`;
                             return (
                               <React.Fragment key={key}>
-                                <tr className="hist-row" style={{ cursor: "pointer" }} onClick={() => toggleExpandRowLocal(i)}>
+                                <tr className="hist-row">
                                   <td className="col-fixed" style={{ whiteSpace: "nowrap", padding: 10 }}>{r.fecha || (r._t ? new Date(r._t).toLocaleString() : "")}</td>
                                   <td style={{ padding: 10 }}>{r.peso ?? r.pesoActual ?? "—"}</td>
                                   <td style={{ padding: 10 }}>{r.masaGrasaPct ?? "—"}</td>
@@ -1056,18 +1286,37 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                                   <td style={{ padding: 10 }}>{r.circunferenciaPiernaCm ?? "—"}</td>
                                   <td style={{ padding: 10 }}>{r.indiceCinturaTalla ?? "—"}</td>
                                   <td style={{ padding: 10 }}>{`${ta.sys || ""}${ta.dia ? ` / ${ta.dia}` : ""}`}</td>
-                                  <td style={{ padding: 10, maxWidth: 340 }}>{renderCell(r.notas)}</td>
+                                  <td style={{ padding: 10, maxWidth: 340, cursor: "pointer" }} onClick={() => toggleExpandRowLocal(i)}>{renderCell(r.notas)}</td>
+                                  <td style={{ padding: 10 }}>
+                                    <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                                      <button 
+                                        className="btn ghost" 
+                                        onClick={(e) => { e.stopPropagation(); openEditModal(r, i); }}
+                                        style={{ padding: "4px 8px", fontSize: "12px" }}
+                                        title="Editar registro"
+                                      >
+                                        ✏️
+                                      </button>
+                                      <button 
+                                        className="btn danger" 
+                                        onClick={(e) => { e.stopPropagation(); deletePesaje(i); }}
+                                        style={{ padding: "4px 8px", fontSize: "12px" }}
+                                        title="Eliminar registro"
+                                      >
+                                        🗑️
+                                      </button>
+                                    </div>
+                                  </td>
                                 </tr>
 
                                 {expandedRowsStateLocal[i] && (
                                   <tr className="hist-row-detail">
-                                    <td colSpan={20} style={{ padding: 12, background: "rgba(6,95,70,0.02)" }}>
+                                    <td colSpan={21} style={{ padding: 12, background: "rgba(6,95,70,0.02)" }}>
                                       <div style={{ display: "flex", gap: 16, flexDirection: "column" }}>
                                         <div style={{ fontSize: 13, color: "#064e3b", fontWeight: 700 }}>Detalle completo</div>
                                         <div style={{ fontSize: 13, color: "#0f172a", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{JSON.stringify(r, null, 2)}</div>
                                         <div style={{ display: "flex", gap: 8 }}>
                                           <button className="btn ghost" onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(JSON.stringify(r)).catch(()=>{}); }}>Copiar JSON</button>
-                                          <button className="btn ghost" onClick={(e) => { e.stopPropagation(); /* placeholder */ }}>Restaurar valores</button>
                                         </div>
                                       </div>
                                     </td>
@@ -1089,9 +1338,150 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
                   <hr style={{ margin: "12px 0" }} />
                   <div style={{ marginTop: 8 }}>
-                    <h4>Gráfico de peso</h4>
-                    <div style={{ width: "100%", minHeight: 380 }} className="chart-container">
-                      <Line ref={chartRef} data={chartData} options={chartOptions} />
+                    <h4>Gráfico de evolución</h4>
+                    
+                    {/* Checkboxes para seleccionar métricas */}
+                    <div style={{ 
+                      padding: "20px", 
+                      backgroundColor: "#f8fafc", 
+                      borderRadius: "8px",
+                      marginBottom: "16px",
+                      border: "1px solid #e2e8f0"
+                    }}>
+                      <div style={{ marginBottom: "16px", fontWeight: "600", color: "#475569" }}>
+                        Selecciona las métricas a mostrar:
+                      </div>
+                      
+                      <div style={{ 
+                        display: "grid", 
+                        gridTemplateColumns: "repeat(3, 1fr)", 
+                        gap: "12px"
+                      }}>
+                      
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minWidth: "180px" }}>
+                        <input 
+                          type="checkbox" 
+                          checked={chartMetrics.peso} 
+                          onChange={(e) => setChartMetrics(prev => ({ ...prev, peso: e.target.checked }))}
+                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                        />
+                        <span style={{ color: "#16a34a", fontWeight: "500" }}>● Peso (kg)</span>
+                      </label>
+
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minWidth: "180px" }}>
+                        <input 
+                          type="checkbox" 
+                          checked={chartMetrics.imc} 
+                          onChange={(e) => setChartMetrics(prev => ({ ...prev, imc: e.target.checked }))}
+                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                        />
+                        <span style={{ color: "#2563eb", fontWeight: "500" }}>● IMC</span>
+                      </label>
+
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minWidth: "180px" }}>
+                        <input 
+                          type="checkbox" 
+                          checked={chartMetrics.masaGrasaPct} 
+                          onChange={(e) => setChartMetrics(prev => ({ ...prev, masaGrasaPct: e.target.checked }))}
+                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                        />
+                        <span style={{ color: "#dc2626", fontWeight: "500" }}>● Masa grasa (%)</span>
+                      </label>
+
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minWidth: "180px" }}>
+                        <input 
+                          type="checkbox" 
+                          checked={chartMetrics.masaGrasaKg} 
+                          onChange={(e) => setChartMetrics(prev => ({ ...prev, masaGrasaKg: e.target.checked }))}
+                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                        />
+                        <span style={{ color: "#ea580c", fontWeight: "500" }}>● Masa grasa (kg)</span>
+                      </label>
+
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minWidth: "180px" }}>
+                        <input 
+                          type="checkbox" 
+                          checked={chartMetrics.masaMagraKg} 
+                          onChange={(e) => setChartMetrics(prev => ({ ...prev, masaMagraKg: e.target.checked }))}
+                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                        />
+                        <span style={{ color: "#65a30d", fontWeight: "500" }}>● Masa magra (kg)</span>
+                      </label>
+
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minWidth: "180px" }}>
+                        <input 
+                          type="checkbox" 
+                          checked={chartMetrics.masaMuscularKg} 
+                          onChange={(e) => setChartMetrics(prev => ({ ...prev, masaMuscularKg: e.target.checked }))}
+                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                        />
+                        <span style={{ color: "#0891b2", fontWeight: "500" }}>● Masa muscular (kg)</span>
+                      </label>
+
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minWidth: "180px" }}>
+                        <input 
+                          type="checkbox" 
+                          checked={chartMetrics.aguaTotalKg} 
+                          onChange={(e) => setChartMetrics(prev => ({ ...prev, aguaTotalKg: e.target.checked }))}
+                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                        />
+                        <span style={{ color: "#0284c7", fontWeight: "500" }}>● Agua (kg)</span>
+                      </label>
+
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minWidth: "180px" }}>
+                        <input 
+                          type="checkbox" 
+                          checked={chartMetrics.aguaTotalPct} 
+                          onChange={(e) => setChartMetrics(prev => ({ ...prev, aguaTotalPct: e.target.checked }))}
+                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                        />
+                        <span style={{ color: "#0ea5e9", fontWeight: "500" }}>● Agua (%)</span>
+                      </label>
+
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minWidth: "180px" }}>
+                        <input 
+                          type="checkbox" 
+                          checked={chartMetrics.masaOseaKg} 
+                          onChange={(e) => setChartMetrics(prev => ({ ...prev, masaOseaKg: e.target.checked }))}
+                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                        />
+                        <span style={{ color: "#64748b", fontWeight: "500" }}>● Masa ósea (kg)</span>
+                      </label>
+
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minWidth: "180px" }}>
+                        <input 
+                          type="checkbox" 
+                          checked={chartMetrics.grasaVisceralNivel} 
+                          onChange={(e) => setChartMetrics(prev => ({ ...prev, grasaVisceralNivel: e.target.checked }))}
+                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                        />
+                        <span style={{ color: "#dc2626", fontWeight: "500" }}>● Grasa visceral</span>
+                      </label>
+                      </div>
+                    </div>
+
+                    <div style={{ 
+                      width: "100%", 
+                      minHeight: 400,
+                      padding: "20px",
+                      backgroundColor: "#ffffff",
+                      borderRadius: "8px",
+                      border: "1px solid #e2e8f0"
+                    }} className="chart-container">
+                      {datasets.length > 0 ? (
+                        <Line ref={chartRef} data={chartData} options={chartOptions} />
+                      ) : (
+                        <div style={{ 
+                          display: "flex", 
+                          alignItems: "center", 
+                          justifyContent: "center", 
+                          height: "380px",
+                          color: "#94a3b8",
+                          fontSize: "14px"
+                        }}>
+                          Selecciona al menos una métrica para ver el gráfico
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1259,6 +1649,295 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       {error && (
         <div style={{ marginTop: 12 }} className="card">
           <div style={{ padding: 8, color: "var(--danger, #b91c1c)" }}>{error}</div>
+        </div>
+      )}
+
+      {/* Modal de edición de registro */}
+      {editingRecord && (
+        <div 
+          className="print-modal-backdrop" 
+          role="dialog" 
+          aria-modal="true"
+          onClick={() => {
+            setEditingRecord(null);
+            setEditingIndex(null);
+          }}
+        >
+          <div 
+            className="print-modal" 
+            style={{ maxWidth: "900px", maxHeight: "90vh", overflowY: "auto" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ marginBottom: "16px" }}>Editar registro de pesaje</h3>
+            
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div className="field">
+                <label>Fecha</label>
+                <input 
+                  type="date" 
+                  className="input" 
+                  value={editingRecord.fecha || ""} 
+                  onChange={(e) => setEditingRecord({ ...editingRecord, fecha: e.target.value })} 
+                />
+              </div>
+
+              <div className="field">
+                <label>Peso (kg)</label>
+                <input 
+                  type="number" 
+                  inputMode="decimal" 
+                  step="0.1" 
+                  className="input" 
+                  value={editingRecord.peso || ""} 
+                  onChange={(e) => setEditingRecord({ ...editingRecord, peso: e.target.value })} 
+                />
+              </div>
+
+              <div className="field">
+                <label>Masa grasa (%)</label>
+                <input 
+                  type="number" 
+                  inputMode="decimal" 
+                  step="0.1" 
+                  className="input" 
+                  value={editingRecord.masaGrasaPct ?? ""} 
+                  onChange={(e) => setEditingRecord({ ...editingRecord, masaGrasaPct: e.target.value })} 
+                />
+              </div>
+
+              <div className="field">
+                <label>Masa grasa (kg)</label>
+                <input 
+                  type="number" 
+                  inputMode="decimal" 
+                  step="0.01" 
+                  className="input" 
+                  value={editingRecord.masaGrasaKg ?? ""} 
+                  onChange={(e) => setEditingRecord({ ...editingRecord, masaGrasaKg: e.target.value })} 
+                />
+              </div>
+
+              <div className="field">
+                <label>Masa magra (kg)</label>
+                <input 
+                  type="number" 
+                  inputMode="decimal" 
+                  step="0.01" 
+                  className="input" 
+                  value={editingRecord.masaMagraKg ?? ""} 
+                  onChange={(e) => setEditingRecord({ ...editingRecord, masaMagraKg: e.target.value })} 
+                />
+              </div>
+
+              <div className="field">
+                <label>Masa muscular (kg)</label>
+                <input 
+                  type="number" 
+                  inputMode="decimal" 
+                  step="0.01" 
+                  className="input" 
+                  value={editingRecord.masaMuscularKg ?? ""} 
+                  onChange={(e) => setEditingRecord({ ...editingRecord, masaMuscularKg: e.target.value })} 
+                />
+              </div>
+
+              <div className="field">
+                <label>Agua total (kg)</label>
+                <input 
+                  type="number" 
+                  inputMode="decimal" 
+                  step="0.01" 
+                  className="input" 
+                  value={editingRecord.aguaTotalKg ?? ""} 
+                  onChange={(e) => setEditingRecord({ ...editingRecord, aguaTotalKg: e.target.value })} 
+                />
+              </div>
+
+              <div className="field">
+                <label>% Agua total</label>
+                <input 
+                  type="number" 
+                  inputMode="decimal" 
+                  step="0.1" 
+                  className="input" 
+                  value={editingRecord.aguaTotalPct ?? ""} 
+                  onChange={(e) => setEditingRecord({ ...editingRecord, aguaTotalPct: e.target.value })} 
+                />
+              </div>
+
+              <div className="field">
+                <label>Masa ósea (kg)</label>
+                <input 
+                  type="number" 
+                  inputMode="decimal" 
+                  step="0.01" 
+                  className="input" 
+                  value={editingRecord.masaOseaKg ?? ""} 
+                  onChange={(e) => setEditingRecord({ ...editingRecord, masaOseaKg: e.target.value })} 
+                />
+              </div>
+
+              <div className="field">
+                <label>MB (kcal)</label>
+                <input 
+                  type="number" 
+                  inputMode="numeric" 
+                  step="1" 
+                  className="input" 
+                  value={editingRecord.mbKcal ?? ""} 
+                  onChange={(e) => setEditingRecord({ ...editingRecord, mbKcal: e.target.value })} 
+                />
+              </div>
+
+              <div className="field">
+                <label>Nivel grasa visceral</label>
+                <input 
+                  type="number" 
+                  inputMode="numeric" 
+                  step="1" 
+                  className="input" 
+                  value={editingRecord.grasaVisceralNivel ?? ""} 
+                  onChange={(e) => setEditingRecord({ ...editingRecord, grasaVisceralNivel: e.target.value })} 
+                />
+              </div>
+
+              <div className="field">
+                <label>IMC</label>
+                <input 
+                  type="number" 
+                  inputMode="decimal" 
+                  step="0.1" 
+                  className="input" 
+                  value={editingRecord.imc ?? ""} 
+                  onChange={(e) => setEditingRecord({ ...editingRecord, imc: e.target.value })} 
+                />
+              </div>
+
+              <div className="field">
+                <label>Edad metabólica</label>
+                <input 
+                  type="number" 
+                  inputMode="numeric" 
+                  step="1" 
+                  className="input" 
+                  value={editingRecord.edadMetabolica ?? ""} 
+                  onChange={(e) => setEditingRecord({ ...editingRecord, edadMetabolica: e.target.value })} 
+                />
+              </div>
+
+              <div className="field">
+                <label>C. Brazo (cm)</label>
+                <input 
+                  type="number" 
+                  inputMode="decimal" 
+                  step="0.1" 
+                  className="input" 
+                  value={editingRecord.circunferenciaBrazoCm ?? ""} 
+                  onChange={(e) => setEditingRecord({ ...editingRecord, circunferenciaBrazoCm: e.target.value })} 
+                />
+              </div>
+
+              <div className="field">
+                <label>C. Cintura (cm)</label>
+                <input 
+                  type="number" 
+                  inputMode="decimal" 
+                  step="0.1" 
+                  className="input" 
+                  value={editingRecord.circunferenciaCinturaCm ?? ""} 
+                  onChange={(e) => setEditingRecord({ ...editingRecord, circunferenciaCinturaCm: e.target.value })} 
+                />
+              </div>
+
+              <div className="field">
+                <label>C. Cadera (cm)</label>
+                <input 
+                  type="number" 
+                  inputMode="decimal" 
+                  step="0.1" 
+                  className="input" 
+                  value={editingRecord.circunferenciaCaderaCm ?? ""} 
+                  onChange={(e) => setEditingRecord({ ...editingRecord, circunferenciaCaderaCm: e.target.value })} 
+                />
+              </div>
+
+              <div className="field">
+                <label>C. Pierna (cm)</label>
+                <input 
+                  type="number" 
+                  inputMode="decimal" 
+                  step="0.1" 
+                  className="input" 
+                  value={editingRecord.circunferenciaPiernaCm ?? ""} 
+                  onChange={(e) => setEditingRecord({ ...editingRecord, circunferenciaPiernaCm: e.target.value })} 
+                />
+              </div>
+
+              <div className="field">
+                <label>Índice cintura / talla</label>
+                <input 
+                  type="text" 
+                  className="input" 
+                  value={editingRecord.indiceCinturaTalla ?? ""} 
+                  onChange={(e) => setEditingRecord({ ...editingRecord, indiceCinturaTalla: e.target.value })} 
+                />
+              </div>
+
+              <div className="field">
+                <label>TA (SYS / DIA)</label>
+                <div className="tension-group" style={{ display: "flex", gap: "8px" }}>
+                  <input 
+                    type="number" 
+                    className="input" 
+                    placeholder="SYS" 
+                    value={editingRecord.tensionArterial?.sys ?? ""} 
+                    onChange={(e) => setEditingRecord({ 
+                      ...editingRecord, 
+                      tensionArterial: { ...(editingRecord.tensionArterial || {}), sys: e.target.value } 
+                    })} 
+                  />
+                  <input 
+                    type="number" 
+                    className="input" 
+                    placeholder="DIA" 
+                    value={editingRecord.tensionArterial?.dia ?? ""} 
+                    onChange={(e) => setEditingRecord({ 
+                      ...editingRecord, 
+                      tensionArterial: { ...(editingRecord.tensionArterial || {}), dia: e.target.value } 
+                    })} 
+                  />
+                </div>
+              </div>
+
+              <div className="field" style={{ gridColumn: "1 / -1" }}>
+                <label>Notas</label>
+                <textarea 
+                  className="input" 
+                  rows={3} 
+                  value={editingRecord.notas || ""} 
+                  onChange={(e) => setEditingRecord({ ...editingRecord, notas: e.target.value })} 
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+              <button 
+                className="btn ghost" 
+                onClick={() => {
+                  setEditingRecord(null);
+                  setEditingIndex(null);
+                }}
+              >
+                Cancelar
+              </button>
+              <button 
+                className="btn primary" 
+                onClick={saveEditedRecord}
+              >
+                Guardar cambios
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
