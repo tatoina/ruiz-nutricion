@@ -25,6 +25,8 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 import DriveFolderViewer from "./DriveFolderViewer";
+import AnamnesisForm from "./AnamnesisForm";
+import FileManager from "./FileManager";
 ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Title, Tooltip, Legend);
 
 /**
@@ -44,12 +46,16 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const DEFAULT_CLINIC_LOGO =
     "https://raw.githubusercontent.com/tatoina/ruiz-nutricion/564ee270d5f1a4c692bdd730ce055dd6aab0bfae/public/logoclinica-512.png";
 
-  const tabs = [
+  const baseTabs = [
     { id: "pesaje", label: "Pesaje" },
     { id: "semana", label: "Dieta semanal" },
     { id: "ejercicios", label: "Ejercicios" },
     { id: "recetas", label: "Recetas" },
   ];
+  
+  const tabs = adminMode 
+    ? [...baseTabs, { id: "anamnesis", label: "Anamnesis" }]
+    : baseTabs;
 
   const ALL_SECTIONS = [
     { key: "desayuno", label: "Desayuno" },
@@ -881,15 +887,73 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
             {tabs.map((t, i) => (<button key={t.id} className={i === tabIndex ? "tab tab-active" : "tab"} onClick={() => setTabIndex(i)}>{t.label}</button>))}
           </nav>
 
-          <div style={{ marginTop: 12 }}>
+          <div style={{ marginTop: 12, position: "relative", paddingBottom: "80px" }}>
             {tabIndex === 0 && (
               <div className="card pesaje-section-wrapper" style={{ padding: 12 }}>
                 <h3>Pesaje / Composición</h3>
                 <div className="panel-section">
-                  <div className="pesaje-actions" style={{ marginBottom: 12 }}>
-                    <button className="btn primary" type="submit" disabled={savingPeso} onClick={submitPeso}>{savingPeso ? "Guardando..." : "Guardar medidas"}</button>
-                    <button type="button" className="btn ghost" onClick={() => { setPeso(""); setFechaPeso(todayISO); }}>Limpiar</button>
-                    <div style={{ marginLeft: 8, color: "#6b7280" }}>{saveLabel}</div>
+                  {/* Botón flotante de guardar */}
+                  <div style={{
+                    position: "fixed",
+                    bottom: "30px",
+                    right: "30px",
+                    zIndex: 1000,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-end",
+                    gap: "10px"
+                  }}>
+                    {saveLabel && (
+                      <div style={{
+                        backgroundColor: saveLabel.includes("✅") || saveLabel.includes("Guardado") ? "#48bb78" : "#718096",
+                        color: "white",
+                        padding: "8px 16px",
+                        borderRadius: "6px",
+                        fontSize: "14px",
+                        fontWeight: "500",
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+                      }}>
+                        {saveLabel}
+                      </div>
+                    )}
+                    <button 
+                      className="btn primary" 
+                      type="submit" 
+                      disabled={savingPeso} 
+                      onClick={submitPeso}
+                      style={{
+                        backgroundColor: "#4299e1",
+                        color: "white",
+                        padding: "14px 28px",
+                        borderRadius: "8px",
+                        border: "none",
+                        cursor: savingPeso ? "not-allowed" : "pointer",
+                        opacity: savingPeso ? 0.6 : 1,
+                        fontWeight: "600",
+                        fontSize: "16px",
+                        boxShadow: "0 4px 12px rgba(66, 153, 225, 0.4)",
+                        transition: "all 0.3s ease",
+                      }}
+                    >
+                      {savingPeso ? "💾 Guardando..." : "💾 Guardar medidas"}
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={() => { setPeso(""); setFechaPeso(todayISO); }}
+                      style={{
+                        backgroundColor: "#e2e8f0",
+                        color: "#2d3748",
+                        padding: "10px 20px",
+                        borderRadius: "6px",
+                        border: "none",
+                        cursor: "pointer",
+                        fontWeight: "500",
+                        fontSize: "14px",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                      }}
+                    >
+                      🗑️ Limpiar
+                    </button>
                   </div>
 
                   <div className="pesaje-container">
@@ -1053,15 +1117,72 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                     </div>
                   </div>
 
+                  {/* Botones flotantes para Dieta Semanal */}
+                  <div style={{
+                    position: "fixed",
+                    bottom: "30px",
+                    right: "30px",
+                    zIndex: 1000,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-end",
+                    gap: "10px"
+                  }}>
+                    {saveLabel && (
+                      <div style={{
+                        backgroundColor: saveLabel.includes("✅") || saveLabel.includes("Guardado") ? "#48bb78" : "#718096",
+                        color: "white",
+                        padding: "8px 16px",
+                        borderRadius: "6px",
+                        fontSize: "14px",
+                        fontWeight: "500",
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+                      }}>
+                        {saveLabel}
+                      </div>
+                    )}
+                    <button 
+                      className="btn primary" 
+                      onClick={saveVersionMenu}
+                      style={{
+                        backgroundColor: "#4299e1",
+                        color: "white",
+                        padding: "14px 28px",
+                        borderRadius: "8px",
+                        border: "none",
+                        cursor: "pointer",
+                        fontWeight: "600",
+                        fontSize: "16px",
+                        boxShadow: "0 4px 12px rgba(66, 153, 225, 0.4)",
+                        transition: "all 0.3s ease",
+                      }}
+                    >
+                      💾 Guardar versión
+                    </button>
+                    <button 
+                      className="btn ghost" 
+                      onClick={saveSemana}
+                      style={{
+                        backgroundColor: "#48bb78",
+                        color: "white",
+                        padding: "12px 24px",
+                        borderRadius: "6px",
+                        border: "none",
+                        cursor: "pointer",
+                        fontWeight: "500",
+                        fontSize: "14px",
+                        boxShadow: "0 2px 8px rgba(72, 187, 120, 0.3)",
+                      }}
+                    >
+                      📝 Guardar menú
+                    </button>
+                  </div>
+
                   <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center" }}>
                     <div style={{ display: "flex", gap: 8 }}>
                       <button className="btn ghost" onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.max(0, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) - 1) }))}>Día anterior</button>
                       <button className="btn ghost" onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.min(6, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) + 1) }))}>Siguiente día</button>
                     </div>
-                    <div style={{ marginLeft: 8, color: "#6b7280" }}>{saveLabel}</div>
-                    <div style={{ flex: 1 }} />
-                    <button className="btn ghost" onClick={saveSemana}>Guardar menú</button>
-                    <button className="btn primary" onClick={saveVersionMenu}>Guardar versión</button>
                   </div>
 
                   <hr style={{ margin: "12px 0" }} />
@@ -1108,20 +1229,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
               <div className="card" style={{ padding: 12 }}>
                 <h3>Ejercicios</h3>
                 <div className="panel-section">
-                  {(editable.ejercicios || userData?.ejercicios) ? (
-                    <DriveFolderViewer folderId={DRIVE_FOLDER_EXERCISES} height={520} />
-                  ) : (
-                    <div className="field">
-                      <label>Descripción</label>
-                      <textarea className="input" rows={4} value={editable.ejerciciosDescripcion || ""} onChange={(e) => setEditable((s) => ({ ...s, ejerciciosDescripcion: e.target.value }))} />
-                      <div style={{ marginTop: 8 }}>
-                        <button className="btn primary" onClick={async () => {
-                          try { await updateDoc(doc(db, "users", uid), { ejerciciosDescripcion: editable.ejerciciosDescripcion || "", updatedAt: serverTimestamp() }); }
-                          catch (err) { console.error(err); setError("No se pudo guardar la descripción de ejercicios."); }
-                        }}>Guardar descripción</button>
-                      </div>
-                    </div>
-                  )}
+                  <FileManager userId={uid} type="ejercicios" isAdmin={adminMode} />
                 </div>
               </div>
             )}
@@ -1129,21 +1237,19 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
               <div className="card" style={{ padding: 12 }}>
                 <h3>Recetas</h3>
                 <div className="panel-section">
-                  {(editable.recetas || userData?.recetas) ? (
-                    <DriveFolderViewer folderId={DRIVE_FOLDER_RECIPES} height={520} />
-                  ) : (
-                    <div className="field">
-                      <label>Descripción</label>
-                      <textarea className="input" rows={4} value={editable.recetasDescripcion || ""} onChange={(e) => setEditable((s) => ({ ...s, recetasDescripcion: e.target.value }))} />
-                      <div style={{ marginTop: 8 }}>
-                        <button className="btn primary" onClick={async () => {
-                          try { await updateDoc(doc(db, "users", uid), { recetasDescripcion: editable.recetasDescripcion || "", updatedAt: serverTimestamp() }); }
-                          catch (err) { console.error(err); setError("No se pudo guardar la descripción de recetas."); }
-                        }}>Guardar descripción</button>
-                      </div>
-                    </div>
-                  )}
+                  <FileManager userId={uid} type="recetas" isAdmin={adminMode} />
                 </div>
+              </div>
+            )}
+            {tabIndex === 4 && adminMode && (
+              <div className="card" style={{ padding: 0 }}>
+                <AnamnesisForm 
+                  user={{ ...userData, uid: uid }} 
+                  onUpdateUser={(updatedUser) => {
+                    setUserData(updatedUser);
+                  }} 
+                  isAdmin={adminMode} 
+                />
               </div>
             )}
           </div>

@@ -88,7 +88,9 @@ export default function AdminUsers() {
         const q = query(collection(db, "users"), orderBy("apellidos", "asc"), orderBy("nombre", "asc"));
         const snap = await getDocs(q);
         if (!mounted) return;
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const list = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((u) => !ADMIN_EMAILS.includes((u.email || "").toLowerCase()));
         setUsers(list);
         setSelectedIndex(list.length ? 0 : -1);
       } catch (err) {
@@ -99,7 +101,9 @@ export default function AdminUsers() {
           try {
             const snap = await getDocs(collection(db, "users")); // sin orderBy
             if (!mounted) return;
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+            const list = snap.docs
+              .map((d) => ({ id: d.id, ...d.data() }))
+              .filter((u) => !ADMIN_EMAILS.includes((u.email || "").toLowerCase()));
             list.sort((a, b) => {
               const A = (a.apellidos || "").toString().trim().toLowerCase();
               const B = (b.apellidos || "").toString().trim().toLowerCase();
