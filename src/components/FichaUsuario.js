@@ -1255,10 +1255,10 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
             ))}
           </nav>
 
-          <div style={{ marginTop: "16px", position: "relative", paddingBottom: "80px" }}>
+          <div style={{ marginTop: "12px", position: "relative", paddingBottom: "80px" }}>
             {tabIndex === 0 && (
-              <div className="card pesaje-section-wrapper" style={{ padding: "16px", borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-                <h3 style={{ margin: "0 0 16px 0", fontSize: "18px", color: "#1e293b" }}>📊 Medidas y Composición</h3>
+              <div className="card pesaje-section-wrapper" style={{ padding: "12px", borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+                <h3 style={{ margin: "0 0 12px 0", fontSize: "17px", color: "#1e293b" }}>📊 Medidas y Composición</h3>
                 <div className="panel-section">
                   {/* Botón flotante de guardar - más compacto */}
                   <div style={{
@@ -1365,13 +1365,13 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                   </div>
 
                   <div style={{ 
-                    margin: "24px 0 16px 0", 
-                    padding: "12px 16px",
+                    margin: "16px 0 12px 0", 
+                    padding: "10px 14px",
                     background: "linear-gradient(90deg, #f0fdf4 0%, #dcfce7 100%)",
-                    borderRadius: "10px",
-                    borderLeft: "4px solid #16a34a"
+                    borderRadius: "8px",
+                    borderLeft: "3px solid #16a34a"
                   }}>
-                    <h4 style={{ margin: 0, fontSize: "16px", color: "#15803d", fontWeight: "600" }}>📋 Histórico de medidas</h4>
+                    <h4 style={{ margin: 0, fontSize: "15px", color: "#15803d", fontWeight: "600" }}>📋 Histórico de medidas</h4>
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: "12px" }}>
@@ -1534,25 +1534,25 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                   </div>
 
                   <div style={{ 
-                    margin: "24px 0 16px 0", 
-                    padding: "12px 16px",
+                    margin: "16px 0 12px 0", 
+                    padding: "10px 14px",
                     background: "linear-gradient(90deg, #eff6ff 0%, #dbeafe 100%)",
-                    borderRadius: "10px",
-                    borderLeft: "4px solid #3b82f6"
+                    borderRadius: "8px",
+                    borderLeft: "3px solid #3b82f6"
                   }}>
-                    <h4 style={{ margin: 0, fontSize: "16px", color: "#1e40af", fontWeight: "600" }}>📈 Gráfico de evolución</h4>
+                    <h4 style={{ margin: 0, fontSize: "15px", color: "#1e40af", fontWeight: "600" }}>📈 Gráfico de evolución</h4>
                   </div>
                   
-                  <div style={{ marginTop: 8 }}>
+                  <div style={{ marginTop: 6 }}>
                     {/* Checkboxes para seleccionar métricas */}
                     <div style={{ 
-                      padding: "12px", 
+                      padding: "10px", 
                       backgroundColor: "#f8fafc", 
-                      borderRadius: "10px",
-                      marginBottom: "12px",
+                      borderRadius: "8px",
+                      marginBottom: "10px",
                       border: "1px solid #e2e8f0"
                     }}>
-                      <div style={{ marginBottom: "10px", fontWeight: "600", color: "#475569", fontSize: "13px" }}>
+                      <div style={{ marginBottom: "8px", fontWeight: "600", color: "#475569", fontSize: "12px" }}>
                         Métricas a mostrar:
                       </div>
                       
@@ -1666,9 +1666,9 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
                     <div style={{ 
                       width: "100%", 
-                      minHeight: "300px",
+                      minHeight: "250px",
                       height: "auto",
-                      padding: "16px",
+                      padding: "12px",
                       backgroundColor: "#ffffff",
                       borderRadius: "8px",
                       border: "1px solid #e2e8f0"
@@ -1680,11 +1680,11 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                           display: "flex", 
                           alignItems: "center", 
                           justifyContent: "center", 
-                          minHeight: "280px",
+                          minHeight: "230px",
                           color: "#94a3b8",
-                          fontSize: "14px",
+                          fontSize: "13px",
                           textAlign: "center",
-                          padding: "20px"
+                          padding: "16px"
                         }}>
                           Selecciona al menos una métrica para ver el gráfico
                         </div>
