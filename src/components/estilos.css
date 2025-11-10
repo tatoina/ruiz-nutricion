@@ -636,3 +636,21 @@ button, .tab { -webkit-tap-highlight-color: rgba(0,0,0,0); }
     min-width: auto;
   }
 }
+
+/* Botones de icono en header - hover effects */
+.btn-icon-header:active {
+  transform: scale(0.95);
+}
+
+/* Ajustes adicionales para móvil muy pequeño */
+@media (max-width: 360px) {
+  .btn-icon-header {
+    width: 32px !important;
+    height: 32px !important;
+  }
+  
+  .btn-icon-header svg {
+    width: 16px !important;
+    height: 16px !important;
+  }
+}

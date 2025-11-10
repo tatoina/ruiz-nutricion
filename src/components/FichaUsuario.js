@@ -1004,30 +1004,137 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
   return (
     <div ref={rootRef} className={`ficha-root ${adminMode ? "admin-wide" : ""}`}>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between", padding: 12, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "center", minWidth: 0, flex: "1 1 auto" }}>
-          <div className="avatar">{(userData.nombre?.[0] || userData.email?.[0] || "U").toUpperCase()}</div>
-          <div style={{ minWidth: 0, overflow: "hidden" }}>
-            <div className="title" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{userData.nombre ? `${userData.nombre} ${userData.apellidos || ""}` : userData.email}</div>
-            <div className="subtitle" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{userData.email}</div>
+      {/* Header tipo app de coaching */}
+      <div style={{ 
+        background: "linear-gradient(135deg, #16a34a 0%, #15803d 100%)",
+        borderRadius: "12px",
+        padding: "16px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        marginBottom: "12px"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          {/* User info */}
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0 }}>
+            <div style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.95)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "20px",
+              fontWeight: "700",
+              color: "#16a34a",
+              flexShrink: 0,
+              boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
+            }}>
+              {(userData.nombre?.[0] || userData.email?.[0] || "U").toUpperCase()}
+            </div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ 
+                fontSize: "16px", 
+                fontWeight: "600", 
+                color: "white",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis"
+              }}>
+                {userData.nombre ? `${userData.nombre} ${userData.apellidos || ""}` : userData.email}
+              </div>
+              <div style={{ 
+                fontSize: "13px", 
+                color: "rgba(255,255,255,0.85)",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis"
+              }}>
+                {userData.pesoActual ? `${userData.pesoActual} kg` : userData.email}
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div className="header-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-          <button className="btn ghost" onClick={() => setShowProfile((s) => !s)} aria-expanded={showProfile}>Perfil</button>
+          {/* Actions - iconos */}
+          <div style={{ display: "flex", gap: "6px", flexShrink: 0, marginLeft: "12px" }}>
+            <button 
+              className="btn-icon-header" 
+              onClick={() => setShowProfile((s) => !s)} 
+              title="Perfil"
+              style={{
+                background: "rgba(255,255,255,0.2)",
+                border: "none",
+                borderRadius: "8px",
+                width: "36px",
+                height: "36px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                transition: "background 0.2s"
+              }}
+              onMouseEnter={(e) => e.target.style.background = "rgba(255,255,255,0.3)"}
+              onMouseLeave={(e) => e.target.style.background = "rgba(255,255,255,0.2)"}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="12" cy="7" r="4" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
 
-          
+            <button 
+              className="btn-icon-header" 
+              onClick={() => setShowPrintDialog(true)} 
+              title="Generar PDF"
+              style={{
+                background: "rgba(255,255,255,0.2)",
+                border: "none",
+                borderRadius: "8px",
+                width: "36px",
+                height: "36px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                transition: "background 0.2s"
+              }}
+              onMouseEnter={(e) => e.target.style.background = "rgba(255,255,255,0.3)"}
+              onMouseLeave={(e) => e.target.style.background = "rgba(255,255,255,0.2)"}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                <path d="M6 9V3h12v6" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M6 18H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-2" strokeLinecap="round" strokeLinejoin="round"/>
+                <rect x="6" y="14" width="12" height="7" rx="1" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
 
-          <button className="btn ghost" title="Generar PDF" onClick={() => setShowPrintDialog(true)} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden focusable="false">
-              <path d="M6 9V3h12v6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M6 18H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-              <rect x="6" y="14" width="12" height="7" rx="1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            PDF
-          </button>
-
-          {(!targetUid || targetUid === authUid) && <button className="btn danger" onClick={handleSignOut}>Cerrar sesión</button>}
+            {(!targetUid || targetUid === authUid) && (
+              <button 
+                className="btn-icon-header" 
+                onClick={handleSignOut} 
+                title="Cerrar sesión"
+                style={{
+                  background: "rgba(239,68,68,0.9)",
+                  border: "none",
+                  borderRadius: "8px",
+                  width: "36px",
+                  height: "36px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  transition: "background 0.2s"
+                }}
+                onMouseEnter={(e) => e.target.style.background = "rgba(220,38,38,1)"}
+                onMouseLeave={(e) => e.target.style.background = "rgba(239,68,68,0.9)"}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round"/>
+                  <polyline points="16 17 21 12 16 7" strokeLinecap="round" strokeLinejoin="round"/>
+                  <line x1="21" y1="12" x2="9" y2="12" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
