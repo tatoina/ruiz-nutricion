@@ -40,6 +40,9 @@ export default function AdminUsers() {
   const MIN_LEFT = 240;
   const MAX_LEFT = 720;
 
+  // Estado para ocultar/mostrar el panel lateral
+  const [panelVisible, setPanelVisible] = useState(true);
+
   // Debug log helper
   const logDebug = (...args) => {
     // Descomenta la siguiente línea para ver logs
@@ -286,74 +289,108 @@ export default function AdminUsers() {
 
       <div className="admin-columns" style={{ marginTop: 12 }}>
         {/* Left panel: listado (ancho controlado por leftWidth) */}
-        <div
-          className="card admin-left"
-          style={{ padding: 12, width: `${leftWidth}px`, flexShrink: 0 }}
-        >
-          <input className="input" placeholder="Buscar por apellidos, nombre o email..." value={filter} onChange={(e) => setFilter(e.target.value)} style={{ width: "100%" }} />
-          <div ref={listRef} style={{ marginTop: 8, maxHeight: "calc(100vh - 180px)", overflowY: "auto" }}>
-            {loading ? (
-              <div style={{ padding: 8 }}>Cargando usuarios...</div>
-            ) : error ? (
-              <div style={{ color: "var(--danger, #b91c1c)", padding: 8 }}>{error}</div>
-            ) : filtered.length === 0 ? (
-              <div style={{ padding: 8 }}>No se encontraron usuarios.</div>
-            ) : (
-              <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-                {filtered.map((u, i) => (
-                  <li
-                    key={u.id}
-                    data-user-index={i}
-                    style={{
-                      padding: 10,
-                      borderBottom: "1px solid #eee",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      background: i === selectedIndex ? "rgba(22,163,74,0.06)" : undefined,
-                      cursor: "pointer",
-                    }}
-                    onClick={() => setSelectedIndex(i)}
-                  >
-                    <div style={{ display: "flex", flexDirection: "column" }}>
-                      <strong style={{ fontSize: 14 }}>{`${(u.apellidos || "").trim()} ${(u.nombre || "").trim()}`.trim() || u.email}</strong>
-                      <small style={{ color: "#666" }}>{u.email}</small>
-                    </div>
-                    <div style={{ fontSize: 12, color: "#666" }}>{u.pesoActual ? `${u.pesoActual} kg` : ""}</div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+        {panelVisible && (
+          <>
+            <div
+              className="card admin-left"
+              style={{ padding: 12, width: `${leftWidth}px`, flexShrink: 0 }}
+            >
+              <input className="input" placeholder="Buscar por apellidos, nombre o email..." value={filter} onChange={(e) => setFilter(e.target.value)} style={{ width: "100%" }} />
+              <div ref={listRef} style={{ marginTop: 8, maxHeight: "calc(100vh - 180px)", overflowY: "auto" }}>
+                {loading ? (
+                  <div style={{ padding: 8 }}>Cargando usuarios...</div>
+                ) : error ? (
+                  <div style={{ color: "var(--danger, #b91c1c)", padding: 8 }}>{error}</div>
+                ) : filtered.length === 0 ? (
+                  <div style={{ padding: 8 }}>No se encontraron usuarios.</div>
+                ) : (
+                  <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                    {filtered.map((u, i) => (
+                      <li
+                        key={u.id}
+                        data-user-index={i}
+                        style={{
+                          padding: 10,
+                          borderBottom: "1px solid #eee",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          background: i === selectedIndex ? "rgba(22,163,74,0.06)" : undefined,
+                          cursor: "pointer",
+                        }}
+                        onClick={() => setSelectedIndex(i)}
+                      >
+                        <div style={{ display: "flex", flexDirection: "column" }}>
+                          <strong style={{ fontSize: 14 }}>{`${(u.apellidos || "").trim()} ${(u.nombre || "").trim()}`.trim() || u.email}</strong>
+                          <small style={{ color: "#666" }}>{u.email}</small>
+                        </div>
+                        <div style={{ fontSize: 12, color: "#666" }}>{u.pesoActual ? `${u.pesoActual} kg` : ""}</div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
 
-          {/* If index required */}
-          {indexRequired && (
-            <div style={{ marginTop: 10, fontSize: 13 }}>
-              <div style={{ color: "#666" }}>Para un rendimiento óptimo crea este índice compuesto en Firestore:</div>
-              <a href={`https://console.firebase.google.com/project/${db.app.options.projectId}/firestore/indexes`} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 6 }}>
-                Ir a índices de Firestore
-              </a>
+              {/* If index required */}
+              {indexRequired && (
+                <div style={{ marginTop: 10, fontSize: 13 }}>
+                  <div style={{ color: "#666" }}>Para un rendimiento óptimo crea este índice compuesto en Firestore:</div>
+                  <a href={`https://console.firebase.google.com/project/${db.app.options.projectId}/firestore/indexes`} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 6 }}>
+                    Ir a índices de Firestore
+                  </a>
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        {/* Resizer divider */}
-        <div
-          className="resizer"
-          onMouseDown={startResizing}
-          onDoubleClick={resetLeftWidth}
-          onTouchStart={startResizingTouch}
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Redimensionar panel izquierdo"
-          title="Arrastra para redimensionar (doble clic para reset)"
-        />
+            {/* Resizer divider */}
+            <div
+              className="resizer"
+              onMouseDown={startResizing}
+              onDoubleClick={resetLeftWidth}
+              onTouchStart={startResizingTouch}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Redimensionar panel izquierdo"
+              title="Arrastra para redimensionar (doble clic para reset)"
+            />
+          </>
+        )}
 
         {/* Right panel: ficha */}
-        <div className="card admin-right" style={{ padding: 0 }}>
+        <div className="card admin-right" style={{ padding: 0, position: 'relative' }}>
           {users.length > 0 && selectedIndex >= 0 ? (
             <div style={{ padding: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", position: 'relative' }}>
+                {/* Botón para ocultar/mostrar panel */}
+                <button
+                  onClick={() => setPanelVisible(!panelVisible)}
+                  title={panelVisible ? "Ocultar panel de usuarios" : "Mostrar panel de usuarios"}
+                  style={{
+                    position: 'absolute',
+                    top: '-8px',
+                    left: '-8px',
+                    zIndex: 10,
+                    background: 'rgba(22, 163, 74, 0.9)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '3px',
+                    width: '24px',
+                    height: '24px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                    transition: 'background 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.target.style.background = 'rgba(22, 163, 74, 1)'}
+                  onMouseLeave={(e) => e.target.style.background = 'rgba(22, 163, 74, 0.9)'}
+                >
+                  {panelVisible ? '◀' : '▶'}
+                </button>
+
                 <h3 style={{ margin: 0 }}>{users[selectedIndex].apellidos ? `${users[selectedIndex].apellidos} ${users[selectedIndex].nombre || ""}` : (users[selectedIndex].nombre || users[selectedIndex].email)}</h3>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button className="btn ghost" onClick={() => prevUser()} disabled={selectedIndex <= 0}>Anterior</button>
