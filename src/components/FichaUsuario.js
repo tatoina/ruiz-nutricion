@@ -1219,76 +1219,123 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       {/* Main content (pesaje, dieta, etc.) */}
       {!showProfile && (
         <>
-          <nav className="tabs" role="tablist" aria-label="Secciones" style={{ marginTop: 12 }}>
-            {tabs.map((t, i) => (<button key={t.id} className={i === tabIndex ? "tab tab-active" : "tab"} onClick={() => setTabIndex(i)}>{t.label}</button>))}
+          {/* Tabs modernos con iconos */}
+          <nav className="tabs" role="tablist" aria-label="Secciones" style={{ 
+            display: "flex", 
+            gap: "6px", 
+            padding: "0",
+            overflowX: "auto",
+            WebkitOverflowScrolling: "touch",
+            scrollbarWidth: "none",
+            msOverflowStyle: "none"
+          }}>
+            {tabs.map((t, i) => (
+              <button 
+                key={t.id} 
+                className={i === tabIndex ? "tab-modern tab-modern-active" : "tab-modern"} 
+                onClick={() => setTabIndex(i)}
+                style={{
+                  flex: "1 1 auto",
+                  minWidth: "fit-content",
+                  padding: "10px 16px",
+                  border: "none",
+                  borderRadius: "10px",
+                  background: i === tabIndex ? "linear-gradient(135deg, #16a34a 0%, #15803d 100%)" : "#f1f5f9",
+                  color: i === tabIndex ? "white" : "#64748b",
+                  fontWeight: i === tabIndex ? "600" : "500",
+                  fontSize: "14px",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  boxShadow: i === tabIndex ? "0 2px 8px rgba(22,163,74,0.3)" : "none",
+                  whiteSpace: "nowrap"
+                }}
+              >
+                {t.label}
+              </button>
+            ))}
           </nav>
 
-          <div style={{ marginTop: 12, position: "relative", paddingBottom: "80px" }}>
+          <div style={{ marginTop: "16px", position: "relative", paddingBottom: "80px" }}>
             {tabIndex === 0 && (
-              <div className="card pesaje-section-wrapper" style={{ padding: 12 }}>
-                <h3>Pesaje / Composición</h3>
+              <div className="card pesaje-section-wrapper" style={{ padding: "16px", borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+                <h3 style={{ margin: "0 0 16px 0", fontSize: "18px", color: "#1e293b" }}>📊 Medidas y Composición</h3>
                 <div className="panel-section">
-                  {/* Botón flotante de guardar */}
+                  {/* Botón flotante de guardar - más compacto */}
                   <div style={{
                     position: "fixed",
-                    bottom: "30px",
-                    right: "30px",
+                    bottom: "20px",
+                    right: "20px",
                     zIndex: 1000,
                     display: "flex",
-                    flexDirection: "column",
-                    alignItems: "flex-end",
-                    gap: "10px"
+                    gap: "8px",
+                    alignItems: "center"
                   }}>
-                    {saveLabel && (
-                      <div style={{
-                        backgroundColor: saveLabel.includes("✅") || saveLabel.includes("Guardado") ? "#48bb78" : "#718096",
-                        color: "white",
-                        padding: "8px 16px",
-                        borderRadius: "6px",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
-                      }}>
-                        {saveLabel}
-                      </div>
-                    )}
+                    <button 
+                      type="button" 
+                      onClick={() => { setPeso(""); setFechaPeso(todayISO); }}
+                      title="Limpiar formulario"
+                      style={{
+                        backgroundColor: "#f1f5f9",
+                        color: "#64748b",
+                        padding: "12px",
+                        borderRadius: "50%",
+                        border: "none",
+                        cursor: "pointer",
+                        width: "48px",
+                        height: "48px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                        transition: "all 0.2s"
+                      }}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = "#e2e8f0"}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = "#f1f5f9"}
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="3 6 5 6 21 6" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
+                    
                     <button 
                       className="btn primary" 
                       type="button" 
                       disabled={savingPeso} 
                       onClick={(e) => submitPeso(e)}
                       style={{
-                        backgroundColor: "#4299e1",
+                        background: savingPeso ? "#94a3b8" : "linear-gradient(135deg, #16a34a 0%, #15803d 100%)",
                         color: "white",
-                        padding: "14px 28px",
-                        borderRadius: "8px",
+                        padding: "12px 24px",
+                        borderRadius: "24px",
                         border: "none",
                         cursor: savingPeso ? "not-allowed" : "pointer",
-                        opacity: savingPeso ? 0.6 : 1,
                         fontWeight: "600",
-                        fontSize: "16px",
-                        boxShadow: "0 4px 12px rgba(66, 153, 225, 0.4)",
+                        fontSize: "15px",
+                        boxShadow: "0 4px 16px rgba(22, 163, 74, 0.4)",
                         transition: "all 0.3s ease",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px"
                       }}
                     >
-                      {savingPeso ? "💾 Guardando..." : "💾 Guardar medidas"}
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => { setPeso(""); setFechaPeso(todayISO); }}
-                      style={{
-                        backgroundColor: "#e2e8f0",
-                        color: "#2d3748",
-                        padding: "10px 20px",
-                        borderRadius: "6px",
-                        border: "none",
-                        cursor: "pointer",
-                        fontWeight: "500",
-                        fontSize: "14px",
-                        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                      }}
-                    >
-                      🗑️ Limpiar
+                      {savingPeso ? (
+                        <>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: "spin 1s linear infinite" }}>
+                            <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                          Guardando...
+                        </>
+                      ) : (
+                        <>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" strokeLinecap="round" strokeLinejoin="round"/>
+                            <polyline points="17 21 17 13 7 13 7 21" strokeLinecap="round" strokeLinejoin="round"/>
+                            <polyline points="7 3 7 8 15 8" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                          Guardar
+                        </>
+                      )}
                     </button>
                   </div>
 
@@ -1317,13 +1364,27 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                     </div>
                   </div>
 
-                  <hr style={{ margin: "12px 0" }} />
-                  <h4>Histórico de medidas</h4>
+                  <div style={{ 
+                    margin: "24px 0 16px 0", 
+                    padding: "12px 16px",
+                    background: "linear-gradient(90deg, #f0fdf4 0%, #dcfce7 100%)",
+                    borderRadius: "10px",
+                    borderLeft: "4px solid #16a34a"
+                  }}>
+                    <h4 style={{ margin: 0, fontSize: "16px", color: "#15803d", fontWeight: "600" }}>📋 Histórico de medidas</h4>
+                  </div>
 
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: "12px" }}>
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <label style={{ fontSize: 13, color: "#6b7280" }}>Mostrar</label>
-                      <select value={histLimit} onChange={(e) => setHistLimit(Number(e.target.value))} className="input" style={{ width: 90, padding: "6px 8px", height: 36 }}>
+                      <label style={{ fontSize: 13, color: "#64748b", fontWeight: "500" }}>Mostrar:</label>
+                      <select value={histLimit} onChange={(e) => setHistLimit(Number(e.target.value))} className="input" style={{ 
+                        width: 80, 
+                        padding: "6px 8px", 
+                        height: 32,
+                        borderRadius: "8px",
+                        border: "1px solid #e2e8f0",
+                        fontSize: "13px"
+                      }}>
                         <option value={10}>10</option>
                         <option value={25}>25</option>
                         <option value={50}>50</option>
@@ -1331,9 +1392,38 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                       </select>
                     </div>
 
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button className="btn ghost" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>Ir arriba</button>
-                      <button className="btn ghost" onClick={exportHistoryCSV} title="Exportar historial a CSV">Exportar CSV</button>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <button 
+                        className="btn-compact" 
+                        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                        style={{
+                          padding: "6px 12px",
+                          fontSize: "13px",
+                          borderRadius: "8px",
+                          border: "1px solid #e2e8f0",
+                          background: "white",
+                          color: "#64748b",
+                          cursor: "pointer"
+                        }}
+                      >
+                        ↑ Arriba
+                      </button>
+                      <button 
+                        className="btn-compact" 
+                        onClick={exportHistoryCSV} 
+                        title="Exportar historial a CSV"
+                        style={{
+                          padding: "6px 12px",
+                          fontSize: "13px",
+                          borderRadius: "8px",
+                          border: "1px solid #e2e8f0",
+                          background: "white",
+                          color: "#64748b",
+                          cursor: "pointer"
+                        }}
+                      >
+                        📊 CSV
+                      </button>
                     </div>
                   </div>
 
@@ -1443,20 +1533,27 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                     <div style={{ marginLeft: "auto", color: "#6b7280", fontSize: 13 }}>{rowsDesc.length} registros totales</div>
                   </div>
 
-                  <hr style={{ margin: "12px 0" }} />
+                  <div style={{ 
+                    margin: "24px 0 16px 0", 
+                    padding: "12px 16px",
+                    background: "linear-gradient(90deg, #eff6ff 0%, #dbeafe 100%)",
+                    borderRadius: "10px",
+                    borderLeft: "4px solid #3b82f6"
+                  }}>
+                    <h4 style={{ margin: 0, fontSize: "16px", color: "#1e40af", fontWeight: "600" }}>📈 Gráfico de evolución</h4>
+                  </div>
+                  
                   <div style={{ marginTop: 8 }}>
-                    <h4 style={{ fontSize: "18px", marginBottom: "12px" }}>Gráfico de evolución</h4>
-                    
                     {/* Checkboxes para seleccionar métricas */}
                     <div style={{ 
                       padding: "12px", 
                       backgroundColor: "#f8fafc", 
-                      borderRadius: "8px",
-                      marginBottom: "16px",
+                      borderRadius: "10px",
+                      marginBottom: "12px",
                       border: "1px solid #e2e8f0"
                     }}>
-                      <div style={{ marginBottom: "12px", fontWeight: "600", color: "#475569", fontSize: "14px" }}>
-                        Selecciona las métricas a mostrar:
+                      <div style={{ marginBottom: "10px", fontWeight: "600", color: "#475569", fontSize: "13px" }}>
+                        Métricas a mostrar:
                       </div>
                       
                       <div style={{ 

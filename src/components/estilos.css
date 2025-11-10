@@ -654,3 +654,65 @@ button, .tab { -webkit-tap-highlight-color: rgba(0,0,0,0); }
     height: 16px !important;
   }
 }
+
+/* Animación de spin para loading */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Tabs modernos */
+.tab-modern {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tab-modern:hover:not(.tab-modern-active) {
+  background: #e2e8f0 !important;
+  transform: translateY(-1px);
+}
+
+.tab-modern:active {
+  transform: translateY(0);
+}
+
+/* Ocultar scrollbar en tabs */
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* Mejorar inputs y selects */
+.input, select.input {
+  transition: all 0.2s;
+  font-size: 14px;
+}
+
+.input:focus, select.input:focus {
+  outline: none;
+  border-color: #16a34a;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+}
+
+/* Card shadows más suaves */
+.card {
+  transition: box-shadow 0.3s;
+}
+
+/* Botones compactos hover */
+.btn-compact:hover {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Mejorar tabla histórico */
+.hist-table th {
+  background: #f8fafc;
+  font-weight: 600;
+  font-size: 12px;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.hist-table tr:hover {
+  background: #f8fafc;
+}
