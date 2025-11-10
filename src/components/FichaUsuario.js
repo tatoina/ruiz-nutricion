@@ -1004,16 +1004,16 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
   return (
     <div ref={rootRef} className={`ficha-root ${adminMode ? "admin-wide" : ""}`}>
-      <div style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between", padding: 12 }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between", padding: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", minWidth: 0, flex: "1 1 auto" }}>
           <div className="avatar">{(userData.nombre?.[0] || userData.email?.[0] || "U").toUpperCase()}</div>
-          <div>
-            <div className="title">{userData.nombre ? `${userData.nombre} ${userData.apellidos || ""}` : userData.email}</div>
-            <div className="subtitle">{userData.email}</div>
+          <div style={{ minWidth: 0, overflow: "hidden" }}>
+            <div className="title" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{userData.nombre ? `${userData.nombre} ${userData.apellidos || ""}` : userData.email}</div>
+            <div className="subtitle" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{userData.email}</div>
           </div>
         </div>
 
-        <div className="header-actions" style={{ display: "flex", gap: 8 }}>
+        <div className="header-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
           <button className="btn ghost" onClick={() => setShowProfile((s) => !s)} aria-expanded={showProfile}>Perfil</button>
 
           
