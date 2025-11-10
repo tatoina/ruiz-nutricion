@@ -1338,132 +1338,133 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
                   <hr style={{ margin: "12px 0" }} />
                   <div style={{ marginTop: 8 }}>
-                    <h4>Gráfico de evolución</h4>
+                    <h4 style={{ fontSize: "18px", marginBottom: "12px" }}>Gráfico de evolución</h4>
                     
                     {/* Checkboxes para seleccionar métricas */}
                     <div style={{ 
-                      padding: "20px", 
+                      padding: "12px", 
                       backgroundColor: "#f8fafc", 
                       borderRadius: "8px",
                       marginBottom: "16px",
                       border: "1px solid #e2e8f0"
                     }}>
-                      <div style={{ marginBottom: "16px", fontWeight: "600", color: "#475569" }}>
+                      <div style={{ marginBottom: "12px", fontWeight: "600", color: "#475569", fontSize: "14px" }}>
                         Selecciona las métricas a mostrar:
                       </div>
                       
                       <div style={{ 
                         display: "grid", 
-                        gridTemplateColumns: "repeat(3, 1fr)", 
-                        gap: "12px"
+                        gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", 
+                        gap: "10px"
                       }}>
                       
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minWidth: "180px" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
                         <input 
                           type="checkbox" 
                           checked={chartMetrics.peso} 
                           onChange={(e) => setChartMetrics(prev => ({ ...prev, peso: e.target.checked }))}
-                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                          style={{ width: "18px", height: "18px", cursor: "pointer", flexShrink: 0 }}
                         />
-                        <span style={{ color: "#16a34a", fontWeight: "500" }}>● Peso (kg)</span>
+                        <span style={{ color: "#16a34a", fontWeight: "500", fontSize: "14px" }}>● Peso (kg)</span>
                       </label>
 
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minWidth: "180px" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
                         <input 
                           type="checkbox" 
                           checked={chartMetrics.imc} 
                           onChange={(e) => setChartMetrics(prev => ({ ...prev, imc: e.target.checked }))}
-                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                          style={{ width: "18px", height: "18px", cursor: "pointer", flexShrink: 0 }}
                         />
-                        <span style={{ color: "#2563eb", fontWeight: "500" }}>● IMC</span>
+                        <span style={{ color: "#2563eb", fontWeight: "500", fontSize: "14px" }}>● IMC</span>
                       </label>
 
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minWidth: "180px" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
                         <input 
                           type="checkbox" 
                           checked={chartMetrics.masaGrasaPct} 
                           onChange={(e) => setChartMetrics(prev => ({ ...prev, masaGrasaPct: e.target.checked }))}
-                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                          style={{ width: "18px", height: "18px", cursor: "pointer", flexShrink: 0 }}
                         />
-                        <span style={{ color: "#dc2626", fontWeight: "500" }}>● Masa grasa (%)</span>
+                        <span style={{ color: "#dc2626", fontWeight: "500", fontSize: "14px" }}>● Masa grasa (%)</span>
                       </label>
 
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minWidth: "180px" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
                         <input 
                           type="checkbox" 
                           checked={chartMetrics.masaGrasaKg} 
                           onChange={(e) => setChartMetrics(prev => ({ ...prev, masaGrasaKg: e.target.checked }))}
-                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                          style={{ width: "18px", height: "18px", cursor: "pointer", flexShrink: 0 }}
                         />
-                        <span style={{ color: "#ea580c", fontWeight: "500" }}>● Masa grasa (kg)</span>
+                        <span style={{ color: "#ea580c", fontWeight: "500", fontSize: "14px" }}>● Masa grasa (kg)</span>
                       </label>
 
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minWidth: "180px" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
                         <input 
                           type="checkbox" 
                           checked={chartMetrics.masaMagraKg} 
                           onChange={(e) => setChartMetrics(prev => ({ ...prev, masaMagraKg: e.target.checked }))}
-                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                          style={{ width: "18px", height: "18px", cursor: "pointer", flexShrink: 0 }}
                         />
-                        <span style={{ color: "#65a30d", fontWeight: "500" }}>● Masa magra (kg)</span>
+                        <span style={{ color: "#65a30d", fontWeight: "500", fontSize: "14px" }}>● Masa magra (kg)</span>
                       </label>
 
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minWidth: "180px" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
                         <input 
                           type="checkbox" 
                           checked={chartMetrics.masaMuscularKg} 
                           onChange={(e) => setChartMetrics(prev => ({ ...prev, masaMuscularKg: e.target.checked }))}
-                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                          style={{ width: "18px", height: "18px", cursor: "pointer", flexShrink: 0 }}
                         />
-                        <span style={{ color: "#0891b2", fontWeight: "500" }}>● Masa muscular (kg)</span>
+                        <span style={{ color: "#0891b2", fontWeight: "500", fontSize: "14px" }}>● Masa muscular (kg)</span>
                       </label>
 
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minWidth: "180px" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
                         <input 
                           type="checkbox" 
                           checked={chartMetrics.aguaTotalKg} 
                           onChange={(e) => setChartMetrics(prev => ({ ...prev, aguaTotalKg: e.target.checked }))}
-                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                          style={{ width: "18px", height: "18px", cursor: "pointer", flexShrink: 0 }}
                         />
-                        <span style={{ color: "#0284c7", fontWeight: "500" }}>● Agua (kg)</span>
+                        <span style={{ color: "#0284c7", fontWeight: "500", fontSize: "14px" }}>● Agua (kg)</span>
                       </label>
 
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minWidth: "180px" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
                         <input 
                           type="checkbox" 
                           checked={chartMetrics.aguaTotalPct} 
                           onChange={(e) => setChartMetrics(prev => ({ ...prev, aguaTotalPct: e.target.checked }))}
-                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                          style={{ width: "18px", height: "18px", cursor: "pointer", flexShrink: 0 }}
                         />
-                        <span style={{ color: "#0ea5e9", fontWeight: "500" }}>● Agua (%)</span>
+                        <span style={{ color: "#0ea5e9", fontWeight: "500", fontSize: "14px" }}>● Agua (%)</span>
                       </label>
 
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minWidth: "180px" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
                         <input 
                           type="checkbox" 
                           checked={chartMetrics.masaOseaKg} 
                           onChange={(e) => setChartMetrics(prev => ({ ...prev, masaOseaKg: e.target.checked }))}
-                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                          style={{ width: "18px", height: "18px", cursor: "pointer", flexShrink: 0 }}
                         />
-                        <span style={{ color: "#64748b", fontWeight: "500" }}>● Masa ósea (kg)</span>
+                        <span style={{ color: "#64748b", fontWeight: "500", fontSize: "14px" }}>● Masa ósea (kg)</span>
                       </label>
 
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minWidth: "180px" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
                         <input 
                           type="checkbox" 
                           checked={chartMetrics.grasaVisceralNivel} 
                           onChange={(e) => setChartMetrics(prev => ({ ...prev, grasaVisceralNivel: e.target.checked }))}
-                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                          style={{ width: "18px", height: "18px", cursor: "pointer", flexShrink: 0 }}
                         />
-                        <span style={{ color: "#dc2626", fontWeight: "500" }}>● Grasa visceral</span>
+                        <span style={{ color: "#dc2626", fontWeight: "500", fontSize: "14px" }}>● Grasa visceral</span>
                       </label>
                       </div>
                     </div>
 
                     <div style={{ 
                       width: "100%", 
-                      minHeight: 400,
-                      padding: "20px",
+                      minHeight: "300px",
+                      height: "auto",
+                      padding: "16px",
                       backgroundColor: "#ffffff",
                       borderRadius: "8px",
                       border: "1px solid #e2e8f0"
@@ -1475,9 +1476,11 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                           display: "flex", 
                           alignItems: "center", 
                           justifyContent: "center", 
-                          height: "380px",
+                          minHeight: "280px",
                           color: "#94a3b8",
-                          fontSize: "14px"
+                          fontSize: "14px",
+                          textAlign: "center",
+                          padding: "20px"
                         }}>
                           Selecciona al menos una métrica para ver el gráfico
                         </div>
