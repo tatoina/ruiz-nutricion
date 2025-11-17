@@ -2,6 +2,7 @@
 import React, { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import AdminUsers from "./components/AdminUsers";
+import AdminAgenda from "./components/AdminAgenda";
 import FichaUsuario from "./components/FichaUsuario";
 import Login from "./components/Login";
 import Register from "./components/Register";
@@ -96,6 +97,15 @@ export default function App() {
           element={
             <PrivateRoute>
               <AdminUsers />
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/admin/agenda"
+          element={
+            <PrivateRoute>
+              <AdminAgenda />
             </PrivateRoute>
           }
         />

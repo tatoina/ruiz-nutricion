@@ -49,6 +49,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const baseTabs = [
     { id: "pesaje", label: "Pesaje" },
     { id: "semana", label: "Dieta semanal" },
+    { id: "calendario", label: "📅 Calendario" },
     { id: "ejercicios", label: "Ejercicios" },
     { id: "recetas", label: "Recetas" },
   ];
@@ -78,6 +79,12 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const [error, setError] = useState(null);
 
   const [showPrintDialog, setShowPrintDialog] = useState(false);
+  const [nextAppointment, setNextAppointment] = useState(null);
+  const [appointments, setAppointments] = useState([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(false);
+  const [newAppointmentDate, setNewAppointmentDate] = useState("");
+  const [newAppointmentTime, setNewAppointmentTime] = useState("");
+  const [newAppointmentNotes, setNewAppointmentNotes] = useState("");
   const [printOptions, setPrintOptions] = useState({ dietaMensual: true, datosPesaje: true });
 
   const [showProfile, setShowProfile] = useState(false);
@@ -109,6 +116,11 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
   const [histLimit, setHistLimit] = useState(10);
   const [expandedRowsStateLocal, setExpandedRowsStateLocal] = useState({});
+
+  // Estados para controlar secciones colapsables
+  const [showFormulario, setShowFormulario] = useState(true);
+  const [showHistorico, setShowHistorico] = useState(false);
+  const [showGrafico, setShowGrafico] = useState(false);
 
   const todayIndex = (() => {
     const d = new Date();
@@ -320,6 +332,92 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     } catch (err) {
       console.error("[FichaUsuario] saveProfile error:", err);
       setError("No se pudieron guardar los datos del perfil.");
+    }
+  };
+
+  // Funciones para gestión de citas
+  const loadAppointments = useCallback(async () => {
+    if (!uid) return;
+    setLoadingAppointments(true);
+    try {
+      const userSnap = await getDoc(doc(db, "users", uid));
+      if (userSnap.exists()) {
+        const data = userSnap.data();
+        const appts = data.citas || [];
+        setAppointments(appts);
+        
+        // Encontrar próxima cita
+        const now = new Date();
+        const futureAppts = appts
+          .filter(apt => new Date(apt.fecha + 'T' + apt.hora) > now)
+          .sort((a, b) => new Date(a.fecha + 'T' + a.hora) - new Date(b.fecha + 'T' + b.hora));
+        
+        setNextAppointment(futureAppts[0] || null);
+      }
+    } catch (err) {
+      console.error("Error loading appointments:", err);
+    } finally {
+      setLoadingAppointments(false);
+    }
+  }, [uid]);
+
+  useEffect(() => {
+    if (tabIndex === 2) { // Tab de calendario
+      loadAppointments();
+    }
+  }, [tabIndex, loadAppointments]);
+
+  const addAppointment = async () => {
+    if (!uid || !newAppointmentDate || !newAppointmentTime) {
+      setError("Por favor completa fecha y hora de la cita.");
+      return;
+    }
+
+    try {
+      const newAppt = {
+        fecha: newAppointmentDate,
+        hora: newAppointmentTime,
+        notas: newAppointmentNotes,
+        createdAt: new Date().toISOString(),
+        createdBy: authUid || "admin"
+      };
+
+      await updateDoc(doc(db, "users", uid), {
+        citas: arrayUnion(newAppt),
+        updatedAt: serverTimestamp()
+      });
+
+      setNewAppointmentDate("");
+      setNewAppointmentTime("");
+      setNewAppointmentNotes("");
+      loadAppointments();
+    } catch (err) {
+      console.error("Error adding appointment:", err);
+      setError("No se pudo agregar la cita.");
+    }
+  };
+
+  const deleteAppointment = async (appointment) => {
+    if (!uid || !window.confirm("¿Eliminar esta cita?")) return;
+
+    try {
+      const userSnap = await getDoc(doc(db, "users", uid));
+      if (userSnap.exists()) {
+        const data = userSnap.data();
+        const updatedCitas = (data.citas || []).filter(apt => 
+          !(apt.fecha === appointment.fecha && apt.hora === appointment.hora)
+        );
+
+        await updateDoc(doc(db, "users", uid), {
+          citas: updatedCitas,
+          updatedAt: serverTimestamp()
+        });
+
+        loadAppointments();
+      }
+    } catch (err) {
+      console.error("Error deleting appointment:", err);
+      setError("No se pudo eliminar la cita.");
     }
   };
 
@@ -1258,7 +1356,42 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           <div style={{ marginTop: "12px", position: "relative", paddingBottom: "80px" }}>
             {tabIndex === 0 && (
               <div className="card pesaje-section-wrapper" style={{ padding: "12px", borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-                <h3 style={{ margin: "0 0 12px 0", fontSize: "17px", color: "#1e293b" }}>📊 Medidas y Composición</h3>
+                {/* Sección 1: Formulario de medidas - Colapsable */}
+                <div 
+                  onClick={() => setShowFormulario(!showFormulario)}
+                  style={{ 
+                    margin: "0 0 12px 0", 
+                    padding: "12px 16px",
+                    background: "linear-gradient(90deg, #f0fdf4 0%, #dcfce7 100%)",
+                    borderRadius: "10px",
+                    borderLeft: "4px solid #16a34a",
+                    cursor: "pointer",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    transition: "all 0.2s"
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = "translateX(2px)"}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = "translateX(0)"}
+                >
+                  <h3 style={{ margin: 0, fontSize: "16px", color: "#15803d", fontWeight: "600" }}>📊 Medidas y Composición</h3>
+                  <svg 
+                    width="20" 
+                    height="20" 
+                    viewBox="0 0 24 24" 
+                    fill="none" 
+                    stroke="#15803d" 
+                    strokeWidth="2"
+                    style={{ 
+                      transform: showFormulario ? "rotate(180deg)" : "rotate(0deg)",
+                      transition: "transform 0.3s"
+                    }}
+                  >
+                    <polyline points="6 9 12 15 18 9" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+
+                {showFormulario && (
                 <div className="panel-section">
                   {/* Botón flotante de guardar - más compacto */}
                   <div style={{
@@ -1340,39 +1473,83 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                   </div>
 
                   <div className="pesaje-container">
-                    <div className="pesaje-grid">
-                      <div><label>Fecha</label><input type="date" className="input" value={fechaPeso} onChange={(e) => setFechaPeso(e.target.value)} /></div>
-                      <div><label>Peso (kg)</label><input type="number" inputMode="decimal" step="0.1" className="input" value={peso} onChange={(e) => setPeso(e.target.value)} placeholder={String(userData.pesoActual ?? "")} /></div>
-                      <div><label>Masa grasa (%)</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.masaGrasaPct ?? ""} onChange={(e) => setEditable((s) => ({ ...s, masaGrasaPct: e.target.value }))} /></div>
-                      <div><label>Masa grasa (kg)</label><input type="number" inputMode="decimal" step="0.01" className="input" value={editable.masaGrasaKg ?? ""} onChange={(e) => setEditable((s) => ({ ...s, masaGrasaKg: e.target.value }))} /></div>
-                      <div><label>Masa magra (kg)</label><input type="number" inputMode="decimal" step="0.01" className="input" value={editable.masaMagraKg ?? ""} onChange={(e) => setEditable((s) => ({ ...s, masaMagraKg: e.target.value }))} /></div>
-                      <div><label>Masa muscular (kg)</label><input type="number" inputMode="decimal" step="0.01" className="input" value={editable.masaMuscularKg ?? ""} onChange={(e) => setEditable((s) => ({ ...s, masaMuscularKg: e.target.value }))} /></div>
-                      <div><label>Agua total (kg)</label><input type="number" inputMode="decimal" step="0.01" className="input" value={editable.aguaTotalKg ?? ""} onChange={(e) => setEditable((s) => ({ ...s, aguaTotalKg: e.target.value }))} /></div>
-                      <div><label>% Agua total</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.aguaTotalPct ?? ""} onChange={(e) => setEditable((s) => ({ ...s, aguaTotalPct: e.target.value }))} /></div>
-                      <div><label>Masa ósea (kg)</label><input type="number" inputMode="decimal" step="0.01" className="input" value={editable.masaOseaKg ?? ""} onChange={(e) => setEditable((s) => ({ ...s, masaOseaKg: e.target.value }))} /></div>
-                      <div><label>MB (kcal)</label><input type="number" inputMode="numeric" step="1" className="input" value={editable.mbKcal ?? ""} onChange={(e) => setEditable((s) => ({ ...s, mbKcal: e.target.value }))} /></div>
-                      <div><label>Nivel grasa visceral</label><input type="number" inputMode="numeric" step="1" className="input" value={editable.grasaVisceralNivel ?? ""} onChange={(e) => setEditable((s) => ({ ...s, grasaVisceralNivel: e.target.value }))} /></div>
-                      <div><label>IMC</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.imc ?? ""} onChange={(e) => setEditable((s) => ({ ...s, imc: e.target.value }))} /></div>
-                      <div><label>Edad metabólica</label><input type="number" inputMode="numeric" step="1" className="input" value={editable.edadMetabolica ?? ""} onChange={(e) => setEditable((s) => ({ ...s, edadMetabolica: e.target.value }))} /></div>
-                      <div><label>C. Brazo (cm)</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.circunferenciaBrazoCm ?? ""} onChange={(e) => setEditable((s) => ({ ...s, circunferenciaBrazoCm: e.target.value }))} /></div>
-                      <div><label>C. Cintura (cm)</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.circunferenciaCinturaCm ?? ""} onChange={(e) => setEditable((s) => ({ ...s, circunferenciaCinturaCm: e.target.value }))} /></div>
-                      <div><label>C. Cadera (cm)</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.circunferenciaCaderaCm ?? ""} onChange={(e) => setEditable((s) => ({ ...s, circunferenciaCaderaCm: e.target.value }))} /></div>
-                      <div><label>C. Pierna (cm)</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.circunferenciaPiernaCm ?? ""} onChange={(e) => setEditable((s) => ({ ...s, circunferenciaPiernaCm: e.target.value }))} /></div>
-                      <div><label>Índice cintura / talla</label><input type="text" className="input" value={editable.indiceCinturaTalla ?? ""} onChange={(e) => setEditable((s) => ({ ...s, indiceCinturaTalla: e.target.value }))} /></div>
-                      <div><label>TA (SYS / DIA)</label><div className="tension-group"><input type="number" className="input" placeholder="SYS" value={editable.tensionArterial?.sys ?? ""} onChange={(e) => setEditable((s) => ({ ...s, tensionArterial: { ...(s.tensionArterial || {}), sys: e.target.value } }))} /><input type="number" className="input" placeholder="DIA" value={editable.tensionArterial?.dia ?? ""} onChange={(e) => setEditable((s) => ({ ...s, tensionArterial: { ...(s.tensionArterial || {}), dia: e.target.value } }))} /></div></div>
-                      <div className="full-row"><label>Notas</label><textarea className="input" rows={2} value={editable.notas || ""} onChange={(e) => setEditable((s) => ({ ...s, notas: e.target.value }))} /></div>
+                    {/* Campo fecha - ancho completo */}
+                    <div style={{ marginBottom: "16px" }}>
+                      <label style={{ display: "block", fontSize: "12px", color: "#475569", marginBottom: "6px", fontWeight: "500" }}>Fecha</label>
+                      <input type="date" className="input" value={fechaPeso} onChange={(e) => setFechaPeso(e.target.value)} style={{ width: "200px", maxWidth: "100%" }} />
+                    </div>
+
+                    {/* Grid compacto para campos de medidas - 2-3 por fila */}
+                    <div className="medidas-grid-custom">
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                        <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.3px" }}>Peso (kg)</label>
+                        <input type="number" inputMode="decimal" step="0.1" className="input" value={peso} onChange={(e) => setPeso(e.target.value)} placeholder={String(userData.pesoActual ?? "")} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} />
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Masa grasa (%)</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.masaGrasaPct ?? ""} onChange={(e) => setEditable((s) => ({ ...s, masaGrasaPct: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Masa grasa (kg)</label><input type="number" inputMode="decimal" step="0.01" className="input" value={editable.masaGrasaKg ?? ""} onChange={(e) => setEditable((s) => ({ ...s, masaGrasaKg: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Masa magra (kg)</label><input type="number" inputMode="decimal" step="0.01" className="input" value={editable.masaMagraKg ?? ""} onChange={(e) => setEditable((s) => ({ ...s, masaMagraKg: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Masa muscular (kg)</label><input type="number" inputMode="decimal" step="0.01" className="input" value={editable.masaMuscularKg ?? ""} onChange={(e) => setEditable((s) => ({ ...s, masaMuscularKg: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Agua total (kg)</label><input type="number" inputMode="decimal" step="0.01" className="input" value={editable.aguaTotalKg ?? ""} onChange={(e) => setEditable((s) => ({ ...s, aguaTotalKg: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>% Agua total</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.aguaTotalPct ?? ""} onChange={(e) => setEditable((s) => ({ ...s, aguaTotalPct: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Masa ósea (kg)</label><input type="number" inputMode="decimal" step="0.01" className="input" value={editable.masaOseaKg ?? ""} onChange={(e) => setEditable((s) => ({ ...s, masaOseaKg: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>MB (kcal)</label><input type="number" inputMode="numeric" step="1" className="input" value={editable.mbKcal ?? ""} onChange={(e) => setEditable((s) => ({ ...s, mbKcal: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Grasa visceral</label><input type="number" inputMode="numeric" step="1" className="input" value={editable.grasaVisceralNivel ?? ""} onChange={(e) => setEditable((s) => ({ ...s, grasaVisceralNivel: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>IMC</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.imc ?? ""} onChange={(e) => setEditable((s) => ({ ...s, imc: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Edad metabólica</label><input type="number" inputMode="numeric" step="1" className="input" value={editable.edadMetabolica ?? ""} onChange={(e) => setEditable((s) => ({ ...s, edadMetabolica: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>C. Brazo (cm)</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.circunferenciaBrazoCm ?? ""} onChange={(e) => setEditable((s) => ({ ...s, circunferenciaBrazoCm: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>C. Cintura (cm)</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.circunferenciaCinturaCm ?? ""} onChange={(e) => setEditable((s) => ({ ...s, circunferenciaCinturaCm: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>C. Cadera (cm)</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.circunferenciaCaderaCm ?? ""} onChange={(e) => setEditable((s) => ({ ...s, circunferenciaCaderaCm: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>C. Pierna (cm)</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.circunferenciaPiernaCm ?? ""} onChange={(e) => setEditable((s) => ({ ...s, circunferenciaPiernaCm: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Índice cintura/talla</label><input type="text" className="input" value={editable.indiceCinturaTalla ?? ""} onChange={(e) => setEditable((s) => ({ ...s, indiceCinturaTalla: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>TA (SYS / DIA)</label><div style={{ display: "flex", gap: "6px" }}><input type="number" className="input" placeholder="SYS" value={editable.tensionArterial?.sys ?? ""} onChange={(e) => setEditable((s) => ({ ...s, tensionArterial: { ...(s.tensionArterial || {}), sys: e.target.value } }))} style={{ flex: "1", padding: "9px 8px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "14px", textAlign: "center" }} /><input type="number" className="input" placeholder="DIA" value={editable.tensionArterial?.dia ?? ""} onChange={(e) => setEditable((s) => ({ ...s, tensionArterial: { ...(s.tensionArterial || {}), dia: e.target.value } }))} style={{ flex: "1", padding: "9px 8px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "14px", textAlign: "center" }} /></div></div>
+                    </div>
+
+                    {/* Notas - ancho completo */}
+                    <div style={{ marginTop: "16px" }}>
+                      <label style={{ display: "block", fontSize: "12px", color: "#475569", marginBottom: "6px", fontWeight: "500" }}>Notas</label>
+                      <textarea className="input" rows={2} value={editable.notas || ""} onChange={(e) => setEditable((s) => ({ ...s, notas: e.target.value }))} style={{ width: "100%" }} />
                     </div>
                   </div>
+                </div>
+              )}
 
-                  <div style={{ 
-                    margin: "16px 0 12px 0", 
-                    padding: "10px 14px",
-                    background: "linear-gradient(90deg, #f0fdf4 0%, #dcfce7 100%)",
-                    borderRadius: "8px",
-                    borderLeft: "3px solid #16a34a"
-                  }}>
-                    <h4 style={{ margin: 0, fontSize: "15px", color: "#15803d", fontWeight: "600" }}>📋 Histórico de medidas</h4>
+              {/* Sección 2: Histórico - Colapsable */}
+                  <div 
+                    onClick={() => setShowHistorico(!showHistorico)}
+                    style={{ 
+                      margin: "8px 0 12px 0", 
+                      padding: "12px 16px",
+                      background: "linear-gradient(90deg, #fef3c7 0%, #fde68a 100%)",
+                      borderRadius: "10px",
+                      borderLeft: "4px solid #f59e0b",
+                      cursor: "pointer",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      transition: "all 0.2s"
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.transform = "translateX(2px)"}
+                    onMouseLeave={(e) => e.currentTarget.style.transform = "translateX(0)"}
+                  >
+                    <h4 style={{ margin: 0, fontSize: "15px", color: "#92400e", fontWeight: "600" }}>📋 Histórico de medidas</h4>
+                    <svg 
+                      width="20" 
+                      height="20" 
+                      viewBox="0 0 24 24" 
+                      fill="none" 
+                      stroke="#92400e" 
+                      strokeWidth="2"
+                      style={{ 
+                        transform: showHistorico ? "rotate(180deg)" : "rotate(0deg)",
+                        transition: "transform 0.3s"
+                      }}
+                    >
+                      <polyline points="6 9 12 15 18 9" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
                   </div>
+
+              {showHistorico && (
+                <div>
 
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: "12px" }}>
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -1532,17 +1709,45 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                     <button className="btn ghost" onClick={() => setHistLimit((s) => s + 10)}>Mostrar más</button>
                     <div style={{ marginLeft: "auto", color: "#6b7280", fontSize: 13 }}>{rowsDesc.length} registros totales</div>
                   </div>
+                </div>
+              )}
 
-                  <div style={{ 
-                    margin: "16px 0 12px 0", 
-                    padding: "10px 14px",
-                    background: "linear-gradient(90deg, #eff6ff 0%, #dbeafe 100%)",
-                    borderRadius: "8px",
-                    borderLeft: "3px solid #3b82f6"
-                  }}>
+              {/* Sección 3: Gráfico - Colapsable */}
+              <div 
+                    onClick={() => setShowGrafico(!showGrafico)}
+                    style={{ 
+                      margin: "8px 0 12px 0", 
+                      padding: "12px 16px",
+                      background: "linear-gradient(90deg, #eff6ff 0%, #dbeafe 100%)",
+                      borderRadius: "10px",
+                      borderLeft: "4px solid #3b82f6",
+                      cursor: "pointer",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      transition: "all 0.2s"
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.transform = "translateX(2px)"}
+                    onMouseLeave={(e) => e.currentTarget.style.transform = "translateX(0)"}
+                  >
                     <h4 style={{ margin: 0, fontSize: "15px", color: "#1e40af", fontWeight: "600" }}>📈 Gráfico de evolución</h4>
+                    <svg 
+                      width="20" 
+                      height="20" 
+                      viewBox="0 0 24 24" 
+                      fill="none" 
+                      stroke="#1e40af" 
+                      strokeWidth="2"
+                      style={{ 
+                        transform: showGrafico ? "rotate(180deg)" : "rotate(0deg)",
+                        transition: "transform 0.3s"
+                      }}
+                    >
+                      <polyline points="6 9 12 15 18 9" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
                   </div>
                   
+                  {showGrafico && (
                   <div style={{ marginTop: 6 }}>
                     {/* Checkboxes para seleccionar métricas */}
                     <div style={{ 
@@ -1691,19 +1896,43 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                       )}
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
-            {tabIndex === 1 && (
-              <div className="card" style={{ padding: 12 }}>
-                <h3>Dieta semanal</h3>
-                <div className="panel-section">
-                  <div className="day-nav" style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "center", marginBottom: 12 }}>
-                    <button className="btn ghost" onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.max(0, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) - 1) }))}>←</button>
-                    <div className="day-label" style={{ fontWeight: 800, color: "var(--accent-600)" }}>{dayName}</div>
-                    <button className="btn ghost" onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.min(6, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) + 1) }))}>→</button>
+              )}
+            </div>
+          )}
+          {tabIndex === 1 && (
+            <div className="card" style={{ padding: "12px" }}>
+              <div className="panel-section" style={{ paddingTop: "0" }}>
+                {/* Título y navegación de días en una sola línea */}
+                <div style={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "space-between",
+                  marginBottom: "10px",
+                  flexWrap: "wrap",
+                  gap: "8px"
+                }}>
+                  <h3 style={{ margin: "0", fontSize: "16px", fontWeight: "600", color: "#15803d" }}>🍽️ Dieta semanal</h3>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <button 
+                      className="btn ghost" 
+                      onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.max(0, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) - 1) }))}
+                      style={{ padding: "6px 12px", minHeight: "32px" }}
+                    >←</button>
+                    <div style={{ 
+                      fontWeight: "700", 
+                      color: "#16a34a",
+                      fontSize: "15px",
+                      minWidth: "90px",
+                      textAlign: "center"
+                    }}>{dayName}</div>
+                    <button 
+                      className="btn ghost" 
+                      onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.min(6, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) + 1) }))}
+                      style={{ padding: "6px 12px", minHeight: "32px" }}
+                    >→</button>
                   </div>
-                  <div style={{ marginTop: 6 }}>
+                </div>
+                <div>
                     <div className="weekly-menu-grid">
                       {ALL_SECTIONS.map((sec) => (
                         <div key={sec.key} className="weekly-field">
@@ -1823,6 +2052,192 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
               </div>
             )}
             {tabIndex === 2 && (
+              <div className="card" style={{ padding: "16px" }}>
+                <div style={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "space-between",
+                  marginBottom: "16px",
+                  flexWrap: "wrap",
+                  gap: "10px"
+                }}>
+                  <h3 style={{ margin: "0", fontSize: "18px", fontWeight: "600", color: "#15803d" }}>📅 Calendario de Citas</h3>
+                </div>
+
+                {loadingAppointments ? (
+                  <div style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>Cargando citas...</div>
+                ) : (
+                  <>
+                    {/* Próxima cita destacada */}
+                    {nextAppointment && (
+                      <div style={{
+                        background: "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)",
+                        border: "2px solid #16a34a",
+                        borderRadius: "12px",
+                        padding: "16px",
+                        marginBottom: "20px"
+                      }}>
+                        <div style={{ fontSize: "13px", color: "#15803d", fontWeight: "600", marginBottom: "8px" }}>
+                          🔔 PRÓXIMA CITA
+                        </div>
+                        <div style={{ fontSize: "20px", fontWeight: "700", color: "#15803d", marginBottom: "4px" }}>
+                          {new Date(nextAppointment.fecha).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                        </div>
+                        <div style={{ fontSize: "24px", fontWeight: "800", color: "#16a34a", marginBottom: "8px" }}>
+                          {nextAppointment.hora}
+                        </div>
+                        {nextAppointment.notas && (
+                          <div style={{ fontSize: "14px", color: "#064e3b", marginTop: "8px", fontStyle: "italic" }}>
+                            📝 {nextAppointment.notas}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Formulario para nueva cita (solo admin) */}
+                    {adminMode && (
+                      <div style={{
+                        background: "#f8fafc",
+                        borderRadius: "10px",
+                        padding: "16px",
+                        marginBottom: "20px",
+                        border: "1px solid #e2e8f0"
+                      }}>
+                        <h4 style={{ margin: "0 0 12px 0", fontSize: "15px", fontWeight: "600", color: "#475569" }}>
+                          ➕ Confirmar nueva cita
+                        </h4>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "12px", marginBottom: "12px" }}>
+                          <div>
+                            <label style={{ display: "block", fontSize: "12px", color: "#64748b", marginBottom: "4px", fontWeight: "600" }}>Fecha</label>
+                            <input 
+                              type="date" 
+                              className="input"
+                              value={newAppointmentDate}
+                              onChange={(e) => setNewAppointmentDate(e.target.value)}
+                              style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #e2e8f0" }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ display: "block", fontSize: "12px", color: "#64748b", marginBottom: "4px", fontWeight: "600" }}>Hora</label>
+                            <input 
+                              type="time" 
+                              className="input"
+                              value={newAppointmentTime}
+                              onChange={(e) => setNewAppointmentTime(e.target.value)}
+                              style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #e2e8f0" }}
+                            />
+                          </div>
+                        </div>
+                        <div style={{ marginBottom: "12px" }}>
+                          <label style={{ display: "block", fontSize: "12px", color: "#64748b", marginBottom: "4px", fontWeight: "600" }}>Notas (opcional)</label>
+                          <input 
+                            type="text" 
+                            className="input"
+                            value={newAppointmentNotes}
+                            onChange={(e) => setNewAppointmentNotes(e.target.value)}
+                            placeholder="Ej: Primera consulta, revisión mensual..."
+                            style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #e2e8f0" }}
+                          />
+                        </div>
+                        <button 
+                          className="btn primary"
+                          onClick={addAppointment}
+                          style={{
+                            background: "linear-gradient(135deg, #16a34a 0%, #15803d 100%)",
+                            color: "white",
+                            padding: "10px 20px",
+                            borderRadius: "8px",
+                            border: "none",
+                            fontWeight: "600",
+                            cursor: "pointer"
+                          }}
+                        >
+                          ✅ Agregar cita
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Lista de todas las citas */}
+                    <div>
+                      <h4 style={{ margin: "0 0 12px 0", fontSize: "15px", fontWeight: "600", color: "#475569" }}>
+                        📋 Todas las citas
+                      </h4>
+                      {appointments.length === 0 ? (
+                        <div style={{ 
+                          textAlign: "center", 
+                          padding: "30px", 
+                          color: "#94a3b8",
+                          fontSize: "14px"
+                        }}>
+                          No hay citas programadas
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                          {appointments
+                            .sort((a, b) => new Date(b.fecha + 'T' + b.hora) - new Date(a.fecha + 'T' + a.hora))
+                            .map((apt, idx) => {
+                              const aptDate = new Date(apt.fecha + 'T' + apt.hora);
+                              const isPast = aptDate < new Date();
+                              return (
+                                <div 
+                                  key={idx}
+                                  style={{
+                                    background: isPast ? "#f1f5f9" : "white",
+                                    border: `1px solid ${isPast ? "#cbd5e1" : "#e2e8f0"}`,
+                                    borderRadius: "8px",
+                                    padding: "12px",
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    opacity: isPast ? 0.6 : 1
+                                  }}
+                                >
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: "600", color: "#0f172a", marginBottom: "4px" }}>
+                                      📅 {new Date(apt.fecha).toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                                      <span style={{ marginLeft: "12px", color: "#16a34a", fontSize: "16px" }}>
+                                        🕐 {apt.hora}
+                                      </span>
+                                    </div>
+                                    {apt.notas && (
+                                      <div style={{ fontSize: "13px", color: "#64748b", marginTop: "4px" }}>
+                                        {apt.notas}
+                                      </div>
+                                    )}
+                                    {isPast && (
+                                      <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px" }}>
+                                        ✓ Cita pasada
+                                      </div>
+                                    )}
+                                  </div>
+                                  {adminMode && (
+                                    <button 
+                                      onClick={() => deleteAppointment(apt)}
+                                      style={{
+                                        background: "#fee2e2",
+                                        color: "#dc2626",
+                                        border: "none",
+                                        borderRadius: "6px",
+                                        padding: "6px 12px",
+                                        fontSize: "12px",
+                                        cursor: "pointer",
+                                        fontWeight: "600"
+                                      }}
+                                    >
+                                      🗑️ Eliminar
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {tabIndex === 3 && (
               <div className="card" style={{ padding: 12 }}>
                 <h3>Ejercicios</h3>
                 <div className="panel-section">
@@ -1830,7 +2245,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                 </div>
               </div>
             )}
-            {tabIndex === 3 && (
+            {tabIndex === 4 && (
               <div className="card" style={{ padding: 12 }}>
                 <h3>Recetas</h3>
                 <div className="panel-section">
@@ -1838,7 +2253,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                 </div>
               </div>
             )}
-            {tabIndex === 4 && adminMode && (
+            {tabIndex === 5 && adminMode && (
               <div className="card" style={{ padding: 0 }}>
                 <AnamnesisForm 
                   user={{ ...userData, uid: uid }} 

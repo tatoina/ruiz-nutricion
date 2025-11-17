@@ -281,9 +281,10 @@ export default function AdminUsers() {
           </div>
         </div>
         
-        <div>
-          <div> <button className="btn primary" onClick={() => navigate("/register")}>Nuevo cliente</button></div>
-          <div> <button className="btn danger" onClick={handleSignOut}>Cerrar sesión</button></div>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <button className="btn primary" onClick={() => navigate("/admin/agenda")}>📅 Agenda</button>
+          <button className="btn primary" onClick={() => navigate("/register")}>Nuevo cliente</button>
+          <button className="btn danger" onClick={handleSignOut}>Cerrar sesión</button>
         </div>
       </div>
 
