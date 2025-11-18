@@ -2016,72 +2016,91 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                       {ALL_SECTIONS.map((sec) => (
                         <div key={sec.key} className="weekly-field">
                           <label>{sec.label}</label>
-                          <textarea className="input weekly-textarea" rows={3} value={(Array.isArray(editable.menu) && editable.menu[selDay] ? editable.menu[selDay][sec.key] : "") || ""} onChange={(e) => { setMenuField(selDay, sec.key, e.target.value); const ta = e.target; ta.style.height = "auto"; ta.style.height = Math.max(72, ta.scrollHeight + 2) + "px"; }} placeholder={sec.key === "consejos" ? "Consejos o notas..." : ""} />
+                          <textarea 
+                            className="input weekly-textarea" 
+                            rows={3} 
+                            value={(Array.isArray(editable.menu) && editable.menu[selDay] ? editable.menu[selDay][sec.key] : "") || ""} 
+                            onChange={(e) => { 
+                              if (!adminMode) return;
+                              setMenuField(selDay, sec.key, e.target.value); 
+                              const ta = e.target; 
+                              ta.style.height = "auto"; 
+                              ta.style.height = Math.max(72, ta.scrollHeight + 2) + "px"; 
+                            }} 
+                            placeholder={sec.key === "consejos" ? "Consejos o notas..." : ""} 
+                            readOnly={!adminMode}
+                            style={{
+                              cursor: adminMode ? "text" : "default",
+                              backgroundColor: adminMode ? "white" : "#f8fafc"
+                            }}
+                          />
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  {/* Botones flotantes para Dieta Semanal */}
-                  <div style={{
-                    position: "fixed",
-                    bottom: "30px",
-                    right: "30px",
-                    zIndex: 1000,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "flex-end",
-                    gap: "10px"
-                  }}>
-                    {saveLabel && (
-                      <div style={{
-                        backgroundColor: saveLabel.includes("✅") || saveLabel.includes("Guardado") ? "#48bb78" : "#718096",
-                        color: "white",
-                        padding: "8px 16px",
-                        borderRadius: "6px",
-                        fontSize: "14px",
-                        fontWeight: "500",
-                        boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
-                      }}>
-                        {saveLabel}
-                      </div>
-                    )}
-                    <button 
-                      className="btn primary" 
-                      onClick={saveVersionMenu}
-                      style={{
-                        backgroundColor: "#4299e1",
-                        color: "white",
-                        padding: "14px 28px",
-                        borderRadius: "8px",
-                        border: "none",
-                        cursor: "pointer",
-                        fontWeight: "600",
-                        fontSize: "16px",
-                        boxShadow: "0 4px 12px rgba(66, 153, 225, 0.4)",
-                        transition: "all 0.3s ease",
-                      }}
-                    >
-                      💾 Guardar versión
-                    </button>
-                    <button 
-                      className="btn ghost" 
-                      onClick={saveSemana}
-                      style={{
-                        backgroundColor: "#48bb78",
-                        color: "white",
-                        padding: "12px 24px",
-                        borderRadius: "6px",
-                        border: "none",
-                        cursor: "pointer",
-                        fontWeight: "500",
-                        fontSize: "14px",
-                        boxShadow: "0 2px 8px rgba(72, 187, 120, 0.3)",
-                      }}
-                    >
-                      📝 Guardar menú
-                    </button>
-                  </div>
+                  {/* Botones flotantes para Dieta Semanal (solo admin) */}
+                  {adminMode && (
+                    <div style={{
+                      position: "fixed",
+                      bottom: "30px",
+                      right: "30px",
+                      zIndex: 1000,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-end",
+                      gap: "10px"
+                    }}>
+                      {saveLabel && (
+                        <div style={{
+                          backgroundColor: saveLabel.includes("✅") || saveLabel.includes("Guardado") ? "#48bb78" : "#718096",
+                          color: "white",
+                          padding: "8px 16px",
+                          borderRadius: "6px",
+                          fontSize: "14px",
+                          fontWeight: "500",
+                          boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+                        }}>
+                          {saveLabel}
+                        </div>
+                      )}
+                      <button 
+                        className="btn primary" 
+                        onClick={saveVersionMenu}
+                        style={{
+                          backgroundColor: "#4299e1",
+                          color: "white",
+                          padding: "14px 28px",
+                          borderRadius: "8px",
+                          border: "none",
+                          cursor: "pointer",
+                          fontWeight: "600",
+                          fontSize: "16px",
+                          boxShadow: "0 4px 12px rgba(66, 153, 225, 0.4)",
+                          transition: "all 0.3s ease",
+                        }}
+                      >
+                        💾 Guardar versión
+                      </button>
+                      <button 
+                        className="btn ghost" 
+                        onClick={saveSemana}
+                        style={{
+                          backgroundColor: "#48bb78",
+                          color: "white",
+                          padding: "12px 24px",
+                          borderRadius: "6px",
+                          border: "none",
+                          cursor: "pointer",
+                          fontWeight: "500",
+                          fontSize: "14px",
+                          boxShadow: "0 2px 8px rgba(72, 187, 120, 0.3)",
+                        }}
+                      >
+                        📝 Guardar menú
+                      </button>
+                    </div>
+                  )}
 
                   <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center" }}>
                     <div style={{ display: "flex", gap: 8 }}>
