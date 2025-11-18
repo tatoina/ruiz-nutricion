@@ -94,6 +94,10 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const [fechaPeso, setFechaPeso] = useState(() => todayISO);
   const [savingPeso, setSavingPeso] = useState(false);
 
+  // Estados para notificaciones
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notifiedAppointments, setNotifiedAppointments] = useState(new Set());
+
   const saveTimerRef = useRef(null);
   const [saveStatus, setSaveStatus] = useState("idle");
   const rootRef = useRef(null);
@@ -366,6 +370,81 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       loadAppointments();
     }
   }, [tabIndex, loadAppointments]);
+
+  // Solicitar permisos de notificación
+  const requestNotificationPermission = useCallback(async () => {
+    if (!("Notification" in window)) {
+      console.log("Este navegador no soporta notificaciones");
+      return false;
+    }
+
+    if (Notification.permission === "granted") {
+      setNotificationsEnabled(true);
+      return true;
+    }
+
+    if (Notification.permission !== "denied") {
+      const permission = await Notification.requestPermission();
+      if (permission === "granted") {
+        setNotificationsEnabled(true);
+        return true;
+      }
+    }
+
+    return false;
+  }, []);
+
+  // Verificar citas próximas y enviar notificaciones
+  const checkUpcomingAppointments = useCallback(() => {
+    if (!notificationsEnabled || appointments.length === 0) return;
+
+    const now = new Date();
+    const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
+
+    appointments.forEach((apt) => {
+      const appointmentDateTime = new Date(apt.fecha + 'T' + apt.hora);
+      const appointmentId = `${apt.fecha}-${apt.hora}`;
+
+      // Si la cita es en exactamente 1 hora (±2 minutos) y no se ha notificado
+      if (
+        appointmentDateTime > now &&
+        appointmentDateTime <= oneHourLater &&
+        !notifiedAppointments.has(appointmentId)
+      ) {
+        const timeUntil = Math.round((appointmentDateTime - now) / (60 * 1000));
+        
+        if (timeUntil >= 58 && timeUntil <= 62) { // Entre 58 y 62 minutos
+          new Notification("🔔 Recordatorio de cita", {
+            body: `Tienes una cita en ${timeUntil} minutos (${apt.hora})${apt.notas ? '\n' + apt.notas : ''}`,
+            icon: DEFAULT_CLINIC_LOGO,
+            badge: DEFAULT_CLINIC_LOGO,
+            requireInteraction: true,
+            tag: appointmentId
+          });
+
+          setNotifiedAppointments(prev => new Set([...prev, appointmentId]));
+        }
+      }
+    });
+  }, [notificationsEnabled, appointments, notifiedAppointments, DEFAULT_CLINIC_LOGO]);
+
+  // Verificar permisos al cargar el componente
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "granted") {
+      setNotificationsEnabled(true);
+    }
+  }, []);
+
+  // Comprobar citas cada minuto
+  useEffect(() => {
+    if (!notificationsEnabled) return;
+
+    const interval = setInterval(() => {
+      checkUpcomingAppointments();
+    }, 60000); // Cada 60 segundos
+
+    return () => clearInterval(interval);
+  }, [notificationsEnabled, checkUpcomingAppointments]);
 
   const addAppointment = async () => {
     if (!uid || !newAppointmentDate || !newAppointmentTime) {
@@ -2062,6 +2141,29 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                   gap: "10px"
                 }}>
                   <h3 style={{ margin: "0", fontSize: "18px", fontWeight: "600", color: "#15803d" }}>📅 Calendario de Citas</h3>
+                  
+                  {!adminMode && (
+                    <button
+                      onClick={requestNotificationPermission}
+                      style={{
+                        padding: "8px 16px",
+                        borderRadius: "8px",
+                        border: notificationsEnabled ? "2px solid #16a34a" : "2px solid #94a3b8",
+                        background: notificationsEnabled ? "#f0fdf4" : "white",
+                        color: notificationsEnabled ? "#15803d" : "#64748b",
+                        cursor: "pointer",
+                        fontWeight: "600",
+                        fontSize: "13px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        transition: "all 0.2s"
+                      }}
+                      disabled={notificationsEnabled}
+                    >
+                      {notificationsEnabled ? "✅ Notificaciones activadas" : "🔔 Activar notificaciones"}
+                    </button>
+                  )}
                 </div>
 
                 {loadingAppointments ? (
