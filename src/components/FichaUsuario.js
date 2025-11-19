@@ -1185,10 +1185,11 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       {/* Header tipo app de coaching */}
       <div style={{ 
         background: "linear-gradient(135deg, #16a34a 0%, #15803d 100%)",
-        borderRadius: "12px",
-        padding: "16px",
+        borderRadius: adminMode ? "0" : "12px",
+        padding: "16px 20px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        marginBottom: "12px"
+        marginBottom: "12px",
+        width: "100%"
       }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           {/* User info */}
@@ -1401,11 +1402,12 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           <nav className="tabs" role="tablist" aria-label="Secciones" style={{ 
             display: "flex", 
             gap: "6px", 
-            padding: "0",
+            padding: adminMode ? "0 20px" : "0",
             overflowX: "auto",
             WebkitOverflowScrolling: "touch",
             scrollbarWidth: "none",
-            msOverflowStyle: "none"
+            msOverflowStyle: "none",
+            width: "100%"
           }}>
             {tabs.map((t, i) => (
               <button 
@@ -1980,85 +1982,164 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
             </div>
           )}
           {tabIndex === 1 && (
-            <div className="card" style={{ padding: "12px" }}>
-              <div className="panel-section" style={{ paddingTop: "0" }}>
+            <div className="card" style={{ width: "100%", maxWidth: "none", margin: "0", padding: "0", borderRadius: "0" }}>
+              <div className="panel-section" style={{ padding: "16px 20px", maxWidth: "none" }}>
                 <h3 style={{ margin: "0 0 16px 0", fontSize: "16px", fontWeight: "600", color: "#15803d" }}>
                   🍽️ Dieta semanal
                 </h3>
 
-                {/* Vista ADMIN: Toda la semana */}
+                {/* Vista ADMIN: Tabla horizontal de toda la semana */}
                 {adminMode ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-                    {["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"].map((dayName, dayIndex) => (
-                      <div 
-                        key={dayIndex}
-                        style={{
-                          background: dayIndex === todayIndex ? "#f0fdf4" : "#f8fafc",
-                          border: dayIndex === todayIndex ? "2px solid #16a34a" : "1px solid #e2e8f0",
-                          borderRadius: "10px",
-                          padding: "16px",
-                          boxShadow: dayIndex === todayIndex ? "0 2px 8px rgba(22,163,74,0.15)" : "none"
-                        }}
-                      >
-                        <div style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          marginBottom: "12px",
-                          paddingBottom: "8px",
-                          borderBottom: "2px solid #e2e8f0"
-                        }}>
-                          <span style={{
-                            fontSize: "18px",
+                  <div style={{ overflowX: "auto", width: "100%" }}>
+                    <table style={{
+                      width: "100%",
+                      borderCollapse: "separate",
+                      borderSpacing: "0",
+                      fontSize: "12px",
+                      tableLayout: "auto"
+                    }}>
+                      <thead>
+                        <tr>
+                          <th style={{
+                            position: "sticky",
+                            left: "0",
+                            background: "linear-gradient(135deg, #0f766e 0%, #14b8a6 100%)",
+                            padding: "14px 10px",
+                            textAlign: "center",
                             fontWeight: "700",
-                            color: dayIndex === todayIndex ? "#16a34a" : "#1e293b"
-                          }}>
-                            {dayName}
-                          </span>
-                          {dayIndex === todayIndex && (
-                            <span style={{
-                              background: "#16a34a",
+                            color: "white",
+                            fontSize: "12px",
+                            width: "100px",
+                            zIndex: 10,
+                            border: "1px solid #e2e8f0",
+                            boxShadow: "2px 0 4px rgba(0,0,0,0.1)",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.5px"
+                          }}>COMIDA</th>
+                          {["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"].map((dayName, dayIndex) => (
+                            <th key={dayIndex} style={{
+                              padding: "14px 10px",
+                              textAlign: "center",
+                              fontWeight: "700",
                               color: "white",
-                              padding: "2px 8px",
-                              borderRadius: "4px",
-                              fontSize: "11px",
-                              fontWeight: "600"
+                              fontSize: "12px",
+                              background: dayIndex === todayIndex ? "linear-gradient(135deg, #15803d 0%, #16a34a 100%)" : "linear-gradient(135deg, #0f766e 0%, #14b8a6 100%)",
+                              border: "1px solid #e2e8f0",
+                              position: "relative",
+                              resize: "horizontal",
+                              overflow: "auto",
+                              minWidth: "150px",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.5px"
                             }}>
-                              HOY
-                            </span>
-                          )}
-                        </div>
-                        
-                        <div className="weekly-menu-grid">
-                          {ALL_SECTIONS.map((sec) => (
-                            <div key={sec.key} className="weekly-field">
-                              <label>{sec.label}</label>
-                              {sec.key === "consejos" ? (
-                                <textarea 
-                                  className="input weekly-textarea" 
-                                  rows={3} 
-                                  value={(Array.isArray(editable.menu) && editable.menu[dayIndex] ? editable.menu[dayIndex][sec.key] : "") || ""} 
-                                  onChange={(e) => { 
-                                    setMenuField(dayIndex, sec.key, e.target.value); 
-                                    const ta = e.target; 
-                                    ta.style.height = "auto"; 
-                                    ta.style.height = Math.max(72, ta.scrollHeight + 2) + "px"; 
-                                  }} 
-                                  placeholder="Consejos o notas..." 
-                                />
-                              ) : (
-                                <MenuSelector
-                                  categoria={sec.key}
-                                  value={(Array.isArray(editable.menu) && editable.menu[dayIndex] ? editable.menu[dayIndex][sec.key] : "") || ""}
-                                  onChange={(val) => setMenuField(dayIndex, sec.key, val)}
-                                  readOnly={false}
-                                />
+                              <div style={{ marginBottom: dayIndex === todayIndex ? "6px" : "0" }}>{dayName.toUpperCase()}</div>
+                              {dayIndex === todayIndex && (
+                                <div style={{
+                                  background: "rgba(255,255,255,0.3)",
+                                  color: "white",
+                                  padding: "3px 8px",
+                                  borderRadius: "4px",
+                                  fontSize: "10px",
+                                  fontWeight: "700",
+                                  display: "inline-block",
+                                  border: "1px solid rgba(255,255,255,0.5)"
+                                }}>HOY</div>
                               )}
-                            </div>
+                              <div style={{
+                                position: "absolute",
+                                right: 0,
+                                top: 0,
+                                bottom: 0,
+                                width: "5px",
+                                cursor: "col-resize",
+                                userSelect: "none",
+                                background: "transparent"
+                              }} 
+                              onMouseDown={(e) => {
+                                const th = e.currentTarget.parentElement;
+                                const startX = e.pageX;
+                                const startWidth = th.offsetWidth;
+                                
+                                const onMouseMove = (e) => {
+                                  const newWidth = startWidth + (e.pageX - startX);
+                                  if (newWidth >= 150) {
+                                    th.style.width = newWidth + "px";
+                                  }
+                                };
+                                
+                                const onMouseUp = () => {
+                                  document.removeEventListener("mousemove", onMouseMove);
+                                  document.removeEventListener("mouseup", onMouseUp);
+                                };
+                                
+                                document.addEventListener("mousemove", onMouseMove);
+                                document.addEventListener("mouseup", onMouseUp);
+                              }}
+                              />
+                            </th>
                           ))}
-                        </div>
-                      </div>
-                    ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {ALL_SECTIONS.map((sec, secIdx) => (
+                          <tr key={sec.key}>
+                            <td style={{
+                              position: "sticky",
+                              left: "0",
+                              background: "#f1f5f9",
+                              padding: "12px 10px",
+                              fontWeight: "600",
+                              color: "#334155",
+                              fontSize: "11px",
+                              zIndex: 5,
+                              border: "1px solid #e2e8f0",
+                              boxShadow: "2px 0 4px rgba(0,0,0,0.08)",
+                              textAlign: "center",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.3px"
+                            }}>
+                              {sec.label}
+                            </td>
+                            {[0, 1, 2, 3, 4, 5, 6].map((dayIndex) => (
+                              <td key={dayIndex} style={{
+                                padding: "10px",
+                                background: dayIndex === todayIndex ? "#f0fdf4" : "white",
+                                verticalAlign: "top",
+                                border: "1px solid #e2e8f0"
+                              }}>
+                                {sec.key === "consejos" ? (
+                                  <textarea 
+                                    className="input" 
+                                    rows={3} 
+                                    value={(Array.isArray(editable.menu) && editable.menu[dayIndex] ? editable.menu[dayIndex][sec.key] : "") || ""} 
+                                    onChange={(e) => { 
+                                      setMenuField(dayIndex, sec.key, e.target.value); 
+                                      const ta = e.target; 
+                                      ta.style.height = "auto"; 
+                                      ta.style.height = Math.max(72, ta.scrollHeight + 2) + "px"; 
+                                    }} 
+                                    placeholder="Consejos..." 
+                                    style={{ 
+                                      width: "100%", 
+                                      fontSize: "12px",
+                                      minHeight: "60px",
+                                      resize: "vertical"
+                                    }}
+                                  />
+                                ) : (
+                                  <MenuSelector
+                                    categoria={sec.key}
+                                    value={(Array.isArray(editable.menu) && editable.menu[dayIndex] ? editable.menu[dayIndex][sec.key] : "") || ""}
+                                    onChange={(val) => setMenuField(dayIndex, sec.key, val)}
+                                    readOnly={false}
+                                  />
+                                )}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 ) : (
                   /* Vista USUARIO: Navegación día por día */
@@ -2241,7 +2322,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
               </div>
             )}
             {tabIndex === 2 && (
-              <div className="card" style={{ padding: "16px" }}>
+              <div className="card" style={{ padding: adminMode ? "16px 20px" : "16px", width: "100%", maxWidth: "none" }}>
                 <div style={{ 
                   display: "flex", 
                   alignItems: "center", 
@@ -2450,23 +2531,23 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
               </div>
             )}
             {tabIndex === 3 && (
-              <div className="card" style={{ padding: 12 }}>
+              <div className="card" style={{ padding: adminMode ? "16px 20px" : "12px", width: "100%", maxWidth: "none" }}>
                 <h3>Ejercicios</h3>
-                <div className="panel-section">
+                <div className="panel-section" style={{ maxWidth: "none" }}>
                   <FileManager userId={uid} type="ejercicios" isAdmin={adminMode} />
                 </div>
               </div>
             )}
             {tabIndex === 4 && (
-              <div className="card" style={{ padding: 12 }}>
+              <div className="card" style={{ padding: adminMode ? "16px 20px" : "12px", width: "100%", maxWidth: "none" }}>
                 <h3>Recetas</h3>
-                <div className="panel-section">
+                <div className="panel-section" style={{ maxWidth: "none" }}>
                   <FileManager userId={uid} type="recetas" isAdmin={adminMode} />
                 </div>
               </div>
             )}
             {tabIndex === 5 && adminMode && (
-              <div className="card" style={{ padding: 0 }}>
+              <div className="card" style={{ padding: "16px 20px", width: "100%", maxWidth: "none" }}>
                 <AnamnesisForm 
                   user={{ ...userData, uid: uid }} 
                   onUpdateUser={(updatedUser) => {

@@ -5,31 +5,24 @@ import { collection, getDocs } from "firebase/firestore";
 export default function MenuSelector({ categoria, value, onChange, readOnly = false }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedItems, setSelectedItems] = useState([]);
+  const [platosSeleccionados, setPlatosSeleccionados] = useState([]);
+  const [draggedIndex, setDraggedIndex] = useState(null);
 
   useEffect(() => {
     loadItems();
   }, [categoria]);
 
   useEffect(() => {
-    // Parsear el valor actual para extraer items seleccionados
-    if (value && items.length > 0) {
-      const lines = value.split('\n').filter(line => line.trim());
-      const selected = [];
-      
-      lines.forEach(line => {
-        const cleaned = line.replace(/^[•\-*]\s*/, '').trim();
-        const found = items.find(item => item.nombre === cleaned);
-        if (found) {
-          selected.push(found.nombre);
-        }
-      });
-      
-      setSelectedItems(selected);
-    } else if (!value) {
-      setSelectedItems([]);
+    // Parsear platos seleccionados desde el value
+    if (value) {
+      const platos = value.split('\n')
+        .map(line => line.replace(/^[•\-*]\s*/, '').trim())
+        .filter(line => line);
+      setPlatosSeleccionados(platos);
+    } else {
+      setPlatosSeleccionados([]);
     }
-  }, [value, items]);
+  }, [value]);
 
   const loadItems = async () => {
     setLoading(true);
@@ -49,6 +42,53 @@ export default function MenuSelector({ categoria, value, onChange, readOnly = fa
     }
   };
 
+  const agregarPlato = (platoNombre) => {
+    if (!platoNombre || platosSeleccionados.includes(platoNombre)) return;
+    const nuevosPlatos = [...platosSeleccionados, platoNombre];
+    actualizarValue(nuevosPlatos);
+  };
+
+  const eliminarPlato = (platoNombre) => {
+    const nuevosPlatos = platosSeleccionados.filter(p => p !== platoNombre);
+    actualizarValue(nuevosPlatos);
+  };
+
+  const actualizarValue = (platos) => {
+    const text = platos.map(p => `• ${p}`).join('\n');
+    onChange(text);
+  };
+
+  const reordenarPlatos = (fromIndex, toIndex) => {
+    const nuevosPlatos = [...platosSeleccionados];
+    const [removed] = nuevosPlatos.splice(fromIndex, 1);
+    nuevosPlatos.splice(toIndex, 0, removed);
+    actualizarValue(nuevosPlatos);
+  };
+
+  const handleDragStart = (e, index) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) return;
+    
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e, dropIndex) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === dropIndex) return;
+    
+    reordenarPlatos(draggedIndex, dropIndex);
+    setDraggedIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+  };
+
   if (loading) {
     return (
       <div style={{
@@ -64,18 +104,8 @@ export default function MenuSelector({ categoria, value, onChange, readOnly = fa
     );
   }
 
-  const handleSelectionChange = (e) => {
-    const options = Array.from(e.target.selectedOptions);
-    const selected = options.map(opt => opt.value);
-    setSelectedItems(selected);
-    
-    const lines = selected.map(item => `• ${item}`);
-    onChange(lines.join('\n'));
-  };
-
   if (readOnly) {
-    // Mostrar con bullets para mejor lectura
-    const lines = value ? value.split('\n').filter(line => line.trim()) : [];
+    const platos = platosSeleccionados;
     return (
       <div style={{
         padding: "12px",
@@ -84,13 +114,12 @@ export default function MenuSelector({ categoria, value, onChange, readOnly = fa
         border: "1px solid #e2e8f0",
         minHeight: "44px",
         fontSize: "15px",
-        color: "#1e293b",
-        whiteSpace: "pre-line"
+        color: "#1e293b"
       }}>
-        {lines.length > 0 ? (
-          lines.map((line, idx) => (
+        {platos.length > 0 ? (
+          platos.map((plato, idx) => (
             <div key={idx} style={{ marginBottom: "4px" }}>
-              {line.startsWith('•') ? line : `• ${line}`}
+              • {plato}
             </div>
           ))
         ) : (
@@ -101,53 +130,100 @@ export default function MenuSelector({ categoria, value, onChange, readOnly = fa
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-      {/* Select múltiple compacto */}
+    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      {/* Platos ya seleccionados */}
+      {platosSeleccionados.length > 0 && (
+        <div style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "6px",
+          padding: "10px",
+          background: "#f0fdf4",
+          borderRadius: "6px",
+          border: "1px solid #86efac"
+        }}>
+          {platosSeleccionados.map((plato, idx) => (
+            <div
+              key={idx}
+              draggable={!readOnly}
+              onDragStart={(e) => handleDragStart(e, idx)}
+              onDragOver={(e) => handleDragOver(e, idx)}
+              onDrop={(e) => handleDrop(e, idx)}
+              onDragEnd={handleDragEnd}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                cursor: readOnly ? "default" : "move",
+                opacity: draggedIndex === idx ? 0.5 : 1,
+                transition: "opacity 0.2s",
+                alignItems: "center",
+                padding: "8px 10px",
+                background: "white",
+                borderRadius: "4px",
+                border: "1px solid #dcfce7"
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1 }}>
+                {!readOnly && (
+                  <span style={{ 
+                    fontSize: "16px", 
+                    color: "#94a3b8",
+                    cursor: "grab",
+                    userSelect: "none"
+                  }}>⋮⋮</span>
+                )}
+                <span style={{ fontSize: "14px", color: "#1e293b" }}>• {plato}</span>
+              </div>
+              <button
+                onClick={() => eliminarPlato(plato)}
+                style={{
+                  padding: "4px 8px",
+                  borderRadius: "4px",
+                  border: "none",
+                  background: "#fee2e2",
+                  color: "#dc2626",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                  fontWeight: "600"
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Desplegable para añadir */}
       {items.length > 0 ? (
-        <>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           <select
-            multiple
-            value={selectedItems}
-            onChange={handleSelectionChange}
+            onChange={(e) => {
+              if (e.target.value) {
+                agregarPlato(e.target.value);
+                e.target.value = "";
+              }
+            }}
+            defaultValue=""
             style={{
-              padding: "8px",
+              flex: 1,
+              padding: "10px",
               borderRadius: "6px",
               border: "2px solid #e2e8f0",
               fontSize: "14px",
               outline: "none",
               cursor: "pointer",
-              background: "white",
-              minHeight: "100px",
-              maxHeight: "150px"
+              background: "white"
             }}
           >
-            {items.map(item => (
-              <option key={item.id} value={item.nombre} style={{ padding: "4px 8px" }}>
+            <option value="">➕ Añadir plato...</option>
+            {items.filter(item => !platosSeleccionados.includes(item.nombre)).map(item => (
+              <option key={item.id} value={item.nombre}>
                 {item.nombre}
               </option>
             ))}
           </select>
-          <div style={{
-            fontSize: "12px",
-            color: "#64748b",
-            fontStyle: "italic"
-          }}>
-            💡 Mantén Ctrl (Cmd en Mac) para seleccionar varios
-          </div>
-          {selectedItems.length > 0 && (
-            <div style={{
-              padding: "6px 10px",
-              background: "#dcfce7",
-              borderRadius: "6px",
-              border: "1px solid #16a34a",
-              fontSize: "12px",
-              color: "#15803d",
-              fontWeight: "600"
-            }}>
-              ✓ {selectedItems.length} seleccionado{selectedItems.length !== 1 ? 's' : ''}
-            </div>
-          )}
-        </>
+        </div>
       ) : (
         <div style={{
           padding: "12px",

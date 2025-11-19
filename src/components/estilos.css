@@ -189,6 +189,7 @@ button, .tab { -webkit-tap-highlight-color: rgba(0,0,0,0); }
 /* Desktop tweaks */
 @media(min-width:720px){
   .layout{max-width:920px;margin:28px auto;padding:0}
+  .layout:has(.admin-wide){max-width:100%;margin:0;padding:0}
   .header{padding:18px}
   .avatar{width:72px;height:72px;font-size:24px;border-radius:16px}
   .title{font-size:20px}
@@ -319,18 +320,21 @@ button, .tab { -webkit-tap-highlight-color: rgba(0,0,0,0); }
   max-width: none;
   width: 100%;
   margin: 0;
-  padding-left: 12px;
-  padding-right: 12px;
+  padding-left: 0;
+  padding-right: 0;
 }
-.layout .ficha-root.admin-wide { max-width: none !important; width: 100% !important; margin: 0 !important; padding-left: 12px !important; padding-right: 12px !important; }
-.ficha-root.admin-wide .card { margin: 0; max-width: none; border-radius: 12px; }
+.layout .ficha-root.admin-wide { max-width: none !important; width: 100% !important; margin: 0 !important; padding-left: 0 !important; padding-right: 0 !important; }
+.ficha-root.admin-wide .card { margin: 0; max-width: none; width: 100%; padding-left: 20px; padding-right: 20px; }
+.ficha-root.admin-wide .panel-section { max-width: none; }
 .card.pesaje-section-wrapper > h3 { margin-left: 0; padding-left: 0; }
 .card.pesaje-section-wrapper .panel-section { max-width: none; padding-left: 12px; padding-right: 12px; }
+.ficha-root.admin-wide .card.pesaje-section-wrapper { width: 100%; max-width: none; }
 
 /* PES AJE: container + grid (consolidated, single place) */
 .pesaje-container {
-  max-width: 1200px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
+  width: 100%;
   padding: 0 8px;
   box-sizing: border-box;
   width: 100%;
