@@ -1982,72 +1982,153 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           {tabIndex === 1 && (
             <div className="card" style={{ padding: "12px" }}>
               <div className="panel-section" style={{ paddingTop: "0" }}>
-                {/* Título y navegación de días en una sola línea */}
-                <div style={{ 
-                  display: "flex", 
-                  alignItems: "center", 
-                  justifyContent: "space-between",
-                  marginBottom: "10px",
-                  flexWrap: "wrap",
-                  gap: "8px"
-                }}>
-                  <h3 style={{ margin: "0", fontSize: "16px", fontWeight: "600", color: "#15803d" }}>🍽️ Dieta semanal</h3>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <button 
-                      className="btn ghost" 
-                      onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.max(0, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) - 1) }))}
-                      style={{ padding: "6px 12px", minHeight: "32px" }}
-                    >←</button>
-                    <div style={{ 
-                      fontWeight: "700", 
-                      color: "#16a34a",
-                      fontSize: "15px",
-                      minWidth: "90px",
-                      textAlign: "center"
-                    }}>{dayName}</div>
-                    <button 
-                      className="btn ghost" 
-                      onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.min(6, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) + 1) }))}
-                      style={{ padding: "6px 12px", minHeight: "32px" }}
-                    >→</button>
-                  </div>
-                </div>
-                <div>
-                    <div className="weekly-menu-grid">
-                      {ALL_SECTIONS.map((sec) => (
-                        <div key={sec.key} className="weekly-field">
-                          <label>{sec.label}</label>
-                          {sec.key === "consejos" ? (
-                            <textarea 
-                              className="input weekly-textarea" 
-                              rows={3} 
-                              value={(Array.isArray(editable.menu) && editable.menu[selDay] ? editable.menu[selDay][sec.key] : "") || ""} 
-                              onChange={(e) => { 
-                                if (!adminMode) return;
-                                setMenuField(selDay, sec.key, e.target.value); 
-                                const ta = e.target; 
-                                ta.style.height = "auto"; 
-                                ta.style.height = Math.max(72, ta.scrollHeight + 2) + "px"; 
-                              }} 
-                              placeholder="Consejos o notas..." 
-                              readOnly={!adminMode}
-                              style={{
-                                cursor: adminMode ? "text" : "default",
-                                backgroundColor: adminMode ? "white" : "#f8fafc"
-                              }}
-                            />
-                          ) : (
-                            <MenuSelector
-                              categoria={sec.key}
-                              value={(Array.isArray(editable.menu) && editable.menu[selDay] ? editable.menu[selDay][sec.key] : "") || ""}
-                              onChange={(val) => setMenuField(selDay, sec.key, val)}
-                              readOnly={!adminMode}
-                            />
+                <h3 style={{ margin: "0 0 16px 0", fontSize: "16px", fontWeight: "600", color: "#15803d" }}>
+                  🍽️ Dieta semanal
+                </h3>
+
+                {/* Vista ADMIN: Toda la semana */}
+                {adminMode ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                    {["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"].map((dayName, dayIndex) => (
+                      <div 
+                        key={dayIndex}
+                        style={{
+                          background: dayIndex === todayIndex ? "#f0fdf4" : "#f8fafc",
+                          border: dayIndex === todayIndex ? "2px solid #16a34a" : "1px solid #e2e8f0",
+                          borderRadius: "10px",
+                          padding: "16px",
+                          boxShadow: dayIndex === todayIndex ? "0 2px 8px rgba(22,163,74,0.15)" : "none"
+                        }}
+                      >
+                        <div style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          marginBottom: "12px",
+                          paddingBottom: "8px",
+                          borderBottom: "2px solid #e2e8f0"
+                        }}>
+                          <span style={{
+                            fontSize: "18px",
+                            fontWeight: "700",
+                            color: dayIndex === todayIndex ? "#16a34a" : "#1e293b"
+                          }}>
+                            {dayName}
+                          </span>
+                          {dayIndex === todayIndex && (
+                            <span style={{
+                              background: "#16a34a",
+                              color: "white",
+                              padding: "2px 8px",
+                              borderRadius: "4px",
+                              fontSize: "11px",
+                              fontWeight: "600"
+                            }}>
+                              HOY
+                            </span>
                           )}
                         </div>
-                      ))}
-                    </div>
+                        
+                        <div className="weekly-menu-grid">
+                          {ALL_SECTIONS.map((sec) => (
+                            <div key={sec.key} className="weekly-field">
+                              <label>{sec.label}</label>
+                              {sec.key === "consejos" ? (
+                                <textarea 
+                                  className="input weekly-textarea" 
+                                  rows={3} 
+                                  value={(Array.isArray(editable.menu) && editable.menu[dayIndex] ? editable.menu[dayIndex][sec.key] : "") || ""} 
+                                  onChange={(e) => { 
+                                    setMenuField(dayIndex, sec.key, e.target.value); 
+                                    const ta = e.target; 
+                                    ta.style.height = "auto"; 
+                                    ta.style.height = Math.max(72, ta.scrollHeight + 2) + "px"; 
+                                  }} 
+                                  placeholder="Consejos o notas..." 
+                                />
+                              ) : (
+                                <MenuSelector
+                                  categoria={sec.key}
+                                  value={(Array.isArray(editable.menu) && editable.menu[dayIndex] ? editable.menu[dayIndex][sec.key] : "") || ""}
+                                  onChange={(val) => setMenuField(dayIndex, sec.key, val)}
+                                  readOnly={false}
+                                />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
+                ) : (
+                  /* Vista USUARIO: Navegación día por día */
+                  <>
+                    <div style={{ 
+                      display: "flex", 
+                      alignItems: "center", 
+                      justifyContent: "space-between",
+                      marginBottom: "10px",
+                      flexWrap: "wrap",
+                      gap: "8px"
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <button 
+                          className="btn ghost" 
+                          onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.max(0, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) - 1) }))}
+                          style={{ padding: "6px 12px", minHeight: "32px" }}
+                        >←</button>
+                        <div style={{ 
+                          fontWeight: "700", 
+                          color: "#16a34a",
+                          fontSize: "15px",
+                          minWidth: "90px",
+                          textAlign: "center"
+                        }}>{dayName}</div>
+                        <button 
+                          className="btn ghost" 
+                          onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.min(6, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) + 1) }))}
+                          style={{ padding: "6px 12px", minHeight: "32px" }}
+                        >→</button>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="weekly-menu-grid">
+                        {ALL_SECTIONS.map((sec) => (
+                          <div key={sec.key} className="weekly-field">
+                            <label>{sec.label}</label>
+                            {sec.key === "consejos" ? (
+                              <textarea 
+                                className="input weekly-textarea" 
+                                rows={3} 
+                                value={(Array.isArray(editable.menu) && editable.menu[selDay] ? editable.menu[selDay][sec.key] : "") || ""} 
+                                onChange={(e) => { 
+                                  if (!adminMode) return;
+                                  setMenuField(selDay, sec.key, e.target.value); 
+                                  const ta = e.target; 
+                                  ta.style.height = "auto"; 
+                                  ta.style.height = Math.max(72, ta.scrollHeight + 2) + "px"; 
+                                }} 
+                                placeholder="Consejos o notas..." 
+                                readOnly={!adminMode}
+                                style={{
+                                  cursor: adminMode ? "text" : "default",
+                                  backgroundColor: adminMode ? "white" : "#f8fafc"
+                                }}
+                              />
+                            ) : (
+                              <MenuSelector
+                                categoria={sec.key}
+                                value={(Array.isArray(editable.menu) && editable.menu[selDay] ? editable.menu[selDay][sec.key] : "") || ""}
+                                onChange={(val) => setMenuField(selDay, sec.key, val)}
+                                readOnly={!adminMode}
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
 
                   {/* Botones flotantes para Dieta Semanal (solo admin) */}
                   {adminMode && (
