@@ -1,9 +1,8 @@
 // src/components/Register.jsx
 import React, { useState } from "react";
 import "./estilos.css";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { setDoc, doc, serverTimestamp } from "firebase/firestore";
-import { auth, db } from "../Firebase";
+import { httpsCallable } from "firebase/functions";
+import { functions } from "../Firebase";
 import { useNavigate } from "react-router-dom";
 
 /**
@@ -26,7 +25,7 @@ export default function Register({ onBackToLogin }) {
   const [nombre, setNombre] = useState("");
   const [apellidos, setApellidos] = useState("");
   const [email, setEmail] = useState("");
-  const [pass, setPass] = useState("");
+  const [pass, setPass] = useState("000000");
   const [nacimiento, setNacimiento] = useState("");
   const [telefono, setTelefono] = useState("");
   const [loading, setLoading] = useState(false);
@@ -75,38 +74,34 @@ export default function Register({ onBackToLogin }) {
 
     setLoading(true);
     try {
-      const uc = await createUserWithEmailAndPassword(auth, email.trim(), pass);
-      const uid = uc.user.uid;
-
-      // update displayName in Auth (optional)
-      try {
-        const displayName = `${nombre || ""} ${apellidos || ""}`.trim();
-        if (displayName) {
-          await updateProfile(uc.user, { displayName });
-        }
-      } catch (updErr) {
-        // No crítico: logueamos pero no abortamos
-        console.warn("[REGISTER] updateProfile failed:", updErr);
-      }
-
-      // create Firestore doc for the user
-      await setDoc(doc(db, "users", uid), {
+      // Llamar a la Cloud Function para crear el usuario sin autenticarlo
+      const createUserFunction = httpsCallable(functions, 'createUser');
+      const result = await createUserFunction({
+        email: email.trim(),
+        password: pass,
         nombre: nombre || "",
         apellidos: apellidos || "",
-        email: email.trim(),
         nacimiento: nacimiento || "",
         telefono: sanitizeTelefono(telefono),
-        createdAt: serverTimestamp(),
-        pesoActual: null,
-        pesoHistorico: [],
-        medidas: {},
-        ejercicios: false,
-        recetas: false,
-        mustChangePassword: true,
       });
 
-      // Al registrarse el usuario queda autenticado. Redirigimos a su ficha.
-      navigate("/mi-ficha");
+      if (result.data.success) {
+        // Mostrar mensaje de éxito y limpiar formulario
+        alert(`✅ Usuario creado exitosamente: ${email}\nContraseña temporal: 000000\n\nSe ha enviado un email de bienvenida.`);
+        
+        // Limpiar el formulario
+        setNombre("");
+        setApellidos("");
+        setEmail("");
+        setPass("000000");
+        setNacimiento("");
+        setTelefono("");
+        
+        // Volver a la página anterior o cerrar modal si hay callback
+        if (onBackToLogin) {
+          onBackToLogin();
+        }
+      }
     } catch (err) {
       console.error("[REGISTER] error:", err);
       setError(friendlyError(err));

@@ -1,18 +1,23 @@
-const functions = require("firebase-functions");
-const admin = require("firebase-admin");
+const {onDocumentCreated} = require("firebase-functions/v2/firestore");
+const {onCall} = require("firebase-functions/v2/https");
+const {initializeApp} = require("firebase-admin/app");
+const {getFirestore} = require("firebase-admin/firestore");
+const {getAuth} = require("firebase-admin/auth");
 
-admin.initializeApp();
+initializeApp();
 
 /**
  * Cloud Function que se dispara cuando se crea un nuevo documento en users/
  * Envía un email de bienvenida con las credenciales y link a la app
  */
-exports.sendWelcomeEmail = functions
-  .region("europe-west1")
-  .firestore.document("users/{userId}")
-  .onCreate(async (snap, context) => {
+exports.sendWelcomeEmail = onDocumentCreated("users/{userId}", async (event) => {
+    const snap = event.data;
+    if (!snap) {
+      console.log("No data associated with the event");
+      return;
+    }
     const userData = snap.data();
-    const userId = context.params.userId;
+    const userId = event.params.userId;
 
     // Solo enviar email si es un usuario nuevo (no admin)
     const email = userData.email;
@@ -31,8 +36,9 @@ exports.sendWelcomeEmail = functions
     // Construir el email
     const emailData = {
       to: email,
-      subject: "Bienvenido a Ruiz Nutrición - Acceso a tu cuenta",
-      html: `
+      message: {
+        subject: "Bienvenido a Ruiz Nutrición - Acceso a tu cuenta",
+        html: `
         <!DOCTYPE html>
         <html>
         <head>
@@ -117,7 +123,7 @@ exports.sendWelcomeEmail = functions
             <div class="credentials">
               <h3 style="margin-top: 0; color: #15803d;">📧 Tus credenciales de acceso</h3>
               <p style="margin: 10px 0;"><strong>Usuario:</strong> ${email}</p>
-              <p style="margin: 10px 0;"><strong>Contraseña temporal:</strong> Tu nutricionista te la proporcionará</p>
+              <p style="margin: 10px 0;"><strong>Contraseña temporal:</strong> 000000</p>
             </div>
 
             <div style="text-align: center;">
@@ -150,15 +156,15 @@ exports.sendWelcomeEmail = functions
           </div>
         </body>
         </html>
-      `,
-      text: `
+        `,
+        text: `
 Hola ${nombreCompleto},
 
 Tu cuenta en Ruiz Nutrición ha sido creada exitosamente.
 
 CREDENCIALES DE ACCESO:
 - Usuario: ${email}
-- Contraseña temporal: Solicítala a tu nutricionista
+- Contraseña temporal: 000000
 
 IMPORTANTE: En tu primer inicio de sesión deberás cambiar tu contraseña temporal por seguridad.
 
@@ -172,21 +178,82 @@ Si tienes dudas, contacta con tu nutricionista.
 
 ¡Bienvenido!
 Ruiz Nutrición
-      `.trim(),
+        `.trim(),
+      },
     };
 
     try {
       // Guardar el email en una colección para procesarlo
       // (Puedes usar Firebase Extensions "Trigger Email" o tu propio servicio SMTP)
-      await admin.firestore().collection("mail").add({
+      const db = getFirestore();
+      await db.collection("mail").add({
         ...emailData,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: new Date(),
       });
 
       console.log(`Welcome email queued for ${email}`);
-      return null;
     } catch (error) {
       console.error("Error sending welcome email:", error);
-      return null;
     }
-  });
+});
+
+/**
+ * Cloud Function callable para crear usuarios sin autenticarse
+ * Solo accesible por administradores
+ */
+exports.createUser = onCall(async (request) => {
+  // Verificar que el usuario está autenticado
+  if (!request.auth) {
+    throw new Error("No autenticado");
+  }
+
+  // Verificar que es admin (por email o custom claim)
+  const adminEmails = ["admin@admin.es"];
+  const isAdmin = request.auth.token.admin === true || 
+                  adminEmails.includes(request.auth.token.email?.toLowerCase());
+
+  if (!isAdmin) {
+    throw new Error("Permisos insuficientes");
+  }
+
+  const { email, password, nombre, apellidos, nacimiento, telefono } = request.data;
+
+  if (!email || !password) {
+    throw new Error("Email y contraseña son requeridos");
+  }
+
+  try {
+    // Crear usuario en Firebase Auth sin autenticarlo
+    const userRecord = await getAuth().createUser({
+      email: email.trim(),
+      password: password,
+      displayName: `${nombre || ""} ${apellidos || ""}`.trim() || undefined,
+    });
+
+    // Crear documento en Firestore
+    const db = getFirestore();
+    await db.collection("users").doc(userRecord.uid).set({
+      nombre: nombre || "",
+      apellidos: apellidos || "",
+      email: email.trim(),
+      nacimiento: nacimiento || "",
+      telefono: telefono || "",
+      createdAt: new Date(),
+      pesoActual: null,
+      pesoHistorico: [],
+      medidas: {},
+      ejercicios: false,
+      recetas: false,
+      mustChangePassword: true,
+    });
+
+    return {
+      success: true,
+      uid: userRecord.uid,
+      email: userRecord.email,
+    };
+  } catch (error) {
+    console.error("Error creating user:", error);
+    throw new Error(`Error al crear usuario: ${error.message}`);
+  }
+});

@@ -1,0 +1,11 @@
+{
+  "projects": {},
+  "targets": {},
+  "etags": {
+    "nutricionapp-b7b7d": {
+      "extensionInstances": {
+        "firestore-send-email": "5a5fc76778eafbad9525b3abaf30be92331544a5026319383c40b3761b25cbd7"
+      }
+    }
+  }
+}

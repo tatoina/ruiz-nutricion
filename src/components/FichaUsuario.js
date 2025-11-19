@@ -1318,26 +1318,133 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       </div>
 
       {showPrintDialog && (
-        <div className="print-modal-backdrop" role="dialog" aria-modal="true">
-          <div className="print-modal">
-            <h3>Generar PDF</h3>
-            <p style={{ marginTop: 6, color: "#374151" }}>Elige qué deseas incluir en el PDF:</p>
+        <div className="print-modal-backdrop" role="dialog" aria-modal="true" onClick={() => setShowPrintDialog(false)}>
+          <div className="print-modal" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h3 style={{ margin: 0, fontSize: "20px", color: "#064e3b", fontWeight: "600" }}>📄 Generar PDF</h3>
+              <button 
+                onClick={() => setShowPrintDialog(false)}
+                style={{ 
+                  background: "transparent", 
+                  border: "none", 
+                  cursor: "pointer", 
+                  padding: "4px",
+                  color: "#64748b",
+                  display: "flex",
+                  alignItems: "center"
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+            
+            <p style={{ marginBottom: "20px", color: "#64748b", fontSize: "14px" }}>Selecciona qué contenido deseas incluir en el documento PDF:</p>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
-              <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <input type="checkbox" checked={printOptions.dietaMensual} onChange={(e) => setPrintOptions((s) => ({ ...s, dietaMensual: e.target.checked }))} />
-                Dieta semanal (plantilla)
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <label 
+                style={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  gap: "12px",
+                  padding: "14px 16px",
+                  background: printOptions.dietaMensual ? "rgba(22,163,74,0.08)" : "#f8fafc",
+                  border: `2px solid ${printOptions.dietaMensual ? "#16a34a" : "#e2e8f0"}`,
+                  borderRadius: "10px",
+                  cursor: "pointer",
+                  transition: "all 0.2s"
+                }}
+                onMouseEnter={(e) => {
+                  if (!printOptions.dietaMensual) {
+                    e.currentTarget.style.borderColor = "#cbd5e1";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!printOptions.dietaMensual) {
+                    e.currentTarget.style.borderColor = "#e2e8f0";
+                  }
+                }}
+              >
+                <input 
+                  type="checkbox" 
+                  checked={printOptions.dietaMensual} 
+                  onChange={(e) => setPrintOptions((s) => ({ ...s, dietaMensual: e.target.checked }))}
+                  style={{ 
+                    width: "20px", 
+                    height: "20px", 
+                    cursor: "pointer",
+                    accentColor: "#16a34a"
+                  }}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: "600", color: "#0f172a", fontSize: "15px", marginBottom: "2px" }}>📋 Dieta Semanal</div>
+                  <div style={{ fontSize: "13px", color: "#64748b" }}>Incluye el menú semanal completo con todas las comidas</div>
+                </div>
               </label>
 
-              <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 4 }}>
-                <input type="checkbox" checked={printOptions.datosPesaje} onChange={(e) => setPrintOptions((s) => ({ ...s, datosPesaje: e.target.checked }))} />
-                Datos de pesaje (histórico + gráfico)
+              <label 
+                style={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  gap: "12px",
+                  padding: "14px 16px",
+                  background: printOptions.datosPesaje ? "rgba(22,163,74,0.08)" : "#f8fafc",
+                  border: `2px solid ${printOptions.datosPesaje ? "#16a34a" : "#e2e8f0"}`,
+                  borderRadius: "10px",
+                  cursor: "pointer",
+                  transition: "all 0.2s"
+                }}
+                onMouseEnter={(e) => {
+                  if (!printOptions.datosPesaje) {
+                    e.currentTarget.style.borderColor = "#cbd5e1";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!printOptions.datosPesaje) {
+                    e.currentTarget.style.borderColor = "#e2e8f0";
+                  }
+                }}
+              >
+                <input 
+                  type="checkbox" 
+                  checked={printOptions.datosPesaje} 
+                  onChange={(e) => setPrintOptions((s) => ({ ...s, datosPesaje: e.target.checked }))}
+                  style={{ 
+                    width: "20px", 
+                    height: "20px", 
+                    cursor: "pointer",
+                    accentColor: "#16a34a"
+                  }}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: "600", color: "#0f172a", fontSize: "15px", marginBottom: "2px" }}>⚖️ Datos de Pesaje</div>
+                  <div style={{ fontSize: "13px", color: "#64748b" }}>Histórico de medidas, composición corporal y gráfico de evolución</div>
+                </div>
               </label>
             </div>
 
-            <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "flex-end" }}>
-              <button className="btn ghost" onClick={() => setShowPrintDialog(false)}>Cancelar</button>
-              <button className="btn primary" onClick={handlePrint} disabled={!printOptions.dietaMensual && !printOptions.datosPesaje}>Generar PDF</button>
+            <div style={{ display: "flex", gap: "10px", marginTop: "24px", justifyContent: "flex-end" }}>
+              <button 
+                className="btn ghost" 
+                onClick={() => setShowPrintDialog(false)}
+                style={{ padding: "10px 20px" }}
+              >
+                Cancelar
+              </button>
+              <button 
+                className="btn primary" 
+                onClick={handlePrint} 
+                disabled={!printOptions.dietaMensual && !printOptions.datosPesaje}
+                style={{ 
+                  padding: "10px 24px",
+                  opacity: (!printOptions.dietaMensual && !printOptions.datosPesaje) ? 0.5 : 1,
+                  cursor: (!printOptions.dietaMensual && !printOptions.datosPesaje) ? "not-allowed" : "pointer"
+                }}
+              >
+                📥 Generar PDF
+              </button>
             </div>
           </div>
         </div>

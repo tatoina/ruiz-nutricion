@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { auth, db } from "../Firebase";
 import { onAuthStateChanged, signOut, getIdTokenResult } from "firebase/auth";
-import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, doc, deleteDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import FichaUsuario from "./FichaUsuario";
 
@@ -231,6 +231,37 @@ export default function AdminUsers() {
     return (u.apellidos || "").toLowerCase().includes(s) || (u.nombre || "").toLowerCase().includes(s) || (u.email || "").toLowerCase().includes(s);
   });
 
+  // Función para eliminar usuario
+  const handleDeleteUser = async (userId, userName, userEmail, e) => {
+    e.stopPropagation(); // Evitar que se seleccione el usuario al hacer clic en eliminar
+    
+    const confirmMsg = `¿Estás seguro de que quieres eliminar definitivamente al usuario?\n\n${userName}\n${userEmail}\n\n⚠️ Esta acción no se puede deshacer.`;
+    
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+
+    try {
+      // Eliminar documento de Firestore
+      await deleteDoc(doc(db, "users", userId));
+      
+      // Actualizar la lista local
+      setUsers((prevUsers) => {
+        const newUsers = prevUsers.filter((u) => u.id !== userId);
+        // Ajustar el índice seleccionado si es necesario
+        if (selectedIndex >= newUsers.length) {
+          setSelectedIndex(Math.max(0, newUsers.length - 1));
+        }
+        return newUsers;
+      });
+      
+      alert(`✅ Usuario eliminado: ${userName}`);
+    } catch (err) {
+      console.error("Error al eliminar usuario:", err);
+      alert(`❌ Error al eliminar usuario: ${err.message}`);
+    }
+  };
+
   if (!currentUser) {
     return (
       <div className="layout admin-fullscreen">
@@ -322,11 +353,44 @@ export default function AdminUsers() {
                         }}
                         onClick={() => setSelectedIndex(i)}
                       >
-                        <div style={{ display: "flex", flexDirection: "column" }}>
+                        <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
                           <strong style={{ fontSize: 14 }}>{`${(u.apellidos || "").trim()} ${(u.nombre || "").trim()}`.trim() || u.email}</strong>
                           <small style={{ color: "#666" }}>{u.email}</small>
                         </div>
-                        <div style={{ fontSize: 12, color: "#666" }}>{u.pesoActual ? `${u.pesoActual} kg` : ""}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <div style={{ fontSize: 12, color: "#666" }}>{u.pesoActual ? `${u.pesoActual} kg` : ""}</div>
+                          <button
+                            onClick={(e) => handleDeleteUser(u.id, `${(u.apellidos || "").trim()} ${(u.nombre || "").trim()}`.trim() || u.email, u.email, e)}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              cursor: "pointer",
+                              padding: "4px 8px",
+                              borderRadius: "4px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              transition: "all 0.2s",
+                              color: "#dc2626",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = "rgba(220, 38, 38, 0.1)";
+                              e.currentTarget.style.transform = "scale(1.1)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = "transparent";
+                              e.currentTarget.style.transform = "scale(1)";
+                            }}
+                            title="Eliminar usuario"
+                          >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                              <line x1="10" y1="11" x2="10" y2="17"></line>
+                              <line x1="14" y1="11" x2="14" y2="17"></line>
+                            </svg>
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
