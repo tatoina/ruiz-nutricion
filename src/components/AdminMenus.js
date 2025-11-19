@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { db } from "../Firebase";
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
 
@@ -11,6 +12,7 @@ const CATEGORIAS = [
 ];
 
 export default function AdminMenus() {
+  const navigate = useNavigate();
   const [categoriaActiva, setCategoriaActiva] = useState("desayuno");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -114,17 +116,48 @@ export default function AdminMenus() {
           marginBottom: "24px",
           boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
         }}>
-          <h1 style={{ 
-            margin: "0 0 8px 0", 
-            fontSize: "28px", 
-            fontWeight: "700", 
-            color: "#15803d" 
-          }}>
-            📋 Gestión de Menús
-          </h1>
-          <p style={{ margin: 0, color: "#64748b", fontSize: "14px" }}>
-            Administra los productos disponibles para cada categoría de comida
-          </p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <h1 style={{ 
+                margin: "0 0 8px 0", 
+                fontSize: "28px", 
+                fontWeight: "700", 
+                color: "#15803d" 
+              }}>
+                📋 Gestión de Menús
+              </h1>
+              <p style={{ margin: 0, color: "#64748b", fontSize: "14px" }}>
+                Administra los productos disponibles para cada categoría de comida
+              </p>
+            </div>
+            <button
+              onClick={() => navigate("/admin")}
+              style={{
+                padding: "10px 20px",
+                borderRadius: "8px",
+                border: "2px solid #16a34a",
+                background: "white",
+                color: "#16a34a",
+                fontWeight: "600",
+                fontSize: "15px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                transition: "all 0.2s"
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.background = "#16a34a";
+                e.target.style.color = "white";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = "white";
+                e.target.style.color = "#16a34a";
+              }}
+            >
+              ← Volver
+            </button>
+          </div>
         </div>
 
         {/* Selector de categorías */}
