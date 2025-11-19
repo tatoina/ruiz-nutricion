@@ -27,6 +27,7 @@ import { Line } from "react-chartjs-2";
 import DriveFolderViewer from "./DriveFolderViewer";
 import AnamnesisForm from "./AnamnesisForm";
 import FileManager from "./FileManager";
+import MenuSelector from "./MenuSelector";
 ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Title, Tooltip, Legend);
 
 /**
@@ -2016,24 +2017,33 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                       {ALL_SECTIONS.map((sec) => (
                         <div key={sec.key} className="weekly-field">
                           <label>{sec.label}</label>
-                          <textarea 
-                            className="input weekly-textarea" 
-                            rows={3} 
-                            value={(Array.isArray(editable.menu) && editable.menu[selDay] ? editable.menu[selDay][sec.key] : "") || ""} 
-                            onChange={(e) => { 
-                              if (!adminMode) return;
-                              setMenuField(selDay, sec.key, e.target.value); 
-                              const ta = e.target; 
-                              ta.style.height = "auto"; 
-                              ta.style.height = Math.max(72, ta.scrollHeight + 2) + "px"; 
-                            }} 
-                            placeholder={sec.key === "consejos" ? "Consejos o notas..." : ""} 
-                            readOnly={!adminMode}
-                            style={{
-                              cursor: adminMode ? "text" : "default",
-                              backgroundColor: adminMode ? "white" : "#f8fafc"
-                            }}
-                          />
+                          {sec.key === "consejos" ? (
+                            <textarea 
+                              className="input weekly-textarea" 
+                              rows={3} 
+                              value={(Array.isArray(editable.menu) && editable.menu[selDay] ? editable.menu[selDay][sec.key] : "") || ""} 
+                              onChange={(e) => { 
+                                if (!adminMode) return;
+                                setMenuField(selDay, sec.key, e.target.value); 
+                                const ta = e.target; 
+                                ta.style.height = "auto"; 
+                                ta.style.height = Math.max(72, ta.scrollHeight + 2) + "px"; 
+                              }} 
+                              placeholder="Consejos o notas..." 
+                              readOnly={!adminMode}
+                              style={{
+                                cursor: adminMode ? "text" : "default",
+                                backgroundColor: adminMode ? "white" : "#f8fafc"
+                              }}
+                            />
+                          ) : (
+                            <MenuSelector
+                              categoria={sec.key}
+                              value={(Array.isArray(editable.menu) && editable.menu[selDay] ? editable.menu[selDay][sec.key] : "") || ""}
+                              onChange={(val) => setMenuField(selDay, sec.key, val)}
+                              readOnly={!adminMode}
+                            />
+                          )}
                         </div>
                       ))}
                     </div>

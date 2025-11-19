@@ -27,6 +27,12 @@ service cloud.firestore {
       allow list: if isAdmin();
     }
     
+    // Colección de items de menú - solo admins pueden gestionar
+    match /menuItems/{categoria}/items/{itemId} {
+      allow read: if request.auth != null; // Todos los autenticados pueden leer
+      allow write: if isAdmin(); // Solo admins pueden escribir
+    }
+    
     // Otras colecciones
     match /{document=**} {
       allow read, write: if isAdmin();

@@ -3,6 +3,7 @@ import React, { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import AdminUsers from "./components/AdminUsers";
 import AdminAgenda from "./components/AdminAgenda";
+import AdminMenus from "./components/AdminMenus";
 import FichaUsuario from "./components/FichaUsuario";
 import Login from "./components/Login";
 import Register from "./components/Register";
@@ -106,6 +107,15 @@ export default function App() {
           element={
             <PrivateRoute>
               <AdminAgenda />
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/admin/menus"
+          element={
+            <PrivateRoute>
+              <AdminMenus />
             </PrivateRoute>
           }
         />
