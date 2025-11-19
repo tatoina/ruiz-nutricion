@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import "./estilos.css";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../Firebase";
+import { signInWithEmailAndPassword, updatePassword } from "firebase/auth";
+import { auth, db } from "../Firebase";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import logo from "../assets/logo.png";
 import pkg from "../../package.json";
 import { useNavigate } from "react-router-dom";
@@ -35,6 +36,15 @@ export default function Login({ onLogin /* onShowRegister no usado ahora */ }) {
       const user = cred?.user;
       const normalizedEmail = String(user?.email || "").trim().toLowerCase();
       console.debug("[LOGIN] signIn success", { uid: user?.uid, email: user?.email, normalizedEmail });
+
+      // Verificar si debe cambiar la contraseña
+      if (normalizedEmail !== "admin@admin.es") {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists() && userDoc.data().mustChangePassword) {
+          navigate("/cambiar-password", { state: { firstLogin: true } });
+          return;
+        }
+      }
 
       if (onLogin && typeof onLogin === "function") {
         try {

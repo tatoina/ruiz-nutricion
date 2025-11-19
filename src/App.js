@@ -7,6 +7,7 @@ import AdminMenus from "./components/AdminMenus";
 import FichaUsuario from "./components/FichaUsuario";
 import Login from "./components/Login";
 import Register from "./components/Register";
+import ChangePassword from "./components/ChangePassword";
 import PrivateRoute from "./components/PrivateRoute";
 import { auth } from "./Firebase";
 import { onAuthStateChanged } from "firebase/auth";
@@ -116,6 +117,15 @@ export default function App() {
           element={
             <PrivateRoute>
               <AdminMenus />
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/cambiar-password"
+          element={
+            <PrivateRoute>
+              <ChangePassword />
             </PrivateRoute>
           }
         />

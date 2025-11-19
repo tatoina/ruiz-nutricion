@@ -102,6 +102,7 @@ export default function Register({ onBackToLogin }) {
         medidas: {},
         ejercicios: false,
         recetas: false,
+        mustChangePassword: true,
       });
 
       // Al registrarse el usuario queda autenticado. Redirigimos a su ficha.
