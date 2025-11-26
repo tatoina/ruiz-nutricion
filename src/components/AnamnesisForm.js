@@ -1,8 +1,12 @@
 import React, { useState } from "react";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../Firebase";
+import { useNavigate } from "react-router-dom";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { storage } from "../Firebase";
 
 export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     // DATOS LABORALES
     dedicacion: user.anamnesis?.dedicacion || "",
@@ -91,6 +95,9 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
     // ELIGE TU PLAN
     eligePlan: user.anamnesis?.eligePlan || "",
     
+    // TIPO DE DIETA
+    tipoDieta: user.anamnesis?.tipoDieta || "",
+    
     // OTROS
     motivoConfianza: user.anamnesis?.motivoConfianza || "",
     otrasConsultas: user.anamnesis?.otrasConsultas || "",
@@ -99,6 +106,15 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
 
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
+  const [imageMenuBasico, setImageMenuBasico] = useState(user.anamnesis?.imageMenuBasico || "");
+  const [imageMenuTips, setImageMenuTips] = useState(user.anamnesis?.imageMenuTips || "");
+  const [imagePlanBasico, setImagePlanBasico] = useState(user.anamnesis?.imagePlanBasico || "");
+  const [imagePlanEjercicios, setImagePlanEjercicios] = useState(user.anamnesis?.imagePlanEjercicios || "");
+  const [uploadingBasico, setUploadingBasico] = useState(false);
+  const [uploadingTips, setUploadingTips] = useState(false);
+  const [uploadingPlanBasico, setUploadingPlanBasico] = useState(false);
+  const [uploadingPlanEjercicios, setUploadingPlanEjercicios] = useState(false);
+  const [modalImage, setModalImage] = useState(null);
 
   // Estilos comunes
   const sectionStyle = { backgroundColor: "#f7fafc", padding: "24px", borderRadius: "8px" };
@@ -110,6 +126,73 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleImageUpload = async (e, tipo) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validar que sea una imagen
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor selecciona un archivo de imagen');
+      return;
+    }
+
+    try {
+      // Set uploading state
+      if (tipo === 'basico') {
+        setUploadingBasico(true);
+      } else if (tipo === 'tips') {
+        setUploadingTips(true);
+      } else if (tipo === 'plan-basico') {
+        setUploadingPlanBasico(true);
+      } else if (tipo === 'plan-ejercicios') {
+        setUploadingPlanEjercicios(true);
+      }
+
+      // Subir imagen a Firebase Storage
+      const storageRef = ref(storage, `menu-images/${user.uid}/${tipo}_${Date.now()}_${file.name}`);
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+
+      // Actualizar estado y Firestore
+      if (tipo === 'basico') {
+        setImageMenuBasico(downloadURL);
+        await updateDoc(doc(db, "users", user.uid), {
+          'anamnesis.imageMenuBasico': downloadURL
+        });
+      } else if (tipo === 'tips') {
+        setImageMenuTips(downloadURL);
+        await updateDoc(doc(db, "users", user.uid), {
+          'anamnesis.imageMenuTips': downloadURL
+        });
+      } else if (tipo === 'plan-basico') {
+        setImagePlanBasico(downloadURL);
+        await updateDoc(doc(db, "users", user.uid), {
+          'anamnesis.imagePlanBasico': downloadURL
+        });
+      } else if (tipo === 'plan-ejercicios') {
+        setImagePlanEjercicios(downloadURL);
+        await updateDoc(doc(db, "users", user.uid), {
+          'anamnesis.imagePlanEjercicios': downloadURL
+        });
+      }
+
+      alert('✅ Imagen subida correctamente');
+    } catch (error) {
+      console.error('Error al subir imagen:', error);
+      alert('❌ Error al subir la imagen');
+    } finally {
+      if (tipo === 'basico') {
+        setUploadingBasico(false);
+      } else if (tipo === 'tips') {
+        setUploadingTips(false);
+      } else if (tipo === 'plan-basico') {
+        setUploadingPlanBasico(false);
+      } else if (tipo === 'plan-ejercicios') {
+        setUploadingPlanEjercicios(false);
+      }
+    }
   };
 
   const handleSave = async () => {
@@ -992,14 +1075,321 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
             ELIGE TU PLAN
           </h3>
           <div>
-            <textarea
+            <label style={labelStyle}>
+              Tipo de plan:
+            </label>
+            <select
               name="eligePlan"
               value={formData.eligePlan}
               onChange={handleChange}
-              rows="3"
-              placeholder="Detalles del plan elegido por el paciente..."
               style={inputStyle}
-            />
+            >
+              <option value="">Seleccionar...</option>
+              <option value="Basico">Básico</option>
+              <option value="Basico + Ejercicios">Básico + Ejercicios</option>
+            </select>
+            
+            {/* Sección de imágenes de planes */}
+            <div style={{ marginTop: "25px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+              
+              {/* Plan Básico */}
+              <div style={{ padding: "15px", backgroundColor: "#fff", borderRadius: "8px", border: "2px solid " + (formData.eligePlan === "Basico" ? "#48bb78" : "#e2e8f0"), position: "relative" }}>
+                {formData.eligePlan === "Basico" && (
+                  <div style={{ position: "absolute", top: "10px", right: "10px", backgroundColor: "#48bb78", color: "white", borderRadius: "50%", width: "30px", height: "30px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", fontWeight: "bold" }}>
+                    ✓
+                  </div>
+                )}
+                <h4 style={{ fontSize: "14px", fontWeight: "600", color: "#2d3748", marginBottom: "12px" }}>
+                  Básico
+                </h4>
+                
+                {imagePlanBasico ? (
+                  <div style={{ marginBottom: "12px", cursor: "pointer" }} onClick={() => setModalImage(imagePlanBasico)}>
+                    <img 
+                      src={imagePlanBasico} 
+                      alt="Plan básico" 
+                      style={{ width: "100%", height: "auto", borderRadius: "4px", border: "1px solid #e2e8f0", transition: "opacity 0.2s" }}
+                      onMouseOver={(e) => e.target.style.opacity = "0.8"}
+                      onMouseOut={(e) => e.target.style.opacity = "1"}
+                    />
+                  </div>
+                ) : (
+                  <div style={{ 
+                    minHeight: "150px", 
+                    backgroundColor: "#f7fafc", 
+                    borderRadius: "4px", 
+                    display: "flex", 
+                    alignItems: "center", 
+                    justifyContent: "center",
+                    marginBottom: "12px",
+                    border: "1px dashed #cbd5e0"
+                  }}>
+                    <p style={{ color: "#a0aec0", fontSize: "12px", textAlign: "center" }}>
+                      Sin imagen
+                    </p>
+                  </div>
+                )}
+                
+                {isAdmin && (
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleImageUpload(e, 'plan-basico')}
+                      style={{ display: "none" }}
+                      id="upload-plan-basico"
+                      disabled={uploadingPlanBasico}
+                    />
+                    <label
+                      htmlFor="upload-plan-basico"
+                      style={{
+                        display: "block",
+                        padding: "8px 12px",
+                        backgroundColor: uploadingPlanBasico ? "#cbd5e0" : "#48bb78",
+                        color: "white",
+                        borderRadius: "4px",
+                        textAlign: "center",
+                        cursor: uploadingPlanBasico ? "not-allowed" : "pointer",
+                        fontSize: "13px",
+                        fontWeight: "500"
+                      }}
+                    >
+                      {uploadingPlanBasico ? "Subiendo..." : "📤 Subir imagen"}
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* Plan Básico + Ejercicios */}
+              <div style={{ padding: "15px", backgroundColor: "#fff", borderRadius: "8px", border: "2px solid " + (formData.eligePlan === "Basico + Ejercicios" ? "#48bb78" : "#e2e8f0"), position: "relative" }}>
+                {formData.eligePlan === "Basico + Ejercicios" && (
+                  <div style={{ position: "absolute", top: "10px", right: "10px", backgroundColor: "#48bb78", color: "white", borderRadius: "50%", width: "30px", height: "30px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", fontWeight: "bold" }}>
+                    ✓
+                  </div>
+                )}
+                <h4 style={{ fontSize: "14px", fontWeight: "600", color: "#2d3748", marginBottom: "12px" }}>
+                  Básico + Ejercicios
+                </h4>
+                
+                {imagePlanEjercicios ? (
+                  <div style={{ marginBottom: "12px", cursor: "pointer" }} onClick={() => setModalImage(imagePlanEjercicios)}>
+                    <img 
+                      src={imagePlanEjercicios} 
+                      alt="Plan con ejercicios" 
+                      style={{ width: "100%", height: "auto", borderRadius: "4px", border: "1px solid #e2e8f0", transition: "opacity 0.2s" }}
+                      onMouseOver={(e) => e.target.style.opacity = "0.8"}
+                      onMouseOut={(e) => e.target.style.opacity = "1"}
+                    />
+                  </div>
+                ) : (
+                  <div style={{ 
+                    minHeight: "150px", 
+                    backgroundColor: "#f7fafc", 
+                    borderRadius: "4px", 
+                    display: "flex", 
+                    alignItems: "center", 
+                    justifyContent: "center",
+                    marginBottom: "12px",
+                    border: "1px dashed #cbd5e0"
+                  }}>
+                    <p style={{ color: "#a0aec0", fontSize: "12px", textAlign: "center" }}>
+                      Sin imagen
+                    </p>
+                  </div>
+                )}
+                
+                {isAdmin && (
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleImageUpload(e, 'plan-ejercicios')}
+                      style={{ display: "none" }}
+                      id="upload-plan-ejercicios"
+                      disabled={uploadingPlanEjercicios}
+                    />
+                    <label
+                      htmlFor="upload-plan-ejercicios"
+                      style={{
+                        display: "block",
+                        padding: "8px 12px",
+                        backgroundColor: uploadingPlanEjercicios ? "#cbd5e0" : "#48bb78",
+                        color: "white",
+                        borderRadius: "4px",
+                        textAlign: "center",
+                        cursor: uploadingPlanEjercicios ? "not-allowed" : "pointer",
+                        fontSize: "13px",
+                        fontWeight: "500"
+                      }}
+                    >
+                      {uploadingPlanEjercicios ? "Subiendo..." : "📤 Subir imagen"}
+                    </label>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* TIPO DE DIETA */}
+        <section style={sectionStyle}>
+          <h3 style={titleStyle}>
+            TIPO DE DIETA
+          </h3>
+          <div>
+            <label style={labelStyle}>
+              Tipo de menú:
+            </label>
+            <select
+              name="tipoDieta"
+              value={formData.tipoDieta}
+              onChange={handleChange}
+              style={inputStyle}
+            >
+              <option value="">Seleccionar...</option>
+              <option value="Menu basico sencillo completo">Menú básico sencillo completo</option>
+              <option value="Solo menu con tips">Solo menú con tips</option>
+            </select>
+            
+            {/* Sección de imágenes de menú */}
+            <div style={{ marginTop: "25px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+              
+              {/* Menú Básico Sencillo Completo */}
+              <div style={{ padding: "15px", backgroundColor: "#fff", borderRadius: "8px", border: "2px solid " + (formData.tipoDieta === "Menu basico sencillo completo" ? "#4299e1" : "#e2e8f0"), position: "relative" }}>
+                {formData.tipoDieta === "Menu basico sencillo completo" && (
+                  <div style={{ position: "absolute", top: "10px", right: "10px", backgroundColor: "#4299e1", color: "white", borderRadius: "50%", width: "30px", height: "30px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", fontWeight: "bold" }}>
+                    ✓
+                  </div>
+                )}
+                <h4 style={{ fontSize: "14px", fontWeight: "600", color: "#2d3748", marginBottom: "12px" }}>
+                  Menú básico sencillo completo
+                </h4>
+                
+                {imageMenuBasico ? (
+                  <div style={{ marginBottom: "12px", cursor: "pointer" }} onClick={() => setModalImage(imageMenuBasico)}>
+                    <img 
+                      src={imageMenuBasico} 
+                      alt="Menú básico" 
+                      style={{ width: "100%", height: "auto", borderRadius: "4px", border: "1px solid #e2e8f0", transition: "opacity 0.2s" }}
+                      onMouseOver={(e) => e.target.style.opacity = "0.8"}
+                      onMouseOut={(e) => e.target.style.opacity = "1"}
+                    />
+                  </div>
+                ) : (
+                  <div style={{ 
+                    minHeight: "150px", 
+                    backgroundColor: "#f7fafc", 
+                    borderRadius: "4px", 
+                    display: "flex", 
+                    alignItems: "center", 
+                    justifyContent: "center",
+                    marginBottom: "12px",
+                    border: "1px dashed #cbd5e0"
+                  }}>
+                    <p style={{ color: "#a0aec0", fontSize: "12px", textAlign: "center" }}>
+                      Sin imagen
+                    </p>
+                  </div>
+                )}
+                
+                {isAdmin && (
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleImageUpload(e, 'basico')}
+                      style={{ display: "none" }}
+                      id="upload-basico"
+                      disabled={uploadingBasico}
+                    />
+                    <label
+                      htmlFor="upload-basico"
+                      style={{
+                        display: "block",
+                        padding: "8px 12px",
+                        backgroundColor: uploadingBasico ? "#cbd5e0" : "#4299e1",
+                        color: "white",
+                        borderRadius: "4px",
+                        textAlign: "center",
+                        cursor: uploadingBasico ? "not-allowed" : "pointer",
+                        fontSize: "13px",
+                        fontWeight: "500"
+                      }}
+                    >
+                      {uploadingBasico ? "Subiendo..." : "📤 Subir imagen"}
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* Solo Menú con Tips */}
+              <div style={{ padding: "15px", backgroundColor: "#fff", borderRadius: "8px", border: "2px solid " + (formData.tipoDieta === "Solo menu con tips" ? "#4299e1" : "#e2e8f0"), position: "relative" }}>
+                {formData.tipoDieta === "Solo menu con tips" && (
+                  <div style={{ position: "absolute", top: "10px", right: "10px", backgroundColor: "#4299e1", color: "white", borderRadius: "50%", width: "30px", height: "30px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px", fontWeight: "bold" }}>
+                    ✓
+                  </div>
+                )}
+                <h4 style={{ fontSize: "14px", fontWeight: "600", color: "#2d3748", marginBottom: "12px" }}>
+                  Solo menú con tips
+                </h4>
+                
+                {imageMenuTips ? (
+                  <div style={{ marginBottom: "12px", cursor: "pointer" }} onClick={() => setModalImage(imageMenuTips)}>
+                    <img 
+                      src={imageMenuTips} 
+                      alt="Menú con tips" 
+                      style={{ width: "100%", height: "auto", borderRadius: "4px", border: "1px solid #e2e8f0", transition: "opacity 0.2s" }}
+                      onMouseOver={(e) => e.target.style.opacity = "0.8"}
+                      onMouseOut={(e) => e.target.style.opacity = "1"}
+                    />
+                  </div>
+                ) : (
+                  <div style={{ 
+                    minHeight: "150px", 
+                    backgroundColor: "#f7fafc", 
+                    borderRadius: "4px", 
+                    display: "flex", 
+                    alignItems: "center", 
+                    justifyContent: "center",
+                    marginBottom: "12px",
+                    border: "1px dashed #cbd5e0"
+                  }}>
+                    <p style={{ color: "#a0aec0", fontSize: "12px", textAlign: "center" }}>
+                      Sin imagen
+                    </p>
+                  </div>
+                )}
+                
+                {isAdmin && (
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleImageUpload(e, 'tips')}
+                      style={{ display: "none" }}
+                      id="upload-tips"
+                      disabled={uploadingTips}
+                    />
+                    <label
+                      htmlFor="upload-tips"
+                      style={{
+                        display: "block",
+                        padding: "8px 12px",
+                        backgroundColor: uploadingTips ? "#cbd5e0" : "#4299e1",
+                        color: "white",
+                        borderRadius: "4px",
+                        textAlign: "center",
+                        cursor: uploadingTips ? "not-allowed" : "pointer",
+                        fontSize: "13px",
+                        fontWeight: "500"
+                      }}
+                    >
+                      {uploadingTips ? "Subiendo..." : "📤 Subir imagen"}
+                    </label>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -1049,6 +1439,61 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
           </div>
         </section>
       
+      {/* Modal para maximizar imagen */}
+      {modalImage && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.9)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            cursor: "pointer",
+            padding: "20px"
+          }}
+          onClick={() => setModalImage(null)}
+        >
+          <img
+            src={modalImage}
+            alt="Vista ampliada"
+            style={{
+              maxWidth: "95%",
+              maxHeight: "95%",
+              objectFit: "contain",
+              borderRadius: "8px"
+            }}
+          />
+          <button
+            style={{
+              position: "absolute",
+              top: "20px",
+              right: "20px",
+              backgroundColor: "#fff",
+              border: "none",
+              borderRadius: "50%",
+              width: "40px",
+              height: "40px",
+              fontSize: "24px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.3)"
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setModalImage(null);
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
     </div>
   );
 }

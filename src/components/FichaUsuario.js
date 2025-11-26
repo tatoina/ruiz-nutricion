@@ -52,7 +52,6 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     { id: "semana", label: "Dieta semanal" },
     { id: "calendario", label: "📅 Calendario" },
     { id: "ejercicios", label: "Ejercicios" },
-    { id: "recetas", label: "Recetas" },
   ];
   
   const tabs = adminMode 
@@ -121,11 +120,21 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
   const [histLimit, setHistLimit] = useState(10);
   const [expandedRowsStateLocal, setExpandedRowsStateLocal] = useState({});
+  const [transposeTable, setTransposeTable] = useState(false);
 
   // Estados para controlar secciones colapsables
   const [showFormulario, setShowFormulario] = useState(true);
   const [showHistorico, setShowHistorico] = useState(false);
   const [showGrafico, setShowGrafico] = useState(false);
+
+  // Estado para el orden de los campos de pesaje (solo para admin)
+  const [fieldsOrder, setFieldsOrder] = useState([
+    "peso", "masaGrasaPct", "masaGrasaKg", "aguaTotalPct", "aguaTotalKg",
+    "masaOseaKg", "masaMuscularKg", "masaMagraKg", "mbKcal", "grasaVisceralNivel",
+    "imc", "edadMetabolica", "circunferenciaBrazoCm", "circunferenciaCinturaCm",
+    "circunferenciaCaderaCm", "circunferenciaPiernaCm", "indiceCinturaTalla", "tensionArterial"
+  ]);
+  const [draggedIndex, setDraggedIndex] = useState(null);
 
   const todayIndex = (() => {
     const d = new Date();
@@ -193,33 +202,37 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           setError(`No hay ficha para este usuario (UID: ${uid}).`);
         } else {
           const data = snap.data();
+          
+          // Limpiar el campo peso antes de establecer userData
+          setPeso("");
           setUserData(data);
           setEditable((prev) => ({
             nombre: data.nombre || "", apellidos: data.apellidos || "", nacimiento: data.nacimiento || "",
             telefono: data.telefono || "", dietaactual: data.dietaactual || "", dietaOtros: data.dietaOtros || "",
-            restricciones: data.restricciones || "", ejercicios: !!data.ejercicios, recetas: !!data.recetas,
-            ejerciciosDescripcion: data.ejerciciosDescripcion || "", recetasDescripcion: data.recetasDescripcion || "",
+            restricciones: data.restricciones || "", ejercicios: !!data.ejercicios,
+            ejerciciosDescripcion: data.ejerciciosDescripcion || "",
             menu: normalizeMenu(data.menu),
             _selectedDay: typeof data._selectedDay === "number" ? data._selectedDay : todayIndex,
 
-            pesoActual: data.pesoActual ?? prev.pesoActual ?? "",
-            masaGrasaPct: data.masaGrasaPct ?? prev.masaGrasaPct ?? "",
-            masaGrasaKg: data.masaGrasaKg ?? prev.masaGrasaKg ?? "",
-            masaMagraKg: data.masaMagraKg ?? prev.masaMagraKg ?? "",
-            masaMuscularKg: data.masaMuscularKg ?? prev.masaMuscularKg ?? "",
-            aguaTotalKg: data.aguaTotalKg ?? prev.aguaTotalKg ?? "",
-            aguaTotalPct: data.aguaTotalPct ?? prev.aguaTotalPct ?? "",
-            masaOseaKg: data.masaOseaKg ?? prev.masaOseaKg ?? "",
-            mbKcal: data.mbKcal ?? prev.mbKcal ?? "", grasaVisceralNivel: data.grasaVisceralNivel ?? prev.grasaVisceralNivel ?? "",
-            imc: data.imc ?? prev.imc ?? "", edadMetabolica: data.edadMetabolica ?? prev.edadMetabolica ?? "",
-            indiceCinturaTalla: data.indiceCinturaTalla ?? prev.indiceCinturaTalla ?? "",
-            circunferenciaBrazoCm: data.circunferenciaBrazoCm ?? prev.circunferenciaBrazoCm ?? "",
-            circunferenciaCinturaCm: data.circunferenciaCinturaCm ?? prev.circunferenciaCinturaCm ?? "",
-            circunferenciaCaderaCm: data.circunferenciaCaderaCm ?? prev.circunferenciaCaderaCm ?? "",
-            circunferenciaPiernaCm: data.circunferenciaPiernaCm ?? prev.circunferenciaPiernaCm ?? "",
-            tensionArterial: data.tensionArterial ?? prev.tensionArterial ?? { sys: "", dia: "" },
-            notas: data.notas ?? prev.notas ?? "",
-            ...prev,
+            // Los campos de pesaje siempre empiezan vacíos
+            masaGrasaPct: "",
+            masaGrasaKg: "",
+            masaMagraKg: "",
+            masaMuscularKg: "",
+            aguaTotalKg: "",
+            aguaTotalPct: "",
+            masaOseaKg: "",
+            mbKcal: "",
+            grasaVisceralNivel: "",
+            imc: "",
+            edadMetabolica: "",
+            indiceCinturaTalla: "",
+            circunferenciaBrazoCm: "",
+            circunferenciaCinturaCm: "",
+            circunferenciaCaderaCm: "",
+            circunferenciaPiernaCm: "",
+            tensionArterial: { sys: "", dia: "" },
+            notas: "",
           }));
           setError(null);
         }
@@ -326,8 +339,8 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       const payload = {
         nombre: editable.nombre || "", apellidos: editable.apellidos || "", nacimiento: editable.nacimiento || "",
         telefono: editable.telefono || "", dietaactual: editable.dietaactual || "", dietaOtros: editable.dietaOtros || "",
-        restricciones: editable.restricciones || "", ejercicios: !!editable.ejercicios, recetas: !!editable.recetas,
-        ejerciciosDescripcion: editable.ejerciciosDescripcion || "", recetasDescripcion: editable.recetasDescripcion || "",
+        restricciones: editable.restricciones || "", ejercicios: !!editable.ejercicios,
+        ejerciciosDescripcion: editable.ejerciciosDescripcion || "",
         updatedAt: serverTimestamp(),
       };
       await updateDoc(doc(db, "users", uid), payload);
@@ -562,44 +575,42 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       if (v !== null && v !== undefined) cleaned[k] = v;
     });
 
-    // Usar Date.now() en lugar de serverTimestamp() dentro de arrayUnion
-    const now = new Date();
-    const entryMedida = { ...cleaned, createdAt: now };
-    const entryPeso = { fecha: fechaPeso, peso: measuresPayload.pesoActual, createdAt: now };
-
+    // Leer los arrays existentes primero
     try {
-      await updateDoc(doc(db, "users", uid), {
-        ...cleaned,
-        medidasHistorico: arrayUnion(entryMedida),
-        pesoHistorico: arrayUnion(entryPeso),
+      const userDocRef = doc(db, "users", uid);
+      const userSnapshot = await getDoc(userDocRef);
+      
+      if (!userSnapshot.exists()) {
+        setError("Usuario no encontrado.");
+        setSavingPeso(false);
+        return;
+      }
+
+      const currentData = userSnapshot.data();
+      const existingMedidas = Array.isArray(currentData?.medidasHistorico) ? currentData.medidasHistorico : [];
+      const existingPeso = Array.isArray(currentData?.pesoHistorico) ? currentData.pesoHistorico : [];
+
+      // Crear nuevas entradas
+      const now = new Date();
+      const entryMedida = { ...cleaned, createdAt: now };
+      const entryPeso = { fecha: fechaPeso, peso: measuresPayload.pesoActual, createdAt: now };
+
+      // Agregar las nuevas entradas a los arrays existentes
+      const updatedMedidas = [...existingMedidas, entryMedida];
+      const updatedPeso = [...existingPeso, entryPeso];
+
+      // Actualizar con los arrays completos
+      await updateDoc(userDocRef, {
+        medidasHistorico: updatedMedidas,
+        pesoHistorico: updatedPeso,
         pesoActual: measuresPayload.pesoActual,
         updatedAt: serverTimestamp(),
       });
     } catch (err) {
-      console.error("[FichaUsuario] submitPeso update error:", err);
-      const notFoundCodes = ["not-found", "notFound", "404"];
-      const isNotFound = err?.code ? notFoundCodes.some((c) => String(err.code).toLowerCase().includes(String(c).toLowerCase())) : false;
-      if (isNotFound) {
-        try {
-          await setDoc(doc(db, "users", uid), {
-            ...cleaned,
-            medidasHistorico: [{ ...cleaned, createdAt: now }],
-            pesoHistorico: [{ fecha: fechaPeso, peso: measuresPayload.pesoActual, createdAt: now }],
-            pesoActual: measuresPayload.pesoActual,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          }, { merge: true });
-        } catch (err2) {
-          console.error("[FichaUsuario] submitPeso fallback error:", err2);
-          setError(err2?.message || "No se pudo guardar el peso (fallback).");
-          setSavingPeso(false);
-          return;
-        }
-      } else {
-        setError(err?.message || "No se pudo guardar el peso.");
-        setSavingPeso(false);
-        return;
-      }
+      console.error("[FichaUsuario] submitPeso error:", err);
+      setError(err?.message || "No se pudo guardar el peso.");
+      setSavingPeso(false);
+      return;
     }
 
     try {
@@ -607,30 +618,31 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       if (snap.exists()) {
         const data = snap.data();
         setUserData(data);
-        setEditable((prev) => ({
-          ...prev,
-          pesoActual: data.pesoActual ?? prev.pesoActual ?? "",
-          masaGrasaPct: data.masaGrasaPct ?? prev.masaGrasaPct ?? "",
-          masaGrasaKg: data.masaGrasaKg ?? prev.masaGrasaKg ?? "",
-          masaMagraKg: data.masaMagraKg ?? prev.masaMagraKg ?? "",
-          masaMuscularKg: data.masaMuscularKg ?? prev.masaMuscularKg ?? "",
-          aguaTotalKg: data.aguaTotalKg ?? prev.aguaTotalKg ?? "",
-          aguaTotalPct: data.aguaTotalPct ?? prev.aguaTotalPct ?? "",
-          masaOseaKg: data.masaOseaKg ?? prev.masaOseaKg ?? "",
-          mbKcal: data.mbKcal ?? prev.mbKcal ?? "",
-          grasaVisceralNivel: data.grasaVisceralNivel ?? prev.grasaVisceralNivel ?? "",
-          imc: data.imc ?? prev.imc ?? "",
-          edadMetabolica: data.edadMetabolica ?? prev.edadMetabolica ?? "",
-          indiceCinturaTalla: data.indiceCinturaTalla ?? prev.indiceCinturaTalla ?? "",
-          circunferenciaBrazoCm: data.circunferenciaBrazoCm ?? prev.circunferenciaBrazoCm ?? "",
-          circunferenciaCinturaCm: data.circunferenciaCinturaCm ?? prev.circunferenciaCinturaCm ?? "",
-          circunferenciaCaderaCm: data.circunferenciaCaderaCm ?? prev.circunferenciaCaderaCm ?? "",
-          circunferenciaPiernaCm: data.circunferenciaPiernaCm ?? prev.circunferenciaPiernaCm ?? "",
-          tensionArterial: data.tensionArterial ?? prev.tensionArterial ?? { sys: "", dia: "" },
-          notas: data.notas ?? prev.notas ?? "",
-        }));
       }
-      setPeso(""); setFechaPeso(todayISO); setError(null);
+      // Limpiar todos los campos del formulario después de guardar
+      setPeso("");
+      setFechaPeso(todayISO);
+      setEditable({
+        masaGrasaPct: "",
+        masaGrasaKg: "",
+        masaMagraKg: "",
+        masaMuscularKg: "",
+        aguaTotalKg: "",
+        aguaTotalPct: "",
+        masaOseaKg: "",
+        mbKcal: "",
+        grasaVisceralNivel: "",
+        imc: "",
+        edadMetabolica: "",
+        indiceCinturaTalla: "",
+        circunferenciaBrazoCm: "",
+        circunferenciaCinturaCm: "",
+        circunferenciaCaderaCm: "",
+        circunferenciaPiernaCm: "",
+        tensionArterial: { sys: "", dia: "" },
+        notas: "",
+      });
+      setError(null);
       setTabIndex(tabs.findIndex((t) => t.id === "pesaje"));
     } catch (err3) {
       console.error("[FichaUsuario] submitPeso post-fetch error:", err3);
@@ -657,24 +669,53 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       const medidasArray = Array.isArray(data?.medidasHistorico) ? [...data.medidasHistorico] : [];
       const pesoArray = Array.isArray(data?.pesoHistorico) ? [...data.pesoHistorico] : [];
 
+      console.log("Intentando borrar índice:", index);
+      console.log("Total registros en rowsDesc:", rowsDesc.length);
+      console.log("Registro a borrar:", rowsDesc[index]);
+
       // Eliminar por índice del array ordenado
       if (index >= 0 && index < rowsDesc.length) {
         const recordToDelete = rowsDesc[index];
         
-        // Buscar y eliminar en medidasHistorico
-        const medidasIndex = medidasArray.findIndex((m) => 
-          m.fecha === recordToDelete.fecha && m._t === recordToDelete._t
-        );
+        // Buscar y eliminar en medidasHistorico usando múltiples criterios
+        const medidasIndex = medidasArray.findIndex((m) => {
+          // Comparar por fecha y peso/pesoActual si existen
+          const sameDate = m.fecha === recordToDelete.fecha;
+          const samePeso = (m.peso === recordToDelete.peso) || (m.pesoActual === recordToDelete.pesoActual) || (m.peso === recordToDelete.pesoActual);
+          
+          // También intentar comparar por timestamp
+          const mTimestamp = timestampToMs(m.createdAt);
+          const sameTimestamp = mTimestamp === recordToDelete._t;
+          
+          console.log("Comparando medida:", { sameDate, samePeso, sameTimestamp, m, recordToDelete });
+          
+          return (sameDate && samePeso) || sameTimestamp;
+        });
+        
+        console.log("Índice encontrado en medidasHistorico:", medidasIndex);
+        
         if (medidasIndex !== -1) {
           medidasArray.splice(medidasIndex, 1);
+          console.log("Eliminado de medidasHistorico");
         }
 
         // Buscar y eliminar en pesoHistorico
-        const pesoIndex = pesoArray.findIndex((p) => 
-          p.fecha === recordToDelete.fecha && p._t === recordToDelete._t
-        );
+        const pesoIndex = pesoArray.findIndex((p) => {
+          const sameDate = p.fecha === recordToDelete.fecha;
+          const samePeso = p.peso === recordToDelete.peso || p.peso === recordToDelete.pesoActual;
+          const pTimestamp = timestampToMs(p.createdAt);
+          const sameTimestamp = pTimestamp === recordToDelete._t;
+          
+          console.log("Comparando peso:", { sameDate, samePeso, sameTimestamp, p, recordToDelete });
+          
+          return (sameDate && samePeso) || sameTimestamp;
+        });
+        
+        console.log("Índice encontrado en pesoHistorico:", pesoIndex);
+        
         if (pesoIndex !== -1) {
           pesoArray.splice(pesoIndex, 1);
+          console.log("Eliminado de pesoHistorico");
         }
 
         // Actualizar Firestore
@@ -684,13 +725,19 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           updatedAt: serverTimestamp(),
         });
 
-        // Recargar datos
-        const newSnap = await getDoc(doc(db, "users", uid));
-        if (newSnap.exists()) {
-          setUserData(newSnap.data());
-        }
+        console.log("Actualización en Firestore completada");
 
+        // Actualizar el estado local inmediatamente con los arrays actualizados
+        setUserData((prevData) => ({
+          ...prevData,
+          medidasHistorico: medidasArray,
+          pesoHistorico: pesoArray,
+        }));
+
+        console.log("Estado local actualizado");
         alert("Registro eliminado correctamente");
+      } else {
+        console.error("Índice fuera de rango:", index, "de", rowsDesc.length);
       }
     } catch (err) {
       console.error("Error al eliminar pesaje:", err);
@@ -793,6 +840,40 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     }
   };
 
+  // Drag and drop handlers (solo para admin)
+  const handleDragStart = (e, index) => {
+    if (!adminMode) return;
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e) => {
+    if (!adminMode) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e, dropIndex) => {
+    if (!adminMode) return;
+    e.preventDefault();
+    
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null);
+      return;
+    }
+
+    const newOrder = [...fieldsOrder];
+    const [draggedItem] = newOrder.splice(draggedIndex, 1);
+    newOrder.splice(dropIndex, 0, draggedItem);
+    
+    setFieldsOrder(newOrder);
+    setDraggedIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+  };
+
   // chart helpers
   const timestampToMs = (t) => {
     if (!t) return null;
@@ -837,6 +918,231 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
   const mappedForChart = rowsDesc.map((p) => ({ ...p })).sort((a, b) => (a._t || 0) - (b._t || 0));
   const labels = mappedForChart.map((s) => s.fecha || (s._t ? new Date(s._t).toLocaleDateString() : ""));
+  
+  // Calcular valores de campos calculados
+  const masaGrasaKgCalc = (() => {
+    const p = parseFloat(peso);
+    const mgPct = parseFloat(editable.masaGrasaPct);
+    if (!isNaN(p) && !isNaN(mgPct) && p > 0 && mgPct >= 0) {
+      return (Math.round((p * mgPct / 100) * 100) / 100).toString();
+    }
+    return "";
+  })();
+
+  const aguaTotalKgCalc = (() => {
+    const p = parseFloat(peso);
+    const atPct = parseFloat(editable.aguaTotalPct);
+    if (!isNaN(p) && !isNaN(atPct) && p > 0 && atPct >= 0) {
+      return (Math.round((p * atPct / 100) * 100) / 100).toString();
+    }
+    return "";
+  })();
+
+  const masaMuscularKgCalc = (() => {
+    const p = parseFloat(peso);
+    const mgKg = parseFloat(masaGrasaKgCalc);
+    const atKg = parseFloat(aguaTotalKgCalc);
+    const moKg = parseFloat(editable.masaOseaKg);
+    if (!isNaN(p) && !isNaN(mgKg) && !isNaN(atKg) && !isNaN(moKg) && p > 0) {
+      return (Math.round((p - mgKg - atKg - moKg) * 100) / 100).toString();
+    }
+    return "";
+  })();
+
+  // Función para renderizar cada campo de pesaje dinámicamente
+  const renderPesajeField = (fieldKey) => {
+    const baseStyle = {
+      padding: "9px 12px",
+      borderRadius: "6px",
+      border: "1px solid #e2e8f0",
+      fontSize: "15px",
+      fontWeight: "500"
+    };
+
+    const calculatedStyle = {
+      ...baseStyle,
+      background: "#d1fae5"
+    };
+
+    switch (fieldKey) {
+      case "peso":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.3px" }}>Peso (kg)</label>
+            <input type="number" inputMode="decimal" step="0.1" className="input" value={peso} onChange={(e) => setPeso(e.target.value)} style={baseStyle} />
+          </div>
+        );
+      
+      case "masaGrasaPct":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Masa grasa (%)</label>
+            <input type="number" inputMode="decimal" step="0.1" className="input" value={editable.masaGrasaPct ?? ""} onChange={(e) => setEditable((s) => ({ ...s, masaGrasaPct: e.target.value }))} style={baseStyle} />
+          </div>
+        );
+      
+      case "masaGrasaKg":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Masa grasa (kg)</label>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              className="input"
+              value={masaGrasaKgCalc}
+              readOnly
+              tabIndex={-1}
+              style={calculatedStyle}
+            />
+          </div>
+        );
+      
+      case "aguaTotalPct":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>% Agua total</label>
+            <input type="number" inputMode="decimal" step="0.1" className="input" value={editable.aguaTotalPct ?? ""} onChange={(e) => setEditable((s) => ({ ...s, aguaTotalPct: e.target.value }))} style={baseStyle} />
+          </div>
+        );
+      
+      case "aguaTotalKg":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Agua total (kg)</label>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              className="input"
+              value={aguaTotalKgCalc}
+              readOnly
+              tabIndex={-1}
+              style={calculatedStyle}
+            />
+          </div>
+        );
+      
+      case "masaOseaKg":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Masa ósea (kg)</label>
+            <input type="number" inputMode="decimal" step="0.01" className="input" value={editable.masaOseaKg ?? ""} onChange={(e) => setEditable((s) => ({ ...s, masaOseaKg: e.target.value }))} style={baseStyle} />
+          </div>
+        );
+      
+      case "masaMuscularKg":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Masa muscular (kg)</label>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              className="input"
+              value={masaMuscularKgCalc}
+              readOnly
+              tabIndex={-1}
+              style={calculatedStyle}
+            />
+          </div>
+        );
+      
+      case "masaMagraKg":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Masa magra (kg)</label>
+            <input type="number" inputMode="decimal" step="0.01" className="input" value={editable.masaMagraKg ?? ""} onChange={(e) => setEditable((s) => ({ ...s, masaMagraKg: e.target.value }))} style={baseStyle} />
+          </div>
+        );
+      
+      case "mbKcal":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>MB (kcal)</label>
+            <input type="number" inputMode="numeric" step="1" className="input" value={editable.mbKcal ?? ""} onChange={(e) => setEditable((s) => ({ ...s, mbKcal: e.target.value }))} style={baseStyle} />
+          </div>
+        );
+      
+      case "grasaVisceralNivel":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Grasa visceral</label>
+            <input type="number" inputMode="numeric" step="1" className="input" value={editable.grasaVisceralNivel ?? ""} onChange={(e) => setEditable((s) => ({ ...s, grasaVisceralNivel: e.target.value }))} style={baseStyle} />
+          </div>
+        );
+      
+      case "imc":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>IMC</label>
+            <input type="number" inputMode="decimal" step="0.1" className="input" value={editable.imc ?? ""} onChange={(e) => setEditable((s) => ({ ...s, imc: e.target.value }))} style={baseStyle} />
+          </div>
+        );
+      
+      case "edadMetabolica":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Edad metabólica</label>
+            <input type="number" inputMode="numeric" step="1" className="input" value={editable.edadMetabolica ?? ""} onChange={(e) => setEditable((s) => ({ ...s, edadMetabolica: e.target.value }))} style={baseStyle} />
+          </div>
+        );
+      
+      case "circunferenciaBrazoCm":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>C. Brazo (cm)</label>
+            <input type="number" inputMode="decimal" step="0.1" className="input" value={editable.circunferenciaBrazoCm ?? ""} onChange={(e) => setEditable((s) => ({ ...s, circunferenciaBrazoCm: e.target.value }))} style={baseStyle} />
+          </div>
+        );
+      
+      case "circunferenciaCinturaCm":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>C. Cintura (cm)</label>
+            <input type="number" inputMode="decimal" step="0.1" className="input" value={editable.circunferenciaCinturaCm ?? ""} onChange={(e) => setEditable((s) => ({ ...s, circunferenciaCinturaCm: e.target.value }))} style={baseStyle} />
+          </div>
+        );
+      
+      case "circunferenciaCaderaCm":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>C. Cadera (cm)</label>
+            <input type="number" inputMode="decimal" step="0.1" className="input" value={editable.circunferenciaCaderaCm ?? ""} onChange={(e) => setEditable((s) => ({ ...s, circunferenciaCaderaCm: e.target.value }))} style={baseStyle} />
+          </div>
+        );
+      
+      case "circunferenciaPiernaCm":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>C. Pierna (cm)</label>
+            <input type="number" inputMode="decimal" step="0.1" className="input" value={editable.circunferenciaPiernaCm ?? ""} onChange={(e) => setEditable((s) => ({ ...s, circunferenciaPiernaCm: e.target.value }))} style={baseStyle} />
+          </div>
+        );
+      
+      case "indiceCinturaTalla":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Índice cintura/talla</label>
+            <input type="text" className="input" value={editable.indiceCinturaTalla ?? ""} onChange={(e) => setEditable((s) => ({ ...s, indiceCinturaTalla: e.target.value }))} style={baseStyle} />
+          </div>
+        );
+      
+      case "tensionArterial":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>TA (SYS / DIA)</label>
+            <div style={{ display: "flex", gap: "6px" }}>
+              <input type="number" className="input" placeholder="SYS" value={editable.tensionArterial?.sys ?? ""} onChange={(e) => setEditable((s) => ({ ...s, tensionArterial: { ...(s.tensionArterial || {}), sys: e.target.value } }))} style={{ flex: "1", padding: "9px 8px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "14px", textAlign: "center" }} />
+              <input type="number" className="input" placeholder="DIA" value={editable.tensionArterial?.dia ?? ""} onChange={(e) => setEditable((s) => ({ ...s, tensionArterial: { ...(s.tensionArterial || {}), dia: e.target.value } }))} style={{ flex: "1", padding: "9px 8px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "14px", textAlign: "center" }} />
+            </div>
+          </div>
+        );
+      
+      default:
+        return null;
+    }
+  };
   
   // Configuración de métricas disponibles para el gráfico
   const metricsConfig = {
@@ -1485,18 +1791,12 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                 <select value={editable.ejercicios ? "si" : "no"} onChange={(e) => setEditable((s) => ({ ...s, ejercicios: e.target.value === "si" }))}><option value="si">Sí</option><option value="no">No</option></select>
               </div>
 
-              <div className="field" style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                <label style={{ minWidth: 160 }}>¿Recetas asignadas?</label>
-                <select value={editable.recetas ? "si" : "no"} onChange={(e) => setEditable((s) => ({ ...s, recetas: e.target.value === "si" }))}><option value="si">Sí</option><option value="no">No</option></select>
-              </div>
-
               <div className="field" style={{ gridColumn: "1 / -1" }}><label>Descripción ejercicios</label><textarea className="input" rows={3} value={editable.ejerciciosDescripcion || ""} onChange={(e) => setEditable((s) => ({ ...s, ejerciciosDescripcion: e.target.value }))} /></div>
-              <div className="field" style={{ gridColumn: "1 / -1" }}><label>Descripción recetas</label><textarea className="input" rows={3} value={editable.recetasDescripcion || ""} onChange={(e) => setEditable((s) => ({ ...s, recetasDescripcion: e.target.value }))} /></div>
             </div>
 
             <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
               <button className="btn primary" onClick={saveProfile}>Guardar perfil y dieta</button>
-              <button className="btn ghost" onClick={() => { setEditable((prev) => ({ ...prev, nombre: userData.nombre || "", apellidos: userData.apellidos || "", nacimiento: userData.nacimiento || "", telefono: userData.telefono || "", dietaactual: userData.dietaactual || "", dietaOtros: userData.dietaOtros || "", restricciones: userData.restricciones || "", ejercicios: !!userData.ejercicios, recetas: !!userData.recetas, ejerciciosDescripcion: userData.ejerciciosDescripcion || "", recetasDescripcion: userData.recetasDescripcion || "" })); setShowProfile(false); }}>Cancelar</button>
+              <button className="btn ghost" onClick={() => { setEditable((prev) => ({ ...prev, nombre: userData.nombre || "", apellidos: userData.apellidos || "", nacimiento: userData.nacimiento || "", telefono: userData.telefono || "", dietaactual: userData.dietaactual || "", dietaOtros: userData.dietaOtros || "", restricciones: userData.restricciones || "", ejercicios: !!userData.ejercicios, ejerciciosDescripcion: userData.ejerciciosDescripcion || "" })); setShowProfile(false); }}>Cancelar</button>
             </div>
           </div>
         </div>
@@ -1668,29 +1968,42 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                       <input type="date" className="input" value={fechaPeso} onChange={(e) => setFechaPeso(e.target.value)} style={{ width: "200px", maxWidth: "100%" }} />
                     </div>
 
-                    {/* Grid compacto para campos de medidas - 2-3 por fila */}
-                    <div className="medidas-grid-custom">
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                        <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.3px" }}>Peso (kg)</label>
-                        <input type="number" inputMode="decimal" step="0.1" className="input" value={peso} onChange={(e) => setPeso(e.target.value)} placeholder={String(userData.pesoActual ?? "")} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} />
+                    {/* Grid compacto para campos de medidas - organizados por tipo */}
+                    {adminMode && (
+                      <div style={{ marginBottom: "12px", padding: "8px 12px", background: "#fef3c7", borderRadius: "6px", fontSize: "13px", color: "#92400e" }}>
+                        ℹ️ Arrastra los campos para reordenarlos
                       </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Masa grasa (%)</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.masaGrasaPct ?? ""} onChange={(e) => setEditable((s) => ({ ...s, masaGrasaPct: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Masa grasa (kg)</label><input type="number" inputMode="decimal" step="0.01" className="input" value={editable.masaGrasaKg ?? ""} onChange={(e) => setEditable((s) => ({ ...s, masaGrasaKg: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Masa magra (kg)</label><input type="number" inputMode="decimal" step="0.01" className="input" value={editable.masaMagraKg ?? ""} onChange={(e) => setEditable((s) => ({ ...s, masaMagraKg: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Masa muscular (kg)</label><input type="number" inputMode="decimal" step="0.01" className="input" value={editable.masaMuscularKg ?? ""} onChange={(e) => setEditable((s) => ({ ...s, masaMuscularKg: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Agua total (kg)</label><input type="number" inputMode="decimal" step="0.01" className="input" value={editable.aguaTotalKg ?? ""} onChange={(e) => setEditable((s) => ({ ...s, aguaTotalKg: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>% Agua total</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.aguaTotalPct ?? ""} onChange={(e) => setEditable((s) => ({ ...s, aguaTotalPct: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Masa ósea (kg)</label><input type="number" inputMode="decimal" step="0.01" className="input" value={editable.masaOseaKg ?? ""} onChange={(e) => setEditable((s) => ({ ...s, masaOseaKg: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>MB (kcal)</label><input type="number" inputMode="numeric" step="1" className="input" value={editable.mbKcal ?? ""} onChange={(e) => setEditable((s) => ({ ...s, mbKcal: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Grasa visceral</label><input type="number" inputMode="numeric" step="1" className="input" value={editable.grasaVisceralNivel ?? ""} onChange={(e) => setEditable((s) => ({ ...s, grasaVisceralNivel: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>IMC</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.imc ?? ""} onChange={(e) => setEditable((s) => ({ ...s, imc: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Edad metabólica</label><input type="number" inputMode="numeric" step="1" className="input" value={editable.edadMetabolica ?? ""} onChange={(e) => setEditable((s) => ({ ...s, edadMetabolica: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>C. Brazo (cm)</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.circunferenciaBrazoCm ?? ""} onChange={(e) => setEditable((s) => ({ ...s, circunferenciaBrazoCm: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>C. Cintura (cm)</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.circunferenciaCinturaCm ?? ""} onChange={(e) => setEditable((s) => ({ ...s, circunferenciaCinturaCm: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>C. Cadera (cm)</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.circunferenciaCaderaCm ?? ""} onChange={(e) => setEditable((s) => ({ ...s, circunferenciaCaderaCm: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>C. Pierna (cm)</label><input type="number" inputMode="decimal" step="0.1" className="input" value={editable.circunferenciaPiernaCm ?? ""} onChange={(e) => setEditable((s) => ({ ...s, circunferenciaPiernaCm: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Índice cintura/talla</label><input type="text" className="input" value={editable.indiceCinturaTalla ?? ""} onChange={(e) => setEditable((s) => ({ ...s, indiceCinturaTalla: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} /></div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}><label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>TA (SYS / DIA)</label><div style={{ display: "flex", gap: "6px" }}><input type="number" className="input" placeholder="SYS" value={editable.tensionArterial?.sys ?? ""} onChange={(e) => setEditable((s) => ({ ...s, tensionArterial: { ...(s.tensionArterial || {}), sys: e.target.value } }))} style={{ flex: "1", padding: "9px 8px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "14px", textAlign: "center" }} /><input type="number" className="input" placeholder="DIA" value={editable.tensionArterial?.dia ?? ""} onChange={(e) => setEditable((s) => ({ ...s, tensionArterial: { ...(s.tensionArterial || {}), dia: e.target.value } }))} style={{ flex: "1", padding: "9px 8px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "14px", textAlign: "center" }} /></div></div>
+                    )}
+                    <div className="medidas-grid-custom">
+                      {fieldsOrder.map((fieldKey, index) => (
+                        <div
+                          key={fieldKey}
+                          draggable={adminMode}
+                          onDragStart={(e) => handleDragStart(e, index)}
+                          onDragOver={handleDragOver}
+                          onDrop={(e) => handleDrop(e, index)}
+                          onDragEnd={handleDragEnd}
+                          style={{
+                            cursor: adminMode ? "grab" : "default",
+                            opacity: draggedIndex === index ? 0.6 : 1,
+                            transition: "opacity 0.2s, transform 0.2s, box-shadow 0.2s",
+                            position: "relative",
+                            background: draggedIndex === index ? "#fef3c7" : "transparent",
+                            borderRadius: "8px",
+                            padding: "4px",
+                            border: draggedIndex === index ? "2px dashed #f59e0b" : "2px solid transparent",
+                            boxShadow: draggedIndex === index ? "0 4px 12px rgba(0,0,0,0.15)" : "none"
+                          }}
+                          onMouseDown={(e) => {
+                            if (adminMode) e.currentTarget.style.cursor = "grabbing";
+                          }}
+                          onMouseUp={(e) => {
+                            if (adminMode) e.currentTarget.style.cursor = "grab";
+                          }}
+                        >
+                          {renderPesajeField(fieldKey)}
+                        </div>
+                      ))}
                     </div>
 
                     {/* Notas - ancho completo */}
@@ -1741,27 +2054,49 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                 <div>
 
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: "12px" }}>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <label style={{ fontSize: 13, color: "#64748b", fontWeight: "500" }}>Mostrar:</label>
-                      <select value={histLimit} onChange={(e) => setHistLimit(Number(e.target.value))} className="input" style={{ 
-                        width: 80, 
-                        padding: "6px 8px", 
-                        height: 32,
-                        borderRadius: "8px",
-                        border: "1px solid #e2e8f0",
-                        fontSize: "13px"
-                      }}>
-                        <option value={10}>10</option>
-                        <option value={25}>25</option>
-                        <option value={50}>50</option>
-                        <option value={100}>100</option>
-                      </select>
+                    <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <label style={{ fontSize: 13, color: "#64748b", fontWeight: "500" }}>Mostrar:</label>
+                        <select value={histLimit} onChange={(e) => setHistLimit(Number(e.target.value))} className="input" style={{ 
+                          width: 80, 
+                          padding: "6px 8px", 
+                          height: 32,
+                          borderRadius: "8px",
+                          border: "1px solid #e2e8f0",
+                          fontSize: "13px"
+                        }}>
+                          <option value={10}>10</option>
+                          <option value={25}>25</option>
+                          <option value={50}>50</option>
+                          <option value={100}>100</option>
+                        </select>
+                      </div>
+                      
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <input 
+                          type="checkbox" 
+                          id="transpose-check" 
+                          checked={transposeTable} 
+                          onChange={(e) => setTransposeTable(e.target.checked)}
+                          style={{ cursor: "pointer" }}
+                        />
+                        <label htmlFor="transpose-check" style={{ fontSize: 13, color: "#64748b", fontWeight: "500", cursor: "pointer" }}>
+                          🔄 Transponer (fechas en columnas)
+                        </label>
+                      </div>
                     </div>
 
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       <button 
                         className="btn-compact" 
-                        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                        onClick={() => {
+                          const container = document.querySelector('.admin-right') || document.querySelector('.main-container') || window;
+                          if (container === window) {
+                            window.scrollTo({ top: 0, behavior: "smooth" });
+                          } else {
+                            container.scrollTo({ top: 0, behavior: "smooth" });
+                          }
+                        }}
                         style={{
                           padding: "6px 12px",
                           fontSize: "13px",
@@ -1794,91 +2129,100 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                   </div>
 
                   <div style={{ overflowX: "auto", marginTop: 8 }} className="hist-table-wrapper">
-                    <table className="table hist-table" style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr>
-                          <th className="col-fixed">Fecha</th>
-                          <th>Peso</th>
-                          <th>Masa grasa %</th>
-                          <th>Masa grasa (kg)</th>
-                          <th>Masa magra (kg)</th>
-                          <th>Masa muscular (kg)</th>
-                          <th>Agua (kg)</th>
-                          <th>% Agua</th>
-                          <th>Masa ósea (kg)</th>
-                          <th>MB (kcal)</th>
-                          <th>Grasa visceral</th>
-                          <th>IMC</th>
-                          <th>Edad metab.</th>
-                          <th>C. Brazo</th>
-                          <th>C. Cintura</th>
-                          <th>C. Cadera</th>
-                          <th>C. Pierna</th>
-                          <th>Índice C/T</th>
-                          <th>TA (SYS/DIA)</th>
-                          <th style={{ width: 220 }}>Notas / Detalle</th>
-                          <th style={{ width: 120 }}>Acciones</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(!rowsDesc || rowsDesc.length === 0) ? (
-                          <tr><td colSpan={21} style={{ padding: 12 }}>Sin registros</td></tr>
-                        ) : (
-                          rowsDesc.slice(0, histLimit).map((r, i) => {
-                            const ta = r.tensionArterial || {};
-                            const key = `${r._t || i}-${i}`;
-                            return (
-                              <React.Fragment key={key}>
-                                <tr className="hist-row">
-                                  <td className="col-fixed" style={{ whiteSpace: "nowrap", padding: 10 }}>{r.fecha || (r._t ? new Date(r._t).toLocaleString() : "")}</td>
-                                  <td style={{ padding: 10 }}>{r.peso ?? r.pesoActual ?? "—"}</td>
-                                  <td style={{ padding: 10 }}>{r.masaGrasaPct ?? "—"}</td>
-                                  <td style={{ padding: 10 }}>{r.masaGrasaKg ?? "—"}</td>
-                                  <td style={{ padding: 10 }}>{r.masaMagraKg ?? "—"}</td>
-                                  <td style={{ padding: 10 }}>{r.masaMuscularKg ?? "—"}</td>
-                                  <td style={{ padding: 10 }}>{r.aguaTotalKg ?? "—"}</td>
-                                  <td style={{ padding: 10 }}>{r.aguaTotalPct ?? "—"}</td>
-                                  <td style={{ padding: 10 }}>{r.masaOseaKg ?? "—"}</td>
-                                  <td style={{ padding: 10 }}>{r.mbKcal ?? "—"}</td>
-                                  <td style={{ padding: 10 }}>{r.grasaVisceralNivel ?? "—"}</td>
-                                  <td style={{ padding: 10 }}>{r.imc ?? "—"}</td>
-                                  <td style={{ padding: 10 }}>{r.edadMetabolica ?? "—"}</td>
-                                  <td style={{ padding: 10 }}>{r.circunferenciaBrazoCm ?? "—"}</td>
-                                  <td style={{ padding: 10 }}>{r.circunferenciaCinturaCm ?? "—"}</td>
-                                  <td style={{ padding: 10 }}>{r.circunferenciaCaderaCm ?? "—"}</td>
-                                  <td style={{ padding: 10 }}>{r.circunferenciaPiernaCm ?? "—"}</td>
-                                  <td style={{ padding: 10 }}>{r.indiceCinturaTalla ?? "—"}</td>
-                                  <td style={{ padding: 10 }}>{`${ta.sys || ""}${ta.dia ? ` / ${ta.dia}` : ""}`}</td>
-                                  <td style={{ padding: 10, maxWidth: 340, cursor: "pointer" }} onClick={() => toggleExpandRowLocal(i)}>{renderCell(r.notas)}</td>
-                                  <td style={{ padding: 10 }}>
-                                    <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
-                                      <button 
-                                        className="btn ghost" 
-                                        onClick={(e) => { e.stopPropagation(); openEditModal(r, i); }}
-                                        style={{ padding: "4px 8px", fontSize: "12px" }}
-                                        title="Editar registro"
-                                      >
-                                        ✏️
-                                      </button>
-                                      <button 
-                                        className="btn danger" 
-                                        onClick={(e) => { e.stopPropagation(); deletePesaje(i); }}
-                                        style={{ padding: "4px 8px", fontSize: "12px" }}
-                                        title="Eliminar registro"
-                                      >
-                                        🗑️
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
+                    {!transposeTable ? (
+                      <table className="table hist-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                        <thead>
+                          <tr>
+                            <th className="col-fixed">Fecha</th>
+                            <th>Peso</th>
+                            <th>Masa grasa %</th>
+                            <th>Masa grasa (kg)</th>
+                            <th>Masa magra (kg)</th>
+                            <th>Masa muscular (kg)</th>
+                            <th>Agua (kg)</th>
+                            <th>% Agua</th>
+                            <th>Masa ósea (kg)</th>
+                            <th>MB (kcal)</th>
+                            <th>Grasa visceral</th>
+                            <th>IMC</th>
+                            <th>Edad metab.</th>
+                            <th>C. Brazo</th>
+                            <th>C. Cintura</th>
+                            <th>C. Cadera</th>
+                            <th>C. Pierna</th>
+                            <th>Índice C/T</th>
+                            <th>TA (SYS/DIA)</th>
+                            <th style={{ width: 220 }}>Notas / Detalle</th>
+                            <th style={{ width: 120 }}>Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(!rowsDesc || rowsDesc.length === 0) ? (
+                            <tr><td colSpan={21} style={{ padding: 12 }}>Sin registros</td></tr>
+                          ) : (
+                            rowsDesc.slice(0, histLimit).map((r, i) => {
+                              const ta = r.tensionArterial || {};
+                              const key = `${r._t || i}-${i}`;
+                              const formatShortDate = (dateStr) => {
+                                if (!dateStr) return "";
+                                const d = new Date(dateStr);
+                                const day = String(d.getDate()).padStart(2, '0');
+                                const month = String(d.getMonth() + 1).padStart(2, '0');
+                                const year = String(d.getFullYear()).slice(-2);
+                                return `${day}/${month}/${year}`;
+                              };
+                              return (
+                                <React.Fragment key={key}>
+                                  <tr className="hist-row">
+                                    <td className="col-fixed" style={{ whiteSpace: "nowrap", padding: 10 }}>{r.fecha ? formatShortDate(r.fecha) : (r._t ? formatShortDate(new Date(r._t).toISOString()) : "")}</td>
+                                    <td style={{ padding: 10 }}>{r.peso ?? r.pesoActual ?? "—"}</td>
+                                    <td style={{ padding: 10 }}>{r.masaGrasaPct ?? "—"}</td>
+                                    <td style={{ padding: 10 }}>{r.masaGrasaKg ?? "—"}</td>
+                                    <td style={{ padding: 10 }}>{r.masaMagraKg ?? "—"}</td>
+                                    <td style={{ padding: 10 }}>{r.masaMuscularKg ?? "—"}</td>
+                                    <td style={{ padding: 10 }}>{r.aguaTotalKg ?? "—"}</td>
+                                    <td style={{ padding: 10 }}>{r.aguaTotalPct ?? "—"}</td>
+                                    <td style={{ padding: 10 }}>{r.masaOseaKg ?? "—"}</td>
+                                    <td style={{ padding: 10 }}>{r.mbKcal ?? "—"}</td>
+                                    <td style={{ padding: 10 }}>{r.grasaVisceralNivel ?? "—"}</td>
+                                    <td style={{ padding: 10 }}>{r.imc ?? "—"}</td>
+                                    <td style={{ padding: 10 }}>{r.edadMetabolica ?? "—"}</td>
+                                    <td style={{ padding: 10 }}>{r.circunferenciaBrazoCm ?? "—"}</td>
+                                    <td style={{ padding: 10 }}>{r.circunferenciaCinturaCm ?? "—"}</td>
+                                    <td style={{ padding: 10 }}>{r.circunferenciaCaderaCm ?? "—"}</td>
+                                    <td style={{ padding: 10 }}>{r.circunferenciaPiernaCm ?? "—"}</td>
+                                    <td style={{ padding: 10 }}>{r.indiceCinturaTalla ?? "—"}</td>
+                                    <td style={{ padding: 10 }}>{`${ta.sys || ""}${ta.dia ? ` / ${ta.dia}` : ""}`}</td>
+                                    <td style={{ padding: 10, maxWidth: 340, cursor: "pointer" }} onClick={() => toggleExpandRowLocal(i)}>{renderCell(r.notas)}</td>
+                                    <td style={{ padding: 10 }}>
+                                      <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                                        <button 
+                                          className="btn ghost" 
+                                          onClick={(e) => { e.stopPropagation(); openEditModal(r, i); }}
+                                          style={{ padding: "4px 8px", fontSize: "12px" }}
+                                          title="Editar registro"
+                                        >
+                                          ✏️
+                                        </button>
+                                        <button 
+                                          className="btn danger" 
+                                          onClick={(e) => { e.stopPropagation(); deletePesaje(i); }}
+                                          style={{ padding: "4px 8px", fontSize: "12px" }}
+                                          title="Eliminar registro"
+                                        >
+                                          🗑️
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
 
-                                {expandedRowsStateLocal[i] && (
-                                  <tr className="hist-row-detail">
-                                    <td colSpan={21} style={{ padding: 12, background: "rgba(6,95,70,0.02)" }}>
-                                      <div style={{ display: "flex", gap: 16, flexDirection: "column" }}>
-                                        <div style={{ fontSize: 13, color: "#064e3b", fontWeight: 700 }}>Detalle completo</div>
-                                        <div style={{ fontSize: 13, color: "#0f172a", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{JSON.stringify(r, null, 2)}</div>
-                                        <div style={{ display: "flex", gap: 8 }}>
+                                  {expandedRowsStateLocal[i] && (
+                                    <tr className="hist-row-detail">
+                                      <td colSpan={21} style={{ padding: 12, background: "rgba(6,95,70,0.02)" }}>
+                                        <div style={{ display: "flex", gap: 16, flexDirection: "column" }}>
+                                          <div style={{ fontSize: 13, color: "#064e3b", fontWeight: 700 }}>Detalle completo</div>
+                                          <div style={{ fontSize: 13, color: "#0f172a", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{JSON.stringify(r, null, 2)}</div>
+                                          <div style={{ display: "flex", gap: 8 }}>
                                           <button className="btn ghost" onClick={(e) => { e.stopPropagation(); navigator.clipboard?.writeText(JSON.stringify(r)).catch(()=>{}); }}>Copiar JSON</button>
                                         </div>
                                       </div>
@@ -1891,6 +2235,83 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                         )}
                       </tbody>
                     </table>
+                    ) : (
+                      <table className="table hist-table" style={{ borderCollapse: "collapse", border: "1px solid #d1d5db", tableLayout: "auto" }}>
+                        <thead>
+                          <tr>
+                            <th style={{ position: "sticky", left: 0, background: "#f8fafc", zIndex: 2, padding: "4px 6px", fontSize: "10px", width: "100px", minWidth: "100px", border: "1px solid #d1d5db" }}>Medida</th>
+                            {(!rowsDesc || rowsDesc.length === 0) ? (
+                              <th style={{ padding: 8, border: "1px solid #d1d5db" }}>Sin datos</th>
+                            ) : (
+                              rowsDesc.slice(0, histLimit).map((r, i) => {
+                                const formatShortDate = (dateStr) => {
+                                  if (!dateStr) return "";
+                                  const d = new Date(dateStr);
+                                  const day = String(d.getDate()).padStart(2, '0');
+                                  const month = String(d.getMonth() + 1).padStart(2, '0');
+                                  const year = String(d.getFullYear()).slice(-2);
+                                  return `${day}/${month}/${year}`;
+                                };
+                                const key = `header-${r._t || i}-${i}`;
+                                return (
+                                  <th key={key} style={{ whiteSpace: "nowrap", padding: "4px 2px", fontSize: "10px", border: "1px solid #d1d5db", textAlign: "center", resize: "horizontal", overflow: "hidden", minWidth: "45px" }}>
+                                    {r.fecha ? formatShortDate(r.fecha) : (r._t ? formatShortDate(new Date(r._t).toISOString()) : "")}
+                                  </th>
+                                );
+                              })
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(!rowsDesc || rowsDesc.length === 0) ? (
+                            <tr><td style={{ padding: 12, border: "1px solid #d1d5db" }}>Sin registros</td></tr>
+                          ) : (
+                            [
+                              { label: "Peso", key: "peso", alt: "pesoActual" },
+                              { label: "Masa grasa %", key: "masaGrasaPct" },
+                              { label: "Masa grasa (kg)", key: "masaGrasaKg" },
+                              { label: "Masa magra (kg)", key: "masaMagraKg" },
+                              { label: "Masa muscular (kg)", key: "masaMuscularKg" },
+                              { label: "Agua (kg)", key: "aguaTotalKg" },
+                              { label: "% Agua", key: "aguaTotalPct" },
+                              { label: "Masa ósea (kg)", key: "masaOseaKg" },
+                              { label: "MB (kcal)", key: "mbKcal" },
+                              { label: "Grasa visceral", key: "grasaVisceralNivel" },
+                              { label: "IMC", key: "imc" },
+                              { label: "Edad metab.", key: "edadMetabolica" },
+                              { label: "C. Brazo", key: "circunferenciaBrazoCm" },
+                              { label: "C. Cintura", key: "circunferenciaCinturaCm" },
+                              { label: "C. Cadera", key: "circunferenciaCaderaCm" },
+                              { label: "C. Pierna", key: "circunferenciaPiernaCm" },
+                              { label: "Índice C/T", key: "indiceCinturaTalla" },
+                              { label: "TA (SYS/DIA)", key: "tensionArterial", isTa: true },
+                              { label: "Notas", key: "notas" }
+                            ].map((field, fieldIdx) => (
+                              <tr key={`row-${fieldIdx}`}>
+                                <td style={{ position: "sticky", left: 0, background: "#fff", fontWeight: 600, padding: "4px 6px", fontSize: "10px", width: "100px", minWidth: "100px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", border: "1px solid #d1d5db", boxShadow: "2px 0 4px rgba(0,0,0,0.05)" }}>
+                                  {field.label}
+                                </td>
+                                {rowsDesc.slice(0, histLimit).map((r, i) => {
+                                  const key = `cell-${fieldIdx}-${i}`;
+                                  let value = "—";
+                                  if (field.isTa) {
+                                    const ta = r.tensionArterial || {};
+                                    value = `${ta.sys || ""}${ta.dia ? ` / ${ta.dia}` : ""}`;
+                                  } else {
+                                    value = r[field.key] ?? (field.alt ? r[field.alt] : "") ?? "—";
+                                  }
+                                  return (
+                                    <td key={key} style={{ padding: "4px 2px", textAlign: "center", fontSize: "10px", border: "1px solid #d1d5db", minWidth: "45px" }}>
+                                      {value}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    )}
                   </div>
 
                   <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center" }}>
@@ -2645,15 +3066,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                 </div>
               </div>
             )}
-            {tabIndex === 4 && (
-              <div className="card" style={{ padding: adminMode ? "16px 20px" : "12px", width: "100%", maxWidth: "none" }}>
-                <h3>Recetas</h3>
-                <div className="panel-section" style={{ maxWidth: "none" }}>
-                  <FileManager userId={uid} type="recetas" isAdmin={adminMode} />
-                </div>
-              </div>
-            )}
-            {tabIndex === 5 && adminMode && (
+            {tabs[tabIndex]?.id === "anamnesis" && adminMode && (
               <div className="card" style={{ padding: "16px 20px", width: "100%", maxWidth: "none" }}>
                 <AnamnesisForm 
                   user={{ ...userData, uid: uid }} 

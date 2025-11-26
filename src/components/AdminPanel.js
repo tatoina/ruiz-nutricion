@@ -54,7 +54,7 @@ export default function AdminPanel({ onLogout }) {
               <th style={th}>Nacimiento</th>
               <th style={th}>Rol</th>
               <th style={th}>Ejercicios</th>
-              <th style={th}>Recetas</th>
+              {/* <th style={th}>Recetas</th> */}
               <th style={th}>Peso Actual</th>
               <th style={th}>Histórico Peso</th>
             </tr>
@@ -68,7 +68,7 @@ export default function AdminPanel({ onLogout }) {
                 <td style={td}>{u.nacimiento}</td>
                 <td style={td}>{u.role}</td>
                 <td style={td}>{u.ejercicios}</td>
-                <td style={td}>{u.recetas}</td>
+                {/* <td style={td}>{u.recetas}</td> */}
                 <td style={td}>{u.pesoActual || "-"}</td>
                 <td style={td}>
                   {u.pesoHistorico?.length

@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from
 import AdminUsers from "./components/AdminUsers";
 import AdminAgenda from "./components/AdminAgenda";
 import AdminMenus from "./components/AdminMenus";
+import AdminTipoDieta from "./components/AdminTipoDieta";
 import FichaUsuario from "./components/FichaUsuario";
 import Login from "./components/Login";
 import Register from "./components/Register";
@@ -117,6 +118,15 @@ export default function App() {
           element={
             <PrivateRoute>
               <AdminMenus />
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/admin/tipodieta"
+          element={
+            <PrivateRoute>
+              <AdminTipoDieta />
             </PrivateRoute>
           }
         />
