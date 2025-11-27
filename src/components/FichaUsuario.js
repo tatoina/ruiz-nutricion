@@ -121,6 +121,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const [histLimit, setHistLimit] = useState(10);
   const [expandedRowsStateLocal, setExpandedRowsStateLocal] = useState({});
   const [transposeTable, setTransposeTable] = useState(false);
+  const [tableZoom, setTableZoom] = useState(100); // Zoom level percentage
 
   // Estados para controlar secciones colapsables
   const [showFormulario, setShowFormulario] = useState(true);
@@ -128,8 +129,9 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const [showGrafico, setShowGrafico] = useState(false);
 
   // Estado para el orden de los campos de pesaje (solo para admin)
+  const [fieldsLocked, setFieldsLocked] = useState(false); // Controla si los campos están bloqueados
   const [fieldsOrder, setFieldsOrder] = useState([
-    "peso", "masaGrasaPct", "masaGrasaKg", "aguaTotalPct", "aguaTotalKg",
+    "masaGrasaPct", "masaGrasaKg", "aguaTotalPct", "aguaTotalKg",
     "masaOseaKg", "masaMuscularKg", "masaMagraKg", "mbKcal", "grasaVisceralNivel",
     "imc", "edadMetabolica", "circunferenciaBrazoCm", "circunferenciaCinturaCm",
     "circunferenciaCaderaCm", "circunferenciaPiernaCm", "indiceCinturaTalla", "tensionArterial"
@@ -842,19 +844,19 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
   // Drag and drop handlers (solo para admin)
   const handleDragStart = (e, index) => {
-    if (!adminMode) return;
+    if (!adminMode || fieldsLocked) return;
     setDraggedIndex(index);
     e.dataTransfer.effectAllowed = "move";
   };
 
   const handleDragOver = (e) => {
-    if (!adminMode) return;
+    if (!adminMode || fieldsLocked) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
   };
 
   const handleDrop = (e, dropIndex) => {
-    if (!adminMode) return;
+    if (!adminMode || fieldsLocked) return;
     e.preventDefault();
     
     if (draggedIndex === null || draggedIndex === dropIndex) {
@@ -1962,29 +1964,65 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                   </div>
 
                   <div className="pesaje-container">
-                    {/* Campo fecha - ancho completo */}
-                    <div style={{ marginBottom: "16px" }}>
-                      <label style={{ display: "block", fontSize: "12px", color: "#475569", marginBottom: "6px", fontWeight: "500" }}>Fecha</label>
-                      <input type="date" className="input" value={fechaPeso} onChange={(e) => setFechaPeso(e.target.value)} style={{ width: "200px", maxWidth: "100%" }} />
+                    {/* Fecha y Peso en la misma fila */}
+                    <div style={{ marginBottom: "16px", display: "grid", gridTemplateColumns: "200px 200px", gap: "16px", alignItems: "end" }}>
+                      <div>
+                        <label style={{ display: "block", fontSize: "12px", color: "#475569", marginBottom: "6px", fontWeight: "500" }}>Fecha</label>
+                        <input type="date" className="input" value={fechaPeso} onChange={(e) => setFechaPeso(e.target.value)} style={{ width: "100%" }} />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: "12px", color: "#475569", marginBottom: "6px", fontWeight: "500" }}>Peso (kg)</label>
+                        <input type="number" step="0.1" className="input" value={editable.peso || ""} onChange={(e) => setEditable((s) => ({ ...s, peso: e.target.value }))} style={{ width: "100%" }} />
+                      </div>
                     </div>
 
                     {/* Grid compacto para campos de medidas - organizados por tipo */}
                     {adminMode && (
-                      <div style={{ marginBottom: "12px", padding: "8px 12px", background: "#fef3c7", borderRadius: "6px", fontSize: "13px", color: "#92400e" }}>
-                        ℹ️ Arrastra los campos para reordenarlos
+                      <div style={{ marginBottom: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+                        <div style={{ padding: "8px 12px", background: "#fef3c7", borderRadius: "6px", fontSize: "13px", color: "#92400e", flex: 1 }}>
+                          {fieldsLocked ? "🔒 Campos bloqueados" : "ℹ️ Arrastra los campos para reordenarlos"}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setFieldsLocked(!fieldsLocked)}
+                          style={{
+                            padding: "8px 16px",
+                            fontSize: "13px",
+                            borderRadius: "8px",
+                            border: fieldsLocked ? "2px solid #dc2626" : "2px solid #16a34a",
+                            background: fieldsLocked ? "#fee2e2" : "#dcfce7",
+                            color: fieldsLocked ? "#991b1b" : "#166534",
+                            cursor: "pointer",
+                            fontWeight: "600",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            transition: "all 0.2s"
+                          }}
+                        >
+                          {fieldsLocked ? (
+                            <>
+                              🔓 Desbloquear
+                            </>
+                          ) : (
+                            <>
+                              🔒 Bloquear orden
+                            </>
+                          )}
+                        </button>
                       </div>
                     )}
                     <div className="medidas-grid-custom">
                       {fieldsOrder.map((fieldKey, index) => (
                         <div
                           key={fieldKey}
-                          draggable={adminMode}
+                          draggable={adminMode && !fieldsLocked}
                           onDragStart={(e) => handleDragStart(e, index)}
                           onDragOver={handleDragOver}
                           onDrop={(e) => handleDrop(e, index)}
                           onDragEnd={handleDragEnd}
                           style={{
-                            cursor: adminMode ? "grab" : "default",
+                            cursor: adminMode && !fieldsLocked ? "grab" : "default",
                             opacity: draggedIndex === index ? 0.6 : 1,
                             transition: "opacity 0.2s, transform 0.2s, box-shadow 0.2s",
                             position: "relative",
@@ -1995,10 +2033,10 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                             boxShadow: draggedIndex === index ? "0 4px 12px rgba(0,0,0,0.15)" : "none"
                           }}
                           onMouseDown={(e) => {
-                            if (adminMode) e.currentTarget.style.cursor = "grabbing";
+                            if (adminMode && !fieldsLocked) e.currentTarget.style.cursor = "grabbing";
                           }}
                           onMouseUp={(e) => {
-                            if (adminMode) e.currentTarget.style.cursor = "grab";
+                            if (adminMode && !fieldsLocked) e.currentTarget.style.cursor = "grab";
                           }}
                         >
                           {renderPesajeField(fieldKey)}
@@ -2084,6 +2122,62 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                           🔄 Transponer (fechas en columnas)
                         </label>
                       </div>
+
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <label style={{ fontSize: 13, color: "#64748b", fontWeight: "500" }}>🔍 Zoom:</label>
+                        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                          <button 
+                            onClick={() => setTableZoom(Math.max(80, tableZoom - 10))}
+                            style={{
+                              padding: "4px 8px",
+                              fontSize: "14px",
+                              borderRadius: "6px",
+                              border: "1px solid #e2e8f0",
+                              background: "white",
+                              color: "#64748b",
+                              cursor: "pointer",
+                              fontWeight: "600"
+                            }}
+                            title="Reducir zoom"
+                          >
+                            −
+                          </button>
+                          <span style={{ fontSize: 12, color: "#64748b", minWidth: "45px", textAlign: "center", fontWeight: "500" }}>
+                            {tableZoom}%
+                          </span>
+                          <button 
+                            onClick={() => setTableZoom(Math.min(150, tableZoom + 10))}
+                            style={{
+                              padding: "4px 8px",
+                              fontSize: "14px",
+                              borderRadius: "6px",
+                              border: "1px solid #e2e8f0",
+                              background: "white",
+                              color: "#64748b",
+                              cursor: "pointer",
+                              fontWeight: "600"
+                            }}
+                            title="Aumentar zoom"
+                          >
+                            +
+                          </button>
+                          <button 
+                            onClick={() => setTableZoom(100)}
+                            style={{
+                              padding: "4px 8px",
+                              fontSize: "11px",
+                              borderRadius: "6px",
+                              border: "1px solid #e2e8f0",
+                              background: "white",
+                              color: "#64748b",
+                              cursor: "pointer"
+                            }}
+                            title="Resetear zoom"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -2128,37 +2222,37 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                     </div>
                   </div>
 
-                  <div style={{ overflowX: "auto", marginTop: 8 }} className="hist-table-wrapper">
+                  <div style={{ overflowX: "auto", marginTop: 8, zoom: `${tableZoom}%` }} className="hist-table-wrapper">
                     {!transposeTable ? (
-                      <table className="table hist-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <table className="table hist-table" style={{ borderCollapse: "collapse", fontSize: "11px", width: "auto" }}>
                         <thead>
-                          <tr>
-                            <th className="col-fixed">Fecha</th>
-                            <th>Peso</th>
-                            <th>Masa grasa %</th>
-                            <th>Masa grasa (kg)</th>
-                            <th>Masa magra (kg)</th>
-                            <th>Masa muscular (kg)</th>
-                            <th>Agua (kg)</th>
-                            <th>% Agua</th>
-                            <th>Masa ósea (kg)</th>
-                            <th>MB (kcal)</th>
-                            <th>Grasa visceral</th>
-                            <th>IMC</th>
-                            <th>Edad metab.</th>
-                            <th>C. Brazo</th>
-                            <th>C. Cintura</th>
-                            <th>C. Cadera</th>
-                            <th>C. Pierna</th>
-                            <th>Índice C/T</th>
-                            <th>TA (SYS/DIA)</th>
-                            <th style={{ width: 220 }}>Notas / Detalle</th>
-                            <th style={{ width: 120 }}>Acciones</th>
+                          <tr style={{ background: "#f8fafc" }}>
+                            <th className="col-fixed" style={{ padding: "6px 8px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", whiteSpace: "nowrap", position: "sticky", left: 0, background: "#f8fafc", zIndex: 10, borderRight: "3px solid #cbd5e1", boxShadow: "2px 0 3px rgba(0,0,0,0.1)" }}>Fecha</th>
+                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "50px" }}>Peso</th>
+                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "45px" }}>MG %</th>
+                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "45px" }}>MG kg</th>
+                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "50px" }}>Magra</th>
+                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "55px" }}>Muscular</th>
+                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "50px" }}>Agua kg</th>
+                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "45px" }}>Agua %</th>
+                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "45px" }}>Ósea</th>
+                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "45px" }}>MB</th>
+                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "40px" }}>GV</th>
+                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "45px" }}>IMC</th>
+                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "40px" }}>EM</th>
+                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "45px" }}>Brazo</th>
+                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "50px" }}>Cintura</th>
+                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "50px" }}>Cadera</th>
+                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "45px" }}>Pierna</th>
+                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "40px" }}>IC/T</th>
+                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "60px" }}>TA</th>
+                            <th style={{ padding: "6px 8px", fontSize: "10.5px", fontWeight: "600", textAlign: "left", width: "150px", maxWidth: "150px" }}>Notas</th>
+                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "70px" }}>Acciones</th>
                           </tr>
                         </thead>
                         <tbody>
                           {(!rowsDesc || rowsDesc.length === 0) ? (
-                            <tr><td colSpan={21} style={{ padding: 12 }}>Sin registros</td></tr>
+                            <tr><td colSpan={21} style={{ padding: 12, textAlign: "center", color: "#94a3b8" }}>Sin registros</td></tr>
                           ) : (
                             rowsDesc.slice(0, histLimit).map((r, i) => {
                               const ta = r.tensionArterial || {};
@@ -2174,32 +2268,32 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                               return (
                                 <React.Fragment key={key}>
                                   <tr className="hist-row">
-                                    <td className="col-fixed" style={{ whiteSpace: "nowrap", padding: 10 }}>{r.fecha ? formatShortDate(r.fecha) : (r._t ? formatShortDate(new Date(r._t).toISOString()) : "")}</td>
-                                    <td style={{ padding: 10 }}>{r.peso ?? r.pesoActual ?? "—"}</td>
-                                    <td style={{ padding: 10 }}>{r.masaGrasaPct ?? "—"}</td>
-                                    <td style={{ padding: 10 }}>{r.masaGrasaKg ?? "—"}</td>
-                                    <td style={{ padding: 10 }}>{r.masaMagraKg ?? "—"}</td>
-                                    <td style={{ padding: 10 }}>{r.masaMuscularKg ?? "—"}</td>
-                                    <td style={{ padding: 10 }}>{r.aguaTotalKg ?? "—"}</td>
-                                    <td style={{ padding: 10 }}>{r.aguaTotalPct ?? "—"}</td>
-                                    <td style={{ padding: 10 }}>{r.masaOseaKg ?? "—"}</td>
-                                    <td style={{ padding: 10 }}>{r.mbKcal ?? "—"}</td>
-                                    <td style={{ padding: 10 }}>{r.grasaVisceralNivel ?? "—"}</td>
-                                    <td style={{ padding: 10 }}>{r.imc ?? "—"}</td>
-                                    <td style={{ padding: 10 }}>{r.edadMetabolica ?? "—"}</td>
-                                    <td style={{ padding: 10 }}>{r.circunferenciaBrazoCm ?? "—"}</td>
-                                    <td style={{ padding: 10 }}>{r.circunferenciaCinturaCm ?? "—"}</td>
-                                    <td style={{ padding: 10 }}>{r.circunferenciaCaderaCm ?? "—"}</td>
-                                    <td style={{ padding: 10 }}>{r.circunferenciaPiernaCm ?? "—"}</td>
-                                    <td style={{ padding: 10 }}>{r.indiceCinturaTalla ?? "—"}</td>
-                                    <td style={{ padding: 10 }}>{`${ta.sys || ""}${ta.dia ? ` / ${ta.dia}` : ""}`}</td>
-                                    <td style={{ padding: 10, maxWidth: 340, cursor: "pointer" }} onClick={() => toggleExpandRowLocal(i)}>{renderCell(r.notas)}</td>
-                                    <td style={{ padding: 10 }}>
-                                      <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                                    <td className="col-fixed" style={{ whiteSpace: "nowrap", padding: "5px 8px", fontSize: "10.5px", textAlign: "center", position: "sticky", left: 0, background: "#fff", borderRight: "3px solid #cbd5e1", fontWeight: "500", boxShadow: "2px 0 3px rgba(0,0,0,0.1)" }}>{r.fecha ? formatShortDate(r.fecha) : (r._t ? formatShortDate(new Date(r._t).toISOString()) : "")}</td>
+                                    <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center", fontWeight: "500" }}>{r.peso ?? r.pesoActual ?? "—"}</td>
+                                    <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center" }}>{r.masaGrasaPct ?? "—"}</td>
+                                    <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center" }}>{r.masaGrasaKg ?? "—"}</td>
+                                    <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center" }}>{r.masaMagraKg ?? "—"}</td>
+                                    <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center" }}>{r.masaMuscularKg ?? "—"}</td>
+                                    <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center" }}>{r.aguaTotalKg ?? "—"}</td>
+                                    <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center" }}>{r.aguaTotalPct ?? "—"}</td>
+                                    <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center" }}>{r.masaOseaKg ?? "—"}</td>
+                                    <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center" }}>{r.mbKcal ?? "—"}</td>
+                                    <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center" }}>{r.grasaVisceralNivel ?? "—"}</td>
+                                    <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center" }}>{r.imc ?? "—"}</td>
+                                    <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center" }}>{r.edadMetabolica ?? "—"}</td>
+                                    <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center" }}>{r.circunferenciaBrazoCm ?? "—"}</td>
+                                    <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center" }}>{r.circunferenciaCinturaCm ?? "—"}</td>
+                                    <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center" }}>{r.circunferenciaCaderaCm ?? "—"}</td>
+                                    <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center" }}>{r.circunferenciaPiernaCm ?? "—"}</td>
+                                    <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center" }}>{r.indiceCinturaTalla ?? "—"}</td>
+                                    <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center", whiteSpace: "nowrap" }}>{`${ta.sys || ""}${ta.dia ? `/${ta.dia}` : ""}`}</td>
+                                    <td style={{ padding: "5px 8px", fontSize: "10.5px", textAlign: "left", maxWidth: "150px", cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} onClick={() => toggleExpandRowLocal(i)}>{renderCell(r.notas)}</td>
+                                    <td style={{ padding: "5px 4px" }}>
+                                      <div style={{ display: "flex", gap: 3, justifyContent: "center" }}>
                                         <button 
                                           className="btn ghost" 
                                           onClick={(e) => { e.stopPropagation(); openEditModal(r, i); }}
-                                          style={{ padding: "4px 8px", fontSize: "12px" }}
+                                          style={{ padding: "3px 6px", fontSize: "11px", minWidth: "32px" }}
                                           title="Editar registro"
                                         >
                                           ✏️
@@ -2207,7 +2301,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                                         <button 
                                           className="btn danger" 
                                           onClick={(e) => { e.stopPropagation(); deletePesaje(i); }}
-                                          style={{ padding: "4px 8px", fontSize: "12px" }}
+                                          style={{ padding: "3px 6px", fontSize: "11px", minWidth: "32px" }}
                                           title="Eliminar registro"
                                         >
                                           🗑️
@@ -2236,12 +2330,12 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                       </tbody>
                     </table>
                     ) : (
-                      <table className="table hist-table" style={{ borderCollapse: "collapse", border: "1px solid #d1d5db", tableLayout: "auto" }}>
+                      <table className="table hist-table" style={{ borderCollapse: "collapse", fontSize: "10.5px", width: "auto" }}>
                         <thead>
-                          <tr>
-                            <th style={{ position: "sticky", left: 0, background: "#f8fafc", zIndex: 2, padding: "4px 6px", fontSize: "10px", width: "100px", minWidth: "100px", border: "1px solid #d1d5db" }}>Medida</th>
+                          <tr style={{ background: "#f1f5f9" }}>
+                            <th style={{ position: "sticky", left: 0, background: "#f1f5f9", zIndex: 10, padding: "8px", fontSize: "10.5px", width: "100px", minWidth: "100px", border: "1px solid #cbd5e1", boxShadow: "3px 0 4px rgba(0,0,0,0.1)", fontWeight: "600", color: "#334155", textAlign: "left", borderRight: "3px solid #cbd5e1" }}>Medida</th>
                             {(!rowsDesc || rowsDesc.length === 0) ? (
-                              <th style={{ padding: 8, border: "1px solid #d1d5db" }}>Sin datos</th>
+                              <th style={{ padding: 8, border: "1px solid #cbd5e1", textAlign: "center", color: "#94a3b8" }}>Sin datos</th>
                             ) : (
                               rowsDesc.slice(0, histLimit).map((r, i) => {
                                 const formatShortDate = (dateStr) => {
@@ -2254,7 +2348,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                                 };
                                 const key = `header-${r._t || i}-${i}`;
                                 return (
-                                  <th key={key} style={{ whiteSpace: "nowrap", padding: "4px 2px", fontSize: "10px", border: "1px solid #d1d5db", textAlign: "center", resize: "horizontal", overflow: "hidden", minWidth: "45px" }}>
+                                  <th key={key} style={{ whiteSpace: "nowrap", padding: "8px 4px", fontSize: "10px", border: "1px solid #cbd5e1", textAlign: "center", width: "50px", minWidth: "50px", maxWidth: "50px", background: "#f8fafc", fontWeight: "600", color: "#475569" }}>
                                     {r.fecha ? formatShortDate(r.fecha) : (r._t ? formatShortDate(new Date(r._t).toISOString()) : "")}
                                   </th>
                                 );
@@ -2264,31 +2358,31 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                         </thead>
                         <tbody>
                           {(!rowsDesc || rowsDesc.length === 0) ? (
-                            <tr><td style={{ padding: 12, border: "1px solid #d1d5db" }}>Sin registros</td></tr>
+                            <tr><td style={{ padding: 12, border: "1px solid #cbd5e1", textAlign: "center", color: "#94a3b8" }}>Sin registros</td></tr>
                           ) : (
                             [
-                              { label: "Peso", key: "peso", alt: "pesoActual" },
-                              { label: "Masa grasa %", key: "masaGrasaPct" },
-                              { label: "Masa grasa (kg)", key: "masaGrasaKg" },
-                              { label: "Masa magra (kg)", key: "masaMagraKg" },
-                              { label: "Masa muscular (kg)", key: "masaMuscularKg" },
-                              { label: "Agua (kg)", key: "aguaTotalKg" },
-                              { label: "% Agua", key: "aguaTotalPct" },
-                              { label: "Masa ósea (kg)", key: "masaOseaKg" },
-                              { label: "MB (kcal)", key: "mbKcal" },
-                              { label: "Grasa visceral", key: "grasaVisceralNivel" },
+                              { label: "Peso", key: "peso", alt: "pesoActual", important: true },
+                              { label: "MG %", key: "masaGrasaPct" },
+                              { label: "MG kg", key: "masaGrasaKg" },
+                              { label: "Magra", key: "masaMagraKg" },
+                              { label: "Muscular", key: "masaMuscularKg" },
+                              { label: "Agua kg", key: "aguaTotalKg" },
+                              { label: "Agua %", key: "aguaTotalPct" },
+                              { label: "Ósea", key: "masaOseaKg" },
+                              { label: "MB", key: "mbKcal" },
+                              { label: "GV", key: "grasaVisceralNivel" },
                               { label: "IMC", key: "imc" },
-                              { label: "Edad metab.", key: "edadMetabolica" },
-                              { label: "C. Brazo", key: "circunferenciaBrazoCm" },
-                              { label: "C. Cintura", key: "circunferenciaCinturaCm" },
-                              { label: "C. Cadera", key: "circunferenciaCaderaCm" },
-                              { label: "C. Pierna", key: "circunferenciaPiernaCm" },
-                              { label: "Índice C/T", key: "indiceCinturaTalla" },
-                              { label: "TA (SYS/DIA)", key: "tensionArterial", isTa: true },
+                              { label: "EM", key: "edadMetabolica" },
+                              { label: "Brazo", key: "circunferenciaBrazoCm" },
+                              { label: "Cintura", key: "circunferenciaCinturaCm" },
+                              { label: "Cadera", key: "circunferenciaCaderaCm" },
+                              { label: "Pierna", key: "circunferenciaPiernaCm" },
+                              { label: "IC/T", key: "indiceCinturaTalla" },
+                              { label: "TA", key: "tensionArterial", isTa: true },
                               { label: "Notas", key: "notas" }
                             ].map((field, fieldIdx) => (
-                              <tr key={`row-${fieldIdx}`}>
-                                <td style={{ position: "sticky", left: 0, background: "#fff", fontWeight: 600, padding: "4px 6px", fontSize: "10px", width: "100px", minWidth: "100px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", border: "1px solid #d1d5db", boxShadow: "2px 0 4px rgba(0,0,0,0.05)" }}>
+                              <tr key={`row-${fieldIdx}`} style={{ background: fieldIdx % 2 === 0 ? "#fefefe" : "#fafafa" }}>
+                                <td style={{ position: "sticky", left: 0, background: fieldIdx % 2 === 0 ? "#fff" : "#fafafa", fontWeight: 500, padding: "6px 8px", fontSize: "10.5px", width: "100px", minWidth: "100px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", border: "1px solid #cbd5e1", boxShadow: "3px 0 4px rgba(0,0,0,0.1)", color: "#1e293b", borderRight: "3px solid #cbd5e1" }}>
                                   {field.label}
                                 </td>
                                 {rowsDesc.slice(0, histLimit).map((r, i) => {
@@ -2296,12 +2390,12 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                                   let value = "—";
                                   if (field.isTa) {
                                     const ta = r.tensionArterial || {};
-                                    value = `${ta.sys || ""}${ta.dia ? ` / ${ta.dia}` : ""}`;
+                                    value = `${ta.sys || ""}${ta.dia ? `/${ta.dia}` : ""}`;
                                   } else {
                                     value = r[field.key] ?? (field.alt ? r[field.alt] : "") ?? "—";
                                   }
                                   return (
-                                    <td key={key} style={{ padding: "4px 2px", textAlign: "center", fontSize: "10px", border: "1px solid #d1d5db", minWidth: "45px" }}>
+                                    <td key={key} style={{ padding: "6px 4px", textAlign: "center", fontSize: "10.5px", border: "1px solid #e2e8f0", width: "50px", minWidth: "50px", maxWidth: "50px", fontWeight: field.important ? "500" : "normal" }}>
                                       {value}
                                     </td>
                                   );
