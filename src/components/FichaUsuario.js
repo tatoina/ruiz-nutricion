@@ -208,6 +208,17 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           // Limpiar el campo peso antes de establecer userData
           setPeso("");
           setUserData(data);
+          
+          // Cargar orden de campos si existe
+          if (data.fieldsOrder && Array.isArray(data.fieldsOrder)) {
+            setFieldsOrder(data.fieldsOrder);
+          }
+          
+          // Cargar estado de bloqueo si existe
+          if (typeof data.fieldsLocked === 'boolean') {
+            setFieldsLocked(data.fieldsLocked);
+          }
+          
           setEditable((prev) => ({
             nombre: data.nombre || "", apellidos: data.apellidos || "", nacimiento: data.nacimiento || "",
             telefono: data.telefono || "", dietaactual: data.dietaactual || "", dietaOtros: data.dietaOtros || "",
@@ -855,7 +866,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     e.dataTransfer.dropEffect = "move";
   };
 
-  const handleDrop = (e, dropIndex) => {
+  const handleDrop = async (e, dropIndex) => {
     if (!adminMode || fieldsLocked) return;
     e.preventDefault();
     
@@ -870,6 +881,18 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     
     setFieldsOrder(newOrder);
     setDraggedIndex(null);
+    
+    // Guardar el nuevo orden en Firestore
+    try {
+      if (uid && db) {
+        await updateDoc(doc(db, "users", uid), {
+          fieldsOrder: newOrder,
+          updatedAt: serverTimestamp()
+        });
+      }
+    } catch (err) {
+      console.error("Error al guardar orden de campos:", err);
+    }
   };
 
   const handleDragEnd = () => {
@@ -1984,7 +2007,21 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                         </div>
                         <button
                           type="button"
-                          onClick={() => setFieldsLocked(!fieldsLocked)}
+                          onClick={async () => {
+                            const newLockedState = !fieldsLocked;
+                            setFieldsLocked(newLockedState);
+                            // Guardar estado en Firestore
+                            try {
+                              if (uid && db) {
+                                await updateDoc(doc(db, "users", uid), {
+                                  fieldsLocked: newLockedState,
+                                  updatedAt: serverTimestamp()
+                                });
+                              }
+                            } catch (err) {
+                              console.error("Error al guardar estado de bloqueo:", err);
+                            }
+                          }}
                           style={{
                             padding: "8px 16px",
                             fontSize: "13px",
