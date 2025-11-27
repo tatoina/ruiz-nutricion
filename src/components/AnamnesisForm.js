@@ -1448,26 +1448,41 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.9)",
+            backgroundColor: "rgba(0, 0, 0, 0.95)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             zIndex: 9999,
-            cursor: "pointer",
-            padding: "20px"
+            cursor: "zoom-out",
+            padding: "40px"
           }}
           onClick={() => setModalImage(null)}
         >
-          <img
-            src={modalImage}
-            alt="Vista ampliada"
+          <div
             style={{
-              maxWidth: "95%",
-              maxHeight: "95%",
-              objectFit: "contain",
-              borderRadius: "8px"
+              maxWidth: "100%",
+              maxHeight: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              overflow: "auto"
             }}
-          />
+          >
+            <img
+              src={modalImage}
+              alt="Vista ampliada"
+              style={{
+                width: "auto",
+                height: "auto",
+                maxWidth: "100%",
+                maxHeight: "90vh",
+                objectFit: "contain",
+                borderRadius: "8px",
+                boxShadow: "0 8px 32px rgba(0,0,0,0.5)"
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
           <button
             style={{
               position: "absolute",
