@@ -116,6 +116,32 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
   const [uploadingPlanEjercicios, setUploadingPlanEjercicios] = useState(false);
   const [modalImage, setModalImage] = useState(null);
 
+  // Estados para mostrar/ocultar secciones
+  const [showDatosPersonales, setShowDatosPersonales] = useState(true);
+  const [showObjetivos, setShowObjetivos] = useState(true);
+  const [showHistoriaPonderal, setShowHistoriaPonderal] = useState(true);
+  const [showDatosClinicos, setShowDatosClinicos] = useState(true);
+  const [showTemasDigestivos, setShowTemasDigestivos] = useState(true);
+  const [showPreferenciasGustos, setShowPreferenciasGustos] = useState(true);
+  const [showActividadFisica, setShowActividadFisica] = useState(true);
+  const [showRevisionSeguimiento, setShowRevisionSeguimiento] = useState(true);
+  const [showPreferenciaPlan, setShowPreferenciaPlan] = useState(true);
+  const [showSuplementacion, setShowSuplementacion] = useState(true);
+  const [showFarmacos, setShowFarmacos] = useState(true);
+  const [showSueno, setShowSueno] = useState(true);
+  const [showEstiloVida, setShowEstiloVida] = useState(true);
+  const [showIntolerancias, setShowIntolerancias] = useState(true);
+  const [showPatologias, setShowPatologias] = useState(true);
+  const [showMedicacion, setShowMedicacion] = useState(true);
+  const [showDeporte, setShowDeporte] = useState(true);
+  const [showLesiones, setShowLesiones] = useState(true);
+  const [showMenstruacion, setShowMenstruacion] = useState(true);
+  const [showRutinaSemana, setShowRutinaSemana] = useState(true);
+  const [showFinSemana, setShowFinSemana] = useState(true);
+  const [showEligePlan, setShowEligePlan] = useState(true);
+  const [showTipoDieta, setShowTipoDieta] = useState(true);
+  const [showOtros, setShowOtros] = useState(true);
+
   // Estilos comunes
   const sectionStyle = { backgroundColor: "#f7fafc", padding: "24px", borderRadius: "8px" };
   const gridStyle = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", columnGap: "30px" };
@@ -302,9 +328,28 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
      
         {/* DATOS LABORALES */}
         <section style={{ backgroundColor: "#f7fafc", padding: "24px", borderRadius: "8px" }}>
-          <h3 style={{ color: "#2d3748", fontSize: "18px", fontWeight: "600", marginBottom: "20px" }}>
-            DATOS LABORALES
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+            <h3 style={{ color: "#2d3748", fontSize: "18px", fontWeight: "600", margin: 0 }}>
+              DATOS LABORALES
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowDatosPersonales(!showDatosPersonales)}
+              style={{
+                backgroundColor: "#e2e8f0",
+                border: "none",
+                borderRadius: "6px",
+                padding: "6px 12px",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: "600",
+                color: "#4a5568"
+              }}
+            >
+              {showDatosPersonales ? "➖ Ocultar" : "➕ Mostrar"}
+            </button>
+          </div>
+          {showDatosPersonales && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", columnGap: "30px" }}>
             <div>
               <label style={{ display: "block", marginBottom: "8px", fontWeight: "500", color: "#4a5568", fontSize: "14px" }}>
@@ -379,13 +424,33 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               />
             </div>
           </div>
+          )}
         </section>
 
         {/* MOTIVO DE LA VISITA */}
         <section style={{ backgroundColor: "#f7fafc", padding: "24px", borderRadius: "8px" }}>
-          <h3 style={{ color: "#2d3748", fontSize: "18px", fontWeight: "600", marginBottom: "20px" }}>
-            MOTIVO DE LA VISITA
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+            <h3 style={{ color: "#2d3748", fontSize: "18px", fontWeight: "600", margin: 0 }}>
+              MOTIVO DE LA VISITA
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowObjetivos(!showObjetivos)}
+              style={{
+                backgroundColor: "#e2e8f0",
+                border: "none",
+                borderRadius: "6px",
+                padding: "6px 12px",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: "600",
+                color: "#4a5568"
+              }}
+            >
+              {showObjetivos ? "➖ Ocultar" : "➕ Mostrar"}
+            </button>
+          </div>
+          {showObjetivos && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", columnGap: "30px" }}>
             <div>
               <label style={{ display: "block", marginBottom: "8px", fontWeight: "500", color: "#4a5568", fontSize: "14px" }}>
@@ -426,13 +491,31 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               />
             </div>
           </div>
+          )}
         </section>
 
         {/* HISTORIA PONDERAL */}
         <section style={sectionStyle}>
-          <h3 style={titleStyle}>
-            HISTORIA PONDERAL
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+            <h3 style={{ ...titleStyle, marginBottom: 0 }}>
+              HISTORIA PONDERAL
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowHistoriaPonderal(!showHistoriaPonderal)}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: "14px",
+                color: "#2d3748",
+                cursor: "pointer",
+                padding: "4px 8px"
+              }}
+            >
+              {showHistoriaPonderal ? "➖ Ocultar" : "➕ Mostrar"}
+            </button>
+          </div>
+          {showHistoriaPonderal && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "20px", columnGap: "30px" }}>
             <div>
               <label style={labelStyle}>
@@ -495,13 +578,31 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               />
             </div>
           </div>
+          )}
         </section>
 
         {/* DATOS CLÍNICOS */}
         <section style={sectionStyle}>
-          <h3 style={titleStyle}>
-            DATOS CLÍNICOS
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+            <h3 style={{ ...titleStyle, marginBottom: 0 }}>
+              DATOS CLÍNICOS
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowDatosClinicos(!showDatosClinicos)}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: "14px",
+                color: "#2d3748",
+                cursor: "pointer",
+                padding: "4px 8px"
+              }}
+            >
+              {showDatosClinicos ? "⟖ Ocultar" : "➕ Mostrar"}
+            </button>
+          </div>
+          {showDatosClinicos && (
           <div style={gridStyle}>
             <div>
               <label style={labelStyle}>
@@ -576,13 +677,31 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               />
             </div>
           </div>
+          )}
         </section>
 
         {/* TEMAS DIGESTIVOS */}
         <section style={sectionStyle}>
-          <h3 style={titleStyle}>
-            TEMAS DIGESTIVOS
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+            <h3 style={{ ...titleStyle, marginBottom: 0 }}>
+              TEMAS DIGESTIVOS
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowTemasDigestivos(!showTemasDigestivos)}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: "14px",
+                color: "#2d3748",
+                cursor: "pointer",
+                padding: "4px 8px"
+              }}
+            >
+              {showTemasDigestivos ? "⟖ Ocultar" : "➕ Mostrar"}
+            </button>
+          </div>
+          {showTemasDigestivos && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "15px" }}>
             <div>
               <label style={labelStyle}>
@@ -609,13 +728,31 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               />
             </div>
           </div>
+          )}
         </section>
 
         {/* PREFERENCIAS Y GUSTOS */}
         <section style={sectionStyle}>
-          <h3 style={titleStyle}>
-            PREFERENCIAS Y GUSTOS
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+            <h3 style={{ ...titleStyle, marginBottom: 0 }}>
+              PREFERENCIAS Y GUSTOS
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowPreferenciasGustos(!showPreferenciasGustos)}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: "14px",
+                color: "#2d3748",
+                cursor: "pointer",
+                padding: "4px 8px"
+              }}
+            >
+              {showPreferenciasGustos ? "⟖ Ocultar" : "➕ Mostrar"}
+            </button>
+          </div>
+          {showPreferenciasGustos && (
           <div style={gridStyle}>
             <div>
               <label style={labelStyle}>
@@ -714,13 +851,31 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               />
             </div>
           </div>
+          )}
         </section>
 
         {/* ACTIVIDAD FÍSICA */}
         <section style={sectionStyle}>
-          <h3 style={titleStyle}>
-            ACTIVIDAD FÍSICA
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+            <h3 style={{ ...titleStyle, marginBottom: 0 }}>
+              ACTIVIDAD FÍSICA
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowActividadFisica(!showActividadFisica)}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: "14px",
+                color: "#2d3748",
+                cursor: "pointer",
+                padding: "4px 8px"
+              }}
+            >
+              {showActividadFisica ? "⟖ Ocultar" : "➕ Mostrar"}
+            </button>
+          </div>
+          {showActividadFisica && (
           <div style={gridStyle}>
             <div>
               <label style={labelStyle}>
@@ -783,13 +938,31 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               />
             </div>
           </div>
+          )}
         </section>
 
         {/* REVISIÓN Y SEGUIMIENTO */}
         <section style={sectionStyle}>
-          <h3 style={titleStyle}>
-            REVISIÓN Y SEGUIMIENTO
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+            <h3 style={{ ...titleStyle, marginBottom: 0 }}>
+              REVISIÓN Y SEGUIMIENTO
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowRevisionSeguimiento(!showRevisionSeguimiento)}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: "14px",
+                color: "#2d3748",
+                cursor: "pointer",
+                padding: "4px 8px"
+              }}
+            >
+              {showRevisionSeguimiento ? "⟖ Ocultar" : "➕ Mostrar"}
+            </button>
+          </div>
+          {showRevisionSeguimiento && (
           <div>
             <label style={labelStyle}>
               ¿Cada cuánto desea volver a revisión?
@@ -805,13 +978,31 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               style={inputStyle}
             />
           </div>
+          )}
         </section>
 
         {/* PREFERENCIA DE PLAN NUTRICIONAL */}
         <section style={sectionStyle}>
-          <h3 style={titleStyle}>
-            PREFERENCIA DE PLAN NUTRICIONAL
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+            <h3 style={{ ...titleStyle, marginBottom: 0 }}>
+              PREFERENCIA DE PLAN NUTRICIONAL
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowPreferenciaPlan(!showPreferenciaPlan)}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: "14px",
+                color: "#2d3748",
+                cursor: "pointer",
+                padding: "4px 8px"
+              }}
+            >
+              {showPreferenciaPlan ? "⟖ Ocultar" : "➕ Mostrar"}
+            </button>
+          </div>
+          {showPreferenciaPlan && (
           <div>
             <label style={labelStyle}>
               ¿Prefiere un menú sencillo y práctico o un plan más elaborado con mayor variedad de recetas?
@@ -824,13 +1015,31 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               style={inputStyle}
             />
           </div>
+          )}
         </section>
 
         {/* SUPLEMENTACIÓN */}
         <section style={sectionStyle}>
-          <h3 style={titleStyle}>
-            SUPLEMENTACIÓN
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+            <h3 style={{ ...titleStyle, marginBottom: 0 }}>
+              SUPLEMENTACIÓN
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowSuplementacion(!showSuplementacion)}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: "14px",
+                color: "#2d3748",
+                cursor: "pointer",
+                padding: "4px 8px"
+              }}
+            >
+              {showSuplementacion ? "⟖ Ocultar" : "➕ Mostrar"}
+            </button>
+          </div>
+          {showSuplementacion && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "15px" }}>
             <div>
               <label style={labelStyle}>
@@ -869,13 +1078,31 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               />
             </div>
           </div>
+          )}
         </section>
 
         {/* FÁRMACOS */}
         <section style={sectionStyle}>
-          <h3 style={titleStyle}>
-            FÁRMACOS
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+            <h3 style={{ ...titleStyle, marginBottom: 0 }}>
+              FÁRMACOS
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowFarmacos(!showFarmacos)}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: "14px",
+                color: "#2d3748",
+                cursor: "pointer",
+                padding: "4px 8px"
+              }}
+            >
+              {showFarmacos ? "⟖ Ocultar" : "➕ Mostrar"}
+            </button>
+          </div>
+          {showFarmacos && (
           <div>
             <label style={labelStyle}>
               ¿Toma algún fármaco? (indique dosis y frecuencia):
@@ -888,13 +1115,31 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               style={inputStyle}
             />
           </div>
+          )}
         </section>
 
         {/* SUEÑO */}
         <section style={sectionStyle}>
-          <h3 style={titleStyle}>
-            SUEÑO
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+            <h3 style={{ ...titleStyle, marginBottom: 0 }}>
+              SUEÑO
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowSueno(!showSueno)}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: "14px",
+                color: "#2d3748",
+                cursor: "pointer",
+                padding: "4px 8px"
+              }}
+            >
+              {showSueno ? "⟖ Ocultar" : "➕ Mostrar"}
+            </button>
+          </div>
+          {showSueno && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px" }}>
             <div>
               <label style={labelStyle}>
@@ -935,13 +1180,31 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               />
             </div>
           </div>
+          )}
         </section>
 
         {/* LESIONES */}
         <section style={sectionStyle}>
-          <h3 style={titleStyle}>
-            LESIONES
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+            <h3 style={{ ...titleStyle, marginBottom: 0 }}>
+              LESIONES
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowLesiones(!showLesiones)}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: "14px",
+                color: "#2d3748",
+                cursor: "pointer",
+                padding: "4px 8px"
+              }}
+            >
+              {showLesiones ? "⟖ Ocultar" : "➕ Mostrar"}
+            </button>
+          </div>
+          {showLesiones && (
           <div style={gridStyle}>
             <div>
               <label style={labelStyle}>
@@ -968,13 +1231,31 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               />
             </div>
           </div>
+          )}
         </section>
 
         {/* MENSTRUACIÓN Y HÁBITO INTESTINAL */}
         <section style={sectionStyle}>
-          <h3 style={titleStyle}>
-            MENSTRUACIÓN Y HÁBITO INTESTINAL
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+            <h3 style={{ ...titleStyle, marginBottom: 0 }}>
+              MENSTRUACIÓN Y HÁBITO INTESTINAL
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowMenstruacion(!showMenstruacion)}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: "14px",
+                color: "#2d3748",
+                cursor: "pointer",
+                padding: "4px 8px"
+              }}
+            >
+              {showMenstruacion ? "⟖ Ocultar" : "➕ Mostrar"}
+            </button>
+          </div>
+          {showMenstruacion && (
           <div style={gridStyle}>
             <div>
               <label style={labelStyle}>
@@ -1001,13 +1282,31 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               />
             </div>
           </div>
+          )}
         </section>
 
         {/* RUTINA ENTRE SEMANA */}
         <section style={sectionStyle}>
-          <h3 style={titleStyle}>
-            RUTINA ENTRE SEMANA
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+            <h3 style={{ ...titleStyle, marginBottom: 0 }}>
+              RUTINA ENTRE SEMANA
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowRutinaSemana(!showRutinaSemana)}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: "14px",
+                color: "#2d3748",
+                cursor: "pointer",
+                padding: "4px 8px"
+              }}
+            >
+              {showRutinaSemana ? "⟖ Ocultar" : "➕ Mostrar"}
+            </button>
+          </div>
+          {showRutinaSemana && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "15px" }}>
             <div>
               <label style={labelStyle}>
@@ -1034,13 +1333,31 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               />
             </div>
           </div>
+          )}
         </section>
 
         {/* FIN DE SEMANA */}
         <section style={sectionStyle}>
-          <h3 style={titleStyle}>
-            FIN DE SEMANA
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+            <h3 style={{ ...titleStyle, marginBottom: 0 }}>
+              FIN DE SEMANA
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowFinSemana(!showFinSemana)}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: "14px",
+                color: "#2d3748",
+                cursor: "pointer",
+                padding: "4px 8px"
+              }}
+            >
+              {showFinSemana ? "⟖ Ocultar" : "➕ Mostrar"}
+            </button>
+          </div>
+          {showFinSemana && (
           <div style={gridStyle}>
             <div>
               <label style={labelStyle}>
@@ -1067,13 +1384,31 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               />
             </div>
           </div>
+          )}
         </section>
 
         {/* ELIGE TU PLAN */}
         <section style={sectionStyle}>
-          <h3 style={titleStyle}>
-            ELIGE TU PLAN
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+            <h3 style={{ ...titleStyle, marginBottom: 0 }}>
+              ELIGE TU PLAN
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowEligePlan(!showEligePlan)}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: "14px",
+                color: "#2d3748",
+                cursor: "pointer",
+                padding: "4px 8px"
+              }}
+            >
+              {showEligePlan ? "⟖ Ocultar" : "➕ Mostrar"}
+            </button>
+          </div>
+          {showEligePlan && (
           <div>
             <label style={labelStyle}>
               Tipo de plan:
@@ -1087,6 +1422,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               <option value="">Seleccionar...</option>
               <option value="Basico">Básico</option>
               <option value="Basico + Ejercicios">Básico + Ejercicios</option>
+              <option value="Seguimiento">Seguimiento</option>
             </select>
             
             {/* Sección de imágenes de planes */}
@@ -1229,13 +1565,31 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               </div>
             </div>
           </div>
+          )}
         </section>
 
         {/* TIPO DE DIETA */}
         <section style={sectionStyle}>
-          <h3 style={titleStyle}>
-            TIPO DE DIETA
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+            <h3 style={{ ...titleStyle, marginBottom: 0 }}>
+              TIPO DE DIETA
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowTipoDieta(!showTipoDieta)}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: "14px",
+                color: "#2d3748",
+                cursor: "pointer",
+                padding: "4px 8px"
+              }}
+            >
+              {showTipoDieta ? "⟖ Ocultar" : "➕ Mostrar"}
+            </button>
+          </div>
+          {showTipoDieta && (
           <div>
             <label style={labelStyle}>
               Tipo de menú:
@@ -1391,13 +1745,31 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               </div>
             </div>
           </div>
+          )}
         </section>
 
         {/* OTROS */}
         <section style={sectionStyle}>
-          <h3 style={titleStyle}>
-            OTROS
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+            <h3 style={{ ...titleStyle, marginBottom: 0 }}>
+              OTROS
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowOtros(!showOtros)}
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: "14px",
+                color: "#2d3748",
+                cursor: "pointer",
+                padding: "4px 8px"
+              }}
+            >
+              {showOtros ? "⟖ Ocultar" : "➕ Mostrar"}
+            </button>
+          </div>
+          {showOtros && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "15px" }}>
             <div>
               <label style={labelStyle}>
@@ -1437,6 +1809,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               />
             </div>
           </div>
+          )}
         </section>
       
       {/* Modal para maximizar imagen */}

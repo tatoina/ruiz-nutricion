@@ -54,9 +54,15 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     { id: "ejercicios", label: "Ejercicios" },
   ];
   
-  const tabs = adminMode 
-    ? [...baseTabs, { id: "anamnesis", label: "Anamnesis" }]
+  // Filtrar tabs según el plan del usuario
+  const esPlanSeguimiento = userData?.anamnesis?.eligePlan === "Seguimiento";
+  const tabsFiltradas = esPlanSeguimiento 
+    ? baseTabs.filter(tab => tab.id === "pesaje" || tab.id === "calendario")
     : baseTabs;
+  
+  const tabs = adminMode 
+    ? [...tabsFiltradas, { id: "anamnesis", label: "Anamnesis" }]
+    : tabsFiltradas;
 
   const ALL_SECTIONS = [
     { key: "desayuno", label: "Desayuno" },
@@ -1551,6 +1557,20 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                 textOverflow: "ellipsis"
               }}>
                 {userData.nombre ? `${userData.nombre} ${userData.apellidos || ""}` : userData.email}
+                {userData?.anamnesis?.eligePlan && (
+                  <span style={{
+                    marginLeft: "8px",
+                    padding: "2px 8px",
+                    fontSize: "11px",
+                    fontWeight: "500",
+                    backgroundColor: "rgba(255,255,255,0.25)",
+                    borderRadius: "12px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px"
+                  }}>
+                    {userData.anamnesis.eligePlan}
+                  </span>
+                )}
               </div>
               <div style={{ 
                 fontSize: "13px", 
