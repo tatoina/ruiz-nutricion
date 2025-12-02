@@ -142,6 +142,43 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
   const [showTipoDieta, setShowTipoDieta] = useState(true);
   const [showOtros, setShowOtros] = useState(true);
 
+  // Función para colapsar/expandir todas las secciones
+  const toggleAllSections = (show) => {
+    setShowDatosPersonales(show);
+    setShowObjetivos(show);
+    setShowHistoriaPonderal(show);
+    setShowDatosClinicos(show);
+    setShowTemasDigestivos(show);
+    setShowPreferenciasGustos(show);
+    setShowActividadFisica(show);
+    setShowRevisionSeguimiento(show);
+    setShowPreferenciaPlan(show);
+    setShowSuplementacion(show);
+    setShowFarmacos(show);
+    setShowSueno(show);
+    setShowEstiloVida(show);
+    setShowIntolerancias(show);
+    setShowPatologias(show);
+    setShowMedicacion(show);
+    setShowDeporte(show);
+    setShowLesiones(show);
+    setShowMenstruacion(show);
+    setShowRutinaSemana(show);
+    setShowFinSemana(show);
+    setShowEligePlan(show);
+    setShowTipoDieta(show);
+    setShowOtros(show);
+  };
+
+  // Verificar si todas las secciones están visibles
+  const allSectionsVisible = showDatosPersonales && showObjetivos && showHistoriaPonderal && 
+    showDatosClinicos && showTemasDigestivos && showPreferenciasGustos && 
+    showActividadFisica && showRevisionSeguimiento && showPreferenciaPlan && 
+    showSuplementacion && showFarmacos && showSueno && showEstiloVida && 
+    showIntolerancias && showPatologias && showMedicacion && showDeporte && 
+    showLesiones && showMenstruacion && showRutinaSemana && showFinSemana && 
+    showEligePlan && showTipoDieta && showOtros;
+
   // Estilos comunes
   const sectionStyle = { backgroundColor: "#f7fafc", padding: "24px", borderRadius: "8px" };
   const gridStyle = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", columnGap: "30px" };
@@ -267,6 +304,26 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
     <div className="anamnesis-container" style={{ padding: "20px 24px 80px 24px", width: "100%", boxSizing: "border-box", position: "relative" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
         <h2 style={{ color: "#4a5568", fontSize: "24px", fontWeight: "600", margin: 0 }}>ANAMNESIS</h2>
+        <button
+          type="button"
+          onClick={() => toggleAllSections(!allSectionsVisible)}
+          style={{
+            padding: "10px 20px",
+            borderRadius: "8px",
+            border: "2px solid #4299e1",
+            background: allSectionsVisible ? "#4299e1" : "white",
+            color: allSectionsVisible ? "white" : "#4299e1",
+            cursor: "pointer",
+            fontWeight: "600",
+            fontSize: "14px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            transition: "all 0.2s"
+          }}
+        >
+          {allSectionsVisible ? "➖ Ocultar todo" : "➕ Mostrar todo"}
+        </button>
       </div>
 
       {/* Botón flotante de guardar */}
