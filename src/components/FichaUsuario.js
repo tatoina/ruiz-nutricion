@@ -374,48 +374,61 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     }
   };
 
-  // Funciones para gestión de citas
-  const loadAppointments = useCallback(async () => {
-    if (!uid) {
-      setLoadingAppointments(false);
-      return;
-    }
+  // Ref para evitar múltiples cargas
+  const loadingCitasRef = useRef(false);
+  const lastLoadedTabRef = useRef(null);
+
+  // Función para recargar citas
+  const loadAppointments = useCallback(() => {
+    if (!uid || loadingCitasRef.current) return;
     
+    loadingCitasRef.current = true;
     setLoadingAppointments(true);
     
-    try {
-      const userSnap = await getDoc(doc(db, "users", uid));
-      if (userSnap.exists()) {
-        const data = userSnap.data();
-        const appts = data.citas || [];
-        setAppointments(appts);
-        
-        // Encontrar próxima cita
-        const now = new Date();
-        const futureAppts = appts
-          .filter(apt => new Date(apt.fecha + 'T' + apt.hora) > now)
-          .sort((a, b) => new Date(a.fecha + 'T' + a.hora) - new Date(b.fecha + 'T' + b.hora));
-        
-        setNextAppointment(futureAppts[0] || null);
-      } else {
+    getDoc(doc(db, "users", uid))
+      .then(userSnap => {
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          const appts = data.citas || [];
+          setAppointments(appts);
+          
+          // Encontrar próxima cita
+          const now = new Date();
+          const futureAppts = appts
+            .filter(apt => new Date(apt.fecha + 'T' + apt.hora) > now)
+            .sort((a, b) => new Date(a.fecha + 'T' + a.hora) - new Date(b.fecha + 'T' + b.hora));
+          
+          setNextAppointment(futureAppts[0] || null);
+        } else {
+          setAppointments([]);
+          setNextAppointment(null);
+        }
+      })
+      .catch(err => {
+        console.error("Error loading appointments:", err);
         setAppointments([]);
         setNextAppointment(null);
-      }
-      setLoadingAppointments(false);
-    } catch (err) {
-      console.error("Error loading appointments:", err);
-      setAppointments([]);
-      setNextAppointment(null);
-      setLoadingAppointments(false);
-    }
+      })
+      .finally(() => {
+        setLoadingAppointments(false);
+        loadingCitasRef.current = false;
+      });
   }, [uid]);
 
+  // Cargar citas cuando se accede al tab
   useEffect(() => {
-    if (tabs[tabIndex]?.id === "citas" && uid) { // Tab de citas
-      loadAppointments();
+    const currentTabId = tabs[tabIndex]?.id;
+    
+    if (currentTabId === "citas" && uid) {
+      // Solo cargar si cambiamos al tab de citas
+      if (lastLoadedTabRef.current !== "citas") {
+        lastLoadedTabRef.current = "citas";
+        loadAppointments();
+      }
+    } else {
+      lastLoadedTabRef.current = currentTabId;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabIndex, tabs, uid]);
+  }, [tabIndex, tabs, uid, loadAppointments]);
 
   // Solicitar permisos de notificación
   const requestNotificationPermission = useCallback(async () => {
