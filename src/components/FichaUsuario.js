@@ -376,13 +376,19 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
   // Funciones para gestión de citas
   const loadAppointments = useCallback(async () => {
-    if (!uid) return;
+    console.log("loadAppointments llamado, uid:", uid);
+    if (!uid) {
+      console.log("No hay uid, saliendo");
+      return;
+    }
     setLoadingAppointments(true);
     try {
       const userSnap = await getDoc(doc(db, "users", uid));
+      console.log("userSnap exists:", userSnap.exists());
       if (userSnap.exists()) {
         const data = userSnap.data();
         const appts = data.citas || [];
+        console.log("Citas encontradas:", appts.length, appts);
         setAppointments(appts);
         
         // Encontrar próxima cita
@@ -391,6 +397,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           .filter(apt => new Date(apt.fecha + 'T' + apt.hora) > now)
           .sort((a, b) => new Date(a.fecha + 'T' + a.hora) - new Date(b.fecha + 'T' + b.hora));
         
+        console.log("Próxima cita:", futureAppts[0]);
         setNextAppointment(futureAppts[0] || null);
       }
     } catch (err) {
@@ -401,7 +408,9 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   }, [uid]);
 
   useEffect(() => {
+    console.log("Tab actual:", tabs[tabIndex]?.id, "tabIndex:", tabIndex);
     if (tabs[tabIndex]?.id === "citas") { // Tab de citas
+      console.log("Cargando citas...");
       loadAppointments();
     }
   }, [tabIndex, tabs, loadAppointments]);
