@@ -376,9 +376,13 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
   // Funciones para gestión de citas
   const loadAppointments = useCallback(async () => {
-    if (!uid) return;
+    if (!uid) {
+      setLoadingAppointments(false);
+      return;
+    }
     
     setLoadingAppointments(true);
+    
     try {
       const userSnap = await getDoc(doc(db, "users", uid));
       if (userSnap.exists()) {
@@ -393,10 +397,15 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           .sort((a, b) => new Date(a.fecha + 'T' + a.hora) - new Date(b.fecha + 'T' + b.hora));
         
         setNextAppointment(futureAppts[0] || null);
+      } else {
+        setAppointments([]);
+        setNextAppointment(null);
       }
+      setLoadingAppointments(false);
     } catch (err) {
       console.error("Error loading appointments:", err);
-    } finally {
+      setAppointments([]);
+      setNextAppointment(null);
       setLoadingAppointments(false);
     }
   }, [uid]);
@@ -405,7 +414,8 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     if (tabs[tabIndex]?.id === "citas" && uid) { // Tab de citas
       loadAppointments();
     }
-  }, [tabIndex, tabs, uid, loadAppointments]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabIndex, tabs, uid]);
 
   // Solicitar permisos de notificación
   const requestNotificationPermission = useCallback(async () => {
