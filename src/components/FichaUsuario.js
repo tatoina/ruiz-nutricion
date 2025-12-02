@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import "./estilos.css";
 import { auth, db } from "../Firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
@@ -50,19 +50,9 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const baseTabs = [
     { id: "pesaje", label: "Pesaje" },
     { id: "semana", label: "Dieta semanal" },
-    { id: "calendario", label: "📅 Calendario" },
     { id: "ejercicios", label: "Ejercicios" },
+    { id: "citas", label: "📅 Citas" },
   ];
-  
-  // Filtrar tabs según el plan del usuario
-  const esPlanSeguimiento = userData?.anamnesis?.eligePlan === "Seguimiento";
-  const tabsFiltradas = esPlanSeguimiento 
-    ? baseTabs.filter(tab => tab.id === "pesaje" || tab.id === "calendario")
-    : baseTabs;
-  
-  const tabs = adminMode 
-    ? [...tabsFiltradas, { id: "anamnesis", label: "Anamnesis" }]
-    : tabsFiltradas;
 
   const ALL_SECTIONS = [
     { key: "desayuno", label: "Desayuno" },
@@ -103,6 +93,18 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   // Estados para notificaciones
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notifiedAppointments, setNotifiedAppointments] = useState(new Set());
+
+  // Calcular tabs filtradas según el plan del usuario
+  const tabs = useMemo(() => {
+    const esPlanSeguimiento = userData?.anamnesis?.eligePlan === "Seguimiento";
+    const tabsFiltradas = esPlanSeguimiento 
+      ? baseTabs.filter(tab => tab.id === "pesaje" || tab.id === "citas")
+      : baseTabs;
+    
+    return adminMode 
+      ? [...tabsFiltradas, { id: "anamnesis", label: "Anamnesis" }]
+      : tabsFiltradas;
+  }, [userData, adminMode, baseTabs]);
 
   const saveTimerRef = useRef(null);
   const [saveStatus, setSaveStatus] = useState("idle");
@@ -399,10 +401,10 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   }, [uid]);
 
   useEffect(() => {
-    if (tabIndex === 2) { // Tab de calendario
+    if (tabs[tabIndex]?.id === "citas") { // Tab de citas
       loadAppointments();
     }
-  }, [tabIndex, loadAppointments]);
+  }, [tabIndex, tabs, loadAppointments]);
 
   // Solicitar permisos de notificación
   const requestNotificationPermission = useCallback(async () => {
@@ -1888,7 +1890,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           </nav>
 
           <div style={{ marginTop: "12px", position: "relative", paddingBottom: "80px" }}>
-            {tabIndex === 0 && (
+            {tabs[tabIndex]?.id === "pesaje" && (
               <div className="card pesaje-section-wrapper" style={{ padding: "12px", borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
                 {/* Sección 1: Formulario de medidas - Colapsable */}
                 <div 
@@ -2660,7 +2662,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
               )}
             </div>
           )}
-          {tabIndex === 1 && (
+          {tabs[tabIndex]?.id === "semana" && (
             <div className="card" style={{ width: "100%", maxWidth: "none", margin: "0", padding: "0", borderRadius: "0" }}>
               <div className="panel-section" style={{ padding: "16px 20px", maxWidth: "none" }}>
                 <h3 style={{ margin: "0 0 16px 0", fontSize: "16px", fontWeight: "600", color: "#15803d" }}>
@@ -3000,7 +3002,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                 </div>
               </div>
             )}
-            {tabIndex === 2 && (
+            {tabs[tabIndex]?.id === "citas" && (
               <div className="card" style={{ padding: adminMode ? "16px 20px" : "16px", width: "100%", maxWidth: "none" }}>
                 <div style={{ 
                   display: "flex", 
@@ -3209,7 +3211,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                 )}
               </div>
             )}
-            {tabIndex === 3 && (
+            {tabs[tabIndex]?.id === "ejercicios" && (
               <div className="card" style={{ padding: adminMode ? "16px 20px" : "12px", width: "100%", maxWidth: "none" }}>
                 <h3>Ejercicios</h3>
                 <div className="panel-section" style={{ maxWidth: "none" }}>
