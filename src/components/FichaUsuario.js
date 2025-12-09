@@ -868,7 +868,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
   // Función para guardar la edición
   const saveEditedRecord = async () => {
-    if (!editingRecord) return;
+    if (!editingRecord || editingIndex === null) return;
 
     try {
       const snap = await getDoc(doc(db, "users", uid));
@@ -882,29 +882,82 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       const pesoArray = Array.isArray(data?.pesoHistorico) ? [...data.pesoHistorico] : [];
 
       const recordToUpdate = rowsDesc[editingIndex];
+      
+      // Convertir campos numéricos
+      const parseNum = (val) => {
+        const n = parseFloat(val);
+        return isNaN(n) ? null : n;
+      };
 
-      // Actualizar en medidasHistorico
-      const medidasIndex = medidasArray.findIndex((m) => 
-        m.fecha === recordToUpdate.fecha && m._t === recordToUpdate._t
-      );
-      if (medidasIndex !== -1) {
-        medidasArray[medidasIndex] = {
-          ...editingRecord,
-          pesoActual: editingRecord.peso, // Guardar peso como pesoActual en medidasHistorico
-          createdAt: recordToUpdate.createdAt,
-        };
+      // Preparar el registro actualizado con todos los campos convertidos correctamente
+      const updatedRecord = {
+        fecha: editingRecord.fecha,
+        pesoActual: parseNum(editingRecord.peso),
+        masaGrasaPct: parseNum(editingRecord.masaGrasaPct),
+        masaGrasaKg: parseNum(editingRecord.masaGrasaKg),
+        masaMagraKg: parseNum(editingRecord.masaMagraKg),
+        masaMuscularKg: parseNum(editingRecord.masaMuscularKg),
+        aguaTotalKg: parseNum(editingRecord.aguaTotalKg),
+        aguaTotalPct: parseNum(editingRecord.aguaTotalPct),
+        masaOseaKg: parseNum(editingRecord.masaOseaKg),
+        mbKcal: parseNum(editingRecord.mbKcal),
+        grasaVisceralNivel: parseNum(editingRecord.grasaVisceralNivel),
+        imc: parseNum(editingRecord.imc),
+        edadMetabolica: parseNum(editingRecord.edadMetabolica),
+        indiceCinturaTalla: editingRecord.indiceCinturaTalla || "",
+        circunferenciaBrazoCm: parseNum(editingRecord.circunferenciaBrazoCm),
+        circunferenciaCinturaCm: parseNum(editingRecord.circunferenciaCinturaCm),
+        circunferenciaCaderaCm: parseNum(editingRecord.circunferenciaCaderaCm),
+        circunferenciaPiernaCm: parseNum(editingRecord.circunferenciaPiernaCm),
+        tensionArterial: editingRecord.tensionArterial || { sys: "", dia: "" },
+        notas: editingRecord.notas || "",
+        createdAt: recordToUpdate.createdAt || new Date(),
+      };
+
+      // Buscar y actualizar en medidasHistorico usando createdAt como identificador único
+      let foundMedidas = false;
+      for (let i = 0; i < medidasArray.length; i++) {
+        const m = medidasArray[i];
+        const mCreatedTime = timestampToMs(m.createdAt);
+        const recordCreatedTime = timestampToMs(recordToUpdate.createdAt);
+        
+        if (Math.abs(mCreatedTime - recordCreatedTime) < 1000) { // Dentro de 1 segundo
+          medidasArray[i] = updatedRecord;
+          foundMedidas = true;
+          break;
+        }
       }
 
-      // Actualizar en pesoHistorico
-      const pesoIndex = pesoArray.findIndex((p) => 
-        p.fecha === recordToUpdate.fecha && p._t === recordToUpdate._t
-      );
-      if (pesoIndex !== -1) {
-        pesoArray[pesoIndex] = {
+      // Buscar y actualizar en pesoHistorico
+      let foundPeso = false;
+      for (let i = 0; i < pesoArray.length; i++) {
+        const p = pesoArray[i];
+        const pCreatedTime = timestampToMs(p.createdAt);
+        const recordCreatedTime = timestampToMs(recordToUpdate.createdAt);
+        
+        if (Math.abs(pCreatedTime - recordCreatedTime) < 1000) { // Dentro de 1 segundo
+          pesoArray[i] = {
+            fecha: editingRecord.fecha,
+            peso: parseNum(editingRecord.peso),
+            createdAt: recordToUpdate.createdAt,
+          };
+          foundPeso = true;
+          break;
+        }
+      }
+
+      // Si no se encontró en medidasHistorico pero sí hay datos, agregar
+      if (!foundMedidas && medidasArray.length > 0) {
+        medidasArray.push(updatedRecord);
+      }
+
+      // Si no se encontró en pesoHistorico pero sí hay datos, agregar
+      if (!foundPeso && pesoArray.length > 0) {
+        pesoArray.push({
           fecha: editingRecord.fecha,
-          peso: editingRecord.peso,
-          createdAt: recordToUpdate.createdAt,
-        };
+          peso: parseNum(editingRecord.peso),
+          createdAt: recordToUpdate.createdAt || new Date(),
+        });
       }
 
       // Actualizar Firestore
@@ -926,6 +979,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     } catch (err) {
       console.error("Error al actualizar pesaje:", err);
       setError(err?.message || "No se pudo actualizar el registro.");
+      alert("Error al actualizar: " + (err?.message || "Error desconocido"));
     }
   };
 
