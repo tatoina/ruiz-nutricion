@@ -3058,6 +3058,41 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                           style={{ padding: "6px 12px", minHeight: "32px" }}
                         >→</button>
                       </div>
+                      
+                      {/* Botón de Snacks al lado del día de la semana */}
+                      <button
+                        onClick={() => {
+                          setShowSnacksModal(true);
+                          loadSnacks();
+                        }}
+                        style={{
+                          padding: "8px 16px",
+                          borderRadius: "20px",
+                          backgroundColor: "#fb923c",
+                          color: "white",
+                          border: "none",
+                          cursor: "pointer",
+                          fontSize: "14px",
+                          fontWeight: "600",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          boxShadow: "0 2px 8px rgba(251, 146, 60, 0.3)",
+                          transition: "all 0.2s ease"
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = "scale(1.05)";
+                          e.currentTarget.style.backgroundColor = "#f97316";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = "scale(1)";
+                          e.currentTarget.style.backgroundColor = "#fb923c";
+                        }}
+                        title="Ver SNACK's disponibles"
+                      >
+                        <span style={{ fontSize: "18px" }}>🍎</span>
+                        <span>SNACK's</span>
+                      </button>
                     </div>
                     <div>
                       <div className="weekly-menu-grid">
@@ -3097,49 +3132,6 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                     </div>
                   </>
                 )}
-
-                  {/* Botón flotante de Snacks para TODOS los usuarios */}
-                  {!adminMode && (
-                    <div style={{
-                      position: "fixed",
-                      bottom: "30px",
-                      right: "30px",
-                      zIndex: 1000
-                    }}>
-                      <button
-                        onClick={() => {
-                          setShowSnacksModal(true);
-                          loadSnacks();
-                        }}
-                        style={{
-                          width: "60px",
-                          height: "60px",
-                          borderRadius: "50%",
-                          backgroundColor: "#fb923c",
-                          color: "white",
-                          border: "none",
-                          cursor: "pointer",
-                          fontSize: "28px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          boxShadow: "0 4px 16px rgba(251, 146, 60, 0.4)",
-                          transition: "all 0.3s ease"
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = "scale(1.1)";
-                          e.currentTarget.style.backgroundColor = "#f97316";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = "scale(1)";
-                          e.currentTarget.style.backgroundColor = "#fb923c";
-                        }}
-                        title="Ver SNACK's disponibles"
-                      >
-                        🍿
-                      </button>
-                    </div>
-                  )}
 
                   {/* Botones flotantes para Dieta Semanal (solo admin) */}
                   {adminMode && (
@@ -3820,7 +3812,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
               alignItems: "center"
             }}>
               <h2 style={{ margin: 0, fontSize: "24px", color: "#92400e", fontWeight: "700" }}>
-                🍿 SNACK's Disponibles
+                🍎 SNACK's Disponibles
               </h2>
               <button
                 onClick={() => setShowSnacksModal(false)}
@@ -3858,7 +3850,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                 </div>
               ) : snacksList.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "40px", color: "#6b7280" }}>
-                  <div style={{ fontSize: "48px", marginBottom: "16px" }}>🍿</div>
+                  <div style={{ fontSize: "48px", marginBottom: "16px" }}>🍎</div>
                   <div style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>
                     No hay snacks disponibles
                   </div>
