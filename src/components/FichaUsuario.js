@@ -86,9 +86,23 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const [showProfile, setShowProfile] = useState(false);
 
   const [peso, setPeso] = useState("");
+  const [altura, setAltura] = useState("");
   const todayISO = new Date().toISOString().slice(0, 10);
   const [fechaPeso, setFechaPeso] = useState(() => todayISO);
   const [savingPeso, setSavingPeso] = useState(false);
+
+  // Calcular edad desde fecha de nacimiento
+  const calcularEdad = (fechaNacimiento) => {
+    if (!fechaNacimiento) return null;
+    const hoy = new Date();
+    const nacimiento = new Date(fechaNacimiento);
+    let edad = hoy.getFullYear() - nacimiento.getFullYear();
+    const mes = hoy.getMonth() - nacimiento.getMonth();
+    if (mes < 0 || (mes === 0 && hoy.getDate() < nacimiento.getDate())) {
+      edad--;
+    }
+    return edad;
+  };
 
   // Estados para notificaciones
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -213,8 +227,9 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         } else {
           const data = snap.data();
           
-          // Limpiar el campo peso antes de establecer userData
+          // Limpiar el campo peso y cargar altura antes de establecer userData
           setPeso("");
+          setAltura(data.altura || "");
           setUserData(data);
           
           // Cargar orden de campos si existe
@@ -644,13 +659,20 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       const updatedMedidas = [...existingMedidas, entryMedida];
       const updatedPeso = [...existingPeso, entryPeso];
 
-      // Actualizar con los arrays completos
-      await updateDoc(userDocRef, {
+      // Preparar actualización con arrays completos y altura
+      const updatePayload = {
         medidasHistorico: updatedMedidas,
         pesoHistorico: updatedPeso,
         pesoActual: measuresPayload.pesoActual,
         updatedAt: serverTimestamp(),
-      });
+      };
+      
+      // Solo actualizar altura si hay un valor válido
+      if (altura && parseFloat(altura) > 0) {
+        updatePayload.altura = parseFloat(altura);
+      }
+      
+      await updateDoc(userDocRef, updatePayload);
     } catch (err) {
       console.error("[FichaUsuario] submitPeso error:", err);
       setError(err?.message || "No se pudo guardar el peso.");
@@ -2033,8 +2055,8 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                   </div>
 
                   <div className="pesaje-container">
-                    {/* Fecha y Peso en la misma fila */}
-                    <div style={{ marginBottom: "16px", display: "grid", gridTemplateColumns: "200px 200px", gap: "16px", alignItems: "end" }}>
+                    {/* Fila con Fecha, Peso, Edad y Altura */}
+                    <div style={{ marginBottom: "16px", display: "grid", gridTemplateColumns: "200px 120px 80px 120px", gap: "16px", alignItems: "end" }}>
                       <div>
                         <label style={{ display: "block", fontSize: "12px", color: "#475569", marginBottom: "6px", fontWeight: "500" }}>Fecha</label>
                         <input type="date" className="input" value={fechaPeso} onChange={(e) => setFechaPeso(e.target.value)} style={{ width: "100%" }} />
@@ -2042,6 +2064,14 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                       <div>
                         <label style={{ display: "block", fontSize: "12px", color: "#475569", marginBottom: "6px", fontWeight: "500" }}>Peso (kg)</label>
                         <input type="number" step="0.1" className="input" value={editable.peso || ""} onChange={(e) => setEditable((s) => ({ ...s, peso: e.target.value }))} style={{ width: "100%" }} />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: "12px", color: "#475569", marginBottom: "6px", fontWeight: "500" }}>Edad</label>
+                        <input type="text" className="input" value={calcularEdad(userData?.nacimiento) || "—"} readOnly style={{ width: "100%", backgroundColor: "#f8fafc", cursor: "not-allowed" }} />
+                      </div>
+                      <div>
+                        <label style={{ display: "block", fontSize: "12px", color: "#475569", marginBottom: "6px", fontWeight: "500" }}>Altura (cm)</label>
+                        <input type="number" step="0.1" className="input" value={altura} onChange={(e) => setAltura(e.target.value)} style={{ width: "100%" }} />
                       </div>
                     </div>
 
