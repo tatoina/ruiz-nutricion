@@ -2,11 +2,27 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
+    // Función para verificar si el usuario es admin
+    function isAdmin() {
+      return request.auth != null && 
+             (request.auth.token.email == 'ruiznutricionapp@gmail.com' ||
+              request.auth.token.email == 'admin@admin.es');
+    }
+    
     // Regla para imágenes de menús
     match /menu-images/{userId}/{fileName} {
       // Permitir lectura y escritura a cualquier usuario autenticado
       // (Los admins estarán autenticados y podrán subir imágenes para cualquier usuario)
       allow read, write: if request.auth != null;
+    }
+    
+    // Reglas para archivos de usuarios (ejercicios, recetas, etc.)
+    match /users/{userId}/{folder}/{fileName} {
+      // Los usuarios pueden leer sus propios archivos
+      // Los admins pueden leer y escribir cualquier archivo
+      allow read: if request.auth != null && 
+                     (request.auth.uid == userId || isAdmin());
+      allow write: if request.auth != null && isAdmin();
     }
     
     // Denegar acceso por defecto a otras rutas
