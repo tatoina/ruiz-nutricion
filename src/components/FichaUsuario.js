@@ -1094,6 +1094,10 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const timestampToMs = (t) => {
     if (!t) return null;
     if (typeof t === "number") return t;
+    if (typeof t === "string") {
+      const parsed = Date.parse(t);
+      return isNaN(parsed) ? null : parsed;
+    }
     if (t?.seconds != null) return t.seconds * 1000 + (t.nanoseconds ? Math.floor(t.nanoseconds / 1e6) : 0);
     if (typeof t?.toDate === "function") return t.toDate().getTime();
     return null;
