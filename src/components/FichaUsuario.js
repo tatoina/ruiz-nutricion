@@ -417,7 +417,11 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     if (!uid) { setError("Usuario objetivo no disponible."); return; }
     try {
       const menuToSave = Array.isArray(editable.menu) ? editable.menu : Array.from({ length: 7 }, () => ({ ...emptyDayMenu() }));
-      await updateDoc(doc(db, "users", uid), { menuHistorico: arrayUnion({ createdAt: serverTimestamp(), menu: menuToSave }), updatedAt: serverTimestamp() });
+      const timestamp = new Date().toISOString();
+      await updateDoc(doc(db, "users", uid), { 
+        menuHistorico: arrayUnion({ createdAt: timestamp, menu: menuToSave }), 
+        updatedAt: serverTimestamp() 
+      });
       const snap = await getDoc(doc(db, "users", uid));
       if (snap.exists()) setUserData(snap.data());
     } catch (err) {
