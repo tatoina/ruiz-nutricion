@@ -8,7 +8,8 @@ const CATEGORIAS = [
   { id: "almuerzo", label: "🥪 Almuerzo", color: "#dbeafe", borderColor: "#3b82f6" },
   { id: "comida", label: "🍽️ Comida", color: "#fecaca", borderColor: "#ef4444" },
   { id: "merienda", label: "🍪 Merienda", color: "#e9d5ff", borderColor: "#a855f7" },
-  { id: "cena", label: "🌙 Cena", color: "#ccfbf1", borderColor: "#14b8a6" }
+  { id: "cena", label: "🌙 Cena", color: "#ccfbf1", borderColor: "#14b8a6" },
+  { id: "snacks", label: "🍿 SNACK's", color: "#fed7aa", borderColor: "#fb923c" }
 ];
 
 export default function AdminMenus() {

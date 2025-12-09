@@ -9,6 +9,8 @@ import {
   updateDoc,
   serverTimestamp,
   arrayUnion,
+  collection,
+  getDocs,
 } from "firebase/firestore";
 
 import { useNavigate } from "react-router-dom";
@@ -84,6 +86,9 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const [printOptions, setPrintOptions] = useState({ dietaMensual: true, datosPesaje: true });
 
   const [showProfile, setShowProfile] = useState(false);
+  const [showSnacksModal, setShowSnacksModal] = useState(false);
+  const [snacksList, setSnacksList] = useState([]);
+  const [loadingSnacks, setLoadingSnacks] = useState(false);
 
   const [peso, setPeso] = useState("");
   const [altura, setAltura] = useState("");
@@ -600,6 +605,24 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     } catch (err) {
       console.error("Error adding appointment:", err);
       setError("No se pudo agregar la cita.");
+    }
+  };
+
+  // Función para cargar snacks desde Firestore
+  const loadSnacks = async () => {
+    setLoadingSnacks(true);
+    try {
+      const snacksRef = collection(db, "menuItems", "snacks", "items");
+      const snapshot = await getDocs(snacksRef);
+      const snacksData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setSnacksList(snacksData.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "")));
+    } catch (err) {
+      console.error("Error cargando snacks:", err);
+    } finally {
+      setLoadingSnacks(false);
     }
   };
 
@@ -3075,6 +3098,49 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                   </>
                 )}
 
+                  {/* Botón flotante de Snacks para TODOS los usuarios */}
+                  {!adminMode && (
+                    <div style={{
+                      position: "fixed",
+                      bottom: "30px",
+                      right: "30px",
+                      zIndex: 1000
+                    }}>
+                      <button
+                        onClick={() => {
+                          setShowSnacksModal(true);
+                          loadSnacks();
+                        }}
+                        style={{
+                          width: "60px",
+                          height: "60px",
+                          borderRadius: "50%",
+                          backgroundColor: "#fb923c",
+                          color: "white",
+                          border: "none",
+                          cursor: "pointer",
+                          fontSize: "28px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          boxShadow: "0 4px 16px rgba(251, 146, 60, 0.4)",
+                          transition: "all 0.3s ease"
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = "scale(1.1)";
+                          e.currentTarget.style.backgroundColor = "#f97316";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = "scale(1)";
+                          e.currentTarget.style.backgroundColor = "#fb923c";
+                        }}
+                        title="Ver SNACK's disponibles"
+                      >
+                        🍿
+                      </button>
+                    </div>
+                  )}
+
                   {/* Botones flotantes para Dieta Semanal (solo admin) */}
                   {adminMode && (
                     <div style={{
@@ -3707,6 +3773,143 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
               >
                 Guardar cambios
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Snacks */}
+      {showSnacksModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 2000,
+            padding: "20px"
+          }}
+          onClick={() => setShowSnacksModal(false)}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              borderRadius: "16px",
+              maxWidth: "600px",
+              width: "100%",
+              maxHeight: "80vh",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 20px 50px rgba(0, 0, 0, 0.3)"
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header del modal */}
+            <div style={{
+              padding: "24px",
+              borderBottom: "2px solid #fed7aa",
+              background: "linear-gradient(135deg, #fed7aa 0%, #fdba74 100%)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
+              <h2 style={{ margin: 0, fontSize: "24px", color: "#92400e", fontWeight: "700" }}>
+                🍿 SNACK's Disponibles
+              </h2>
+              <button
+                onClick={() => setShowSnacksModal(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  fontSize: "28px",
+                  cursor: "pointer",
+                  color: "#92400e",
+                  padding: "0",
+                  width: "32px",
+                  height: "32px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: "50%",
+                  transition: "background 0.2s"
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "rgba(146, 64, 14, 0.1)"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Contenido del modal */}
+            <div style={{
+              padding: "24px",
+              overflowY: "auto",
+              flex: 1
+            }}>
+              {loadingSnacks ? (
+                <div style={{ textAlign: "center", padding: "40px", color: "#6b7280" }}>
+                  <div style={{ fontSize: "18px" }}>Cargando snacks...</div>
+                </div>
+              ) : snacksList.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px", color: "#6b7280" }}>
+                  <div style={{ fontSize: "48px", marginBottom: "16px" }}>🍿</div>
+                  <div style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>
+                    No hay snacks disponibles
+                  </div>
+                  <div style={{ fontSize: "14px" }}>
+                    El administrador aún no ha añadido snacks a la base de datos
+                  </div>
+                </div>
+              ) : (
+                <div style={{
+                  display: "grid",
+                  gap: "12px"
+                }}>
+                  {snacksList.map((snack) => (
+                    <div
+                      key={snack.id}
+                      style={{
+                        padding: "16px",
+                        borderRadius: "12px",
+                        backgroundColor: "#fffbeb",
+                        border: "2px solid #fde68a",
+                        fontSize: "15px",
+                        fontWeight: "500",
+                        color: "#92400e",
+                        transition: "all 0.2s",
+                        cursor: "default"
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = "#fef3c7";
+                        e.currentTarget.style.borderColor = "#fbbf24";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "#fffbeb";
+                        e.currentTarget.style.borderColor = "#fde68a";
+                      }}
+                    >
+                      {snack.nombre}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer del modal */}
+            <div style={{
+              padding: "16px 24px",
+              borderTop: "1px solid #e5e7eb",
+              textAlign: "center",
+              color: "#6b7280",
+              fontSize: "14px"
+            }}>
+              {snacksList.length > 0 && `${snacksList.length} snack${snacksList.length !== 1 ? 's' : ''} disponible${snacksList.length !== 1 ? 's' : ''}`}
             </div>
           </div>
         </div>
