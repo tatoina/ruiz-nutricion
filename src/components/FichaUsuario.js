@@ -108,6 +108,25 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notifiedAppointments, setNotifiedAppointments] = useState(new Set());
 
+  // Calcular IMC automáticamente cuando cambia el peso o la altura
+  useEffect(() => {
+    const pesoNum = parseFloat(editable.peso);
+    const alturaNum = parseFloat(altura);
+    
+    if (pesoNum > 0 && alturaNum > 0) {
+      const alturaMetros = alturaNum / 100; // convertir cm a metros
+      const imcCalculado = pesoNum / (alturaMetros * alturaMetros);
+      const imcRedondeado = Math.round(imcCalculado * 10) / 10; // redondear a 1 decimal
+      
+      // Solo actualizar si el IMC cambió para evitar loops infinitos
+      const imcActual = parseFloat(editable.imc);
+      if (isNaN(imcActual) || Math.abs(imcActual - imcRedondeado) > 0.05) {
+        setEditable(prev => ({ ...prev, imc: imcRedondeado.toString() }));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editable.peso, altura]);
+
   // Calcular tabs filtradas según el plan del usuario
   const tabs = useMemo(() => {
     const esPlanSeguimiento = userData?.anamnesis?.eligePlan === "Seguimiento";
@@ -593,7 +612,8 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     if (e && e.preventDefault) e.preventDefault();
     if (!uid) { setError("Usuario objetivo no disponible."); return; }
     const ed = { ...editable };
-    const pesoValue = parseNum(peso);
+    // Usar el peso de editable, no el estado separado
+    const pesoValue = parseNum(ed.peso);
     const vError = validateMeasures(pesoValue, ed);
     if (vError) { setError(vError); return; }
 
@@ -690,6 +710,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       setPeso("");
       setFechaPeso(todayISO);
       setEditable({
+        peso: "", // Añadir limpieza del campo peso
         masaGrasaPct: "",
         masaGrasaKg: "",
         masaMagraKg: "",
@@ -869,6 +890,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       if (medidasIndex !== -1) {
         medidasArray[medidasIndex] = {
           ...editingRecord,
+          pesoActual: editingRecord.peso, // Guardar peso como pesoActual en medidasHistorico
           createdAt: recordToUpdate.createdAt,
         };
       }
@@ -1987,7 +2009,11 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                   }}>
                     <button 
                       type="button" 
-                      onClick={() => { setPeso(""); setFechaPeso(todayISO); }}
+                      onClick={() => { 
+                        setPeso(""); 
+                        setFechaPeso(todayISO); 
+                        setEditable(prev => ({ ...prev, peso: "" }));
+                      }}
                       title="Limpiar formulario"
                       style={{
                         backgroundColor: "#f1f5f9",
