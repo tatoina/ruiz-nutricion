@@ -108,24 +108,58 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notifiedAppointments, setNotifiedAppointments] = useState(new Set());
 
-  // Calcular IMC automáticamente cuando cambia el peso o la altura
+  // Calcular campos automáticamente cuando cambian peso, altura o porcentajes
   useEffect(() => {
     const pesoNum = parseFloat(editable.peso);
     const alturaNum = parseFloat(altura);
+    const masaGrasaPct = parseFloat(editable.masaGrasaPct);
+    const aguaTotalPct = parseFloat(editable.aguaTotalPct);
     
+    const updates = {};
+    
+    // Calcular IMC si hay peso y altura
     if (pesoNum > 0 && alturaNum > 0) {
-      const alturaMetros = alturaNum / 100; // convertir cm a metros
+      const alturaMetros = alturaNum / 100;
       const imcCalculado = pesoNum / (alturaMetros * alturaMetros);
-      const imcRedondeado = Math.round(imcCalculado * 10) / 10; // redondear a 1 decimal
+      const imcRedondeado = Math.round(imcCalculado * 10) / 10;
       
-      // Solo actualizar si el IMC cambió para evitar loops infinitos
       const imcActual = parseFloat(editable.imc);
       if (isNaN(imcActual) || Math.abs(imcActual - imcRedondeado) > 0.05) {
-        setEditable(prev => ({ ...prev, imc: imcRedondeado.toString() }));
+        updates.imc = imcRedondeado.toString();
       }
     }
+    
+    // Calcular Masa Grasa (kg) desde Masa Grasa (%)
+    if (pesoNum > 0 && masaGrasaPct >= 0) {
+      const masaGrasaKg = Math.round((pesoNum * masaGrasaPct / 100) * 100) / 100;
+      const masaGrasaKgActual = parseFloat(editable.masaGrasaKg);
+      if (isNaN(masaGrasaKgActual) || Math.abs(masaGrasaKgActual - masaGrasaKg) > 0.05) {
+        updates.masaGrasaKg = masaGrasaKg.toString();
+      }
+      
+      // Calcular Masa Magra (kg) = Peso - Masa Grasa (kg)
+      const masaMagraKg = Math.round((pesoNum - masaGrasaKg) * 100) / 100;
+      const masaMagraKgActual = parseFloat(editable.masaMagraKg);
+      if (isNaN(masaMagraKgActual) || Math.abs(masaMagraKgActual - masaMagraKg) > 0.05) {
+        updates.masaMagraKg = masaMagraKg.toString();
+      }
+    }
+    
+    // Calcular Agua Total (kg) desde Agua Total (%)
+    if (pesoNum > 0 && aguaTotalPct >= 0) {
+      const aguaTotalKg = Math.round((pesoNum * aguaTotalPct / 100) * 100) / 100;
+      const aguaTotalKgActual = parseFloat(editable.aguaTotalKg);
+      if (isNaN(aguaTotalKgActual) || Math.abs(aguaTotalKgActual - aguaTotalKg) > 0.05) {
+        updates.aguaTotalKg = aguaTotalKg.toString();
+      }
+    }
+    
+    // Aplicar actualizaciones si hay cambios
+    if (Object.keys(updates).length > 0) {
+      setEditable(prev => ({ ...prev, ...updates }));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editable.peso, altura]);
+  }, [editable.peso, altura, editable.masaGrasaPct, editable.aguaTotalPct]);
 
   // Calcular tabs filtradas según el plan del usuario
   const tabs = useMemo(() => {
@@ -1074,32 +1108,39 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const mappedForChart = rowsDesc.map((p) => ({ ...p })).sort((a, b) => (a._t || 0) - (b._t || 0));
   const labels = mappedForChart.map((s) => s.fecha || (s._t ? new Date(s._t).toLocaleDateString() : ""));
   
-  // Calcular valores de campos calculados
+  // Calcular valores de campos calculados automáticamente
   const masaGrasaKgCalc = (() => {
-    const p = parseFloat(peso);
+    const p = parseFloat(editable.peso);
     const mgPct = parseFloat(editable.masaGrasaPct);
     if (!isNaN(p) && !isNaN(mgPct) && p > 0 && mgPct >= 0) {
       return (Math.round((p * mgPct / 100) * 100) / 100).toString();
     }
-    return "";
+    return editable.masaGrasaKg || "";
+  })();
+
+  const masaMagraKgCalc = (() => {
+    const p = parseFloat(editable.peso);
+    const mgKg = parseFloat(masaGrasaKgCalc);
+    if (!isNaN(p) && !isNaN(mgKg) && p > 0) {
+      return (Math.round((p - mgKg) * 100) / 100).toString();
+    }
+    return editable.masaMagraKg || "";
   })();
 
   const aguaTotalKgCalc = (() => {
-    const p = parseFloat(peso);
+    const p = parseFloat(editable.peso);
     const atPct = parseFloat(editable.aguaTotalPct);
     if (!isNaN(p) && !isNaN(atPct) && p > 0 && atPct >= 0) {
       return (Math.round((p * atPct / 100) * 100) / 100).toString();
     }
-    return "";
+    return editable.aguaTotalKg || "";
   })();
 
   const masaMuscularKgCalc = (() => {
-    const p = parseFloat(peso);
-    const mgKg = parseFloat(masaGrasaKgCalc);
-    const atKg = parseFloat(aguaTotalKgCalc);
-    const moKg = parseFloat(editable.masaOseaKg);
-    if (!isNaN(p) && !isNaN(mgKg) && !isNaN(atKg) && !isNaN(moKg) && p > 0) {
-      return (Math.round((p - mgKg - atKg - moKg) * 100) / 100).toString();
+    const mmKg = parseFloat(editable.masaMuscularKg);
+    // Si ya hay un valor manual, usarlo
+    if (!isNaN(mmKg) && mmKg > 0) {
+      return mmKg.toString();
     }
     return "";
   })();
@@ -1195,10 +1236,9 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
               inputMode="decimal"
               step="0.01"
               className="input"
-              value={masaMuscularKgCalc}
-              readOnly
-              tabIndex={-1}
-              style={calculatedStyle}
+              value={editable.masaMuscularKg ?? ""}
+              onChange={(e) => setEditable((s) => ({ ...s, masaMuscularKg: e.target.value }))}
+              style={baseStyle}
             />
           </div>
         );
@@ -1207,7 +1247,16 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
             <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Masa magra (kg)</label>
-            <input type="number" inputMode="decimal" step="0.01" className="input" value={editable.masaMagraKg ?? ""} onChange={(e) => setEditable((s) => ({ ...s, masaMagraKg: e.target.value }))} style={baseStyle} />
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              className="input"
+              value={masaMagraKgCalc}
+              readOnly
+              tabIndex={-1}
+              style={calculatedStyle}
+            />
           </div>
         );
       
