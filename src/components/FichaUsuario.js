@@ -1499,21 +1499,21 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     const esc = (s) => escapeHtmlForInject(s || "");
 
     let html = `<div class="print-section dieta-week">
-      <h2 style="margin:0 0 12px 0;color:#064e3b">Dieta semanal — Plantilla</h2>
-      <table class="print-calendar" border="0" cellpadding="8" cellspacing="0" style="width:100%;border-collapse:collapse;">
+      <h2 style="margin:0 0 8px 0;color:#064e3b;font-size:13px">Dieta semanal — Plantilla</h2>
+      <table class="print-calendar" border="0" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:9px;">
         <thead>
           <tr>
-            <th style="text-align:left;padding:24px 16px;background:#f7fff9;border:1px solid #e6f3ea">Comida / Día</th>`;
-    for (let d = 0; d < 7; d++) html += `<th style="text-align:center;padding:24px 16px;background:#f7fff9;border:1px solid #e6f3ea">${dayNames[d]}</th>`;
+            <th style="text-align:left;padding:6px 4px;background:#f7fff9;border:1px solid #e6f3ea;font-size:9px;font-weight:600">Comida / Día</th>`;
+    for (let d = 0; d < 7; d++) html += `<th style="text-align:center;padding:6px 4px;background:#f7fff9;border:1px solid #e6f3ea;font-size:9px;font-weight:600">${dayNames[d]}</th>`;
     html += `</tr></thead><tbody>`;
 
     for (let r = 0; r < ALL_SECTIONS.length; r++) {
       const sec = ALL_SECTIONS[r];
       html += `<tr>
-        <td style="vertical-align:top;padding:20px;border:1px solid #eef6ee;font-weight:700;width:18%;background:#fff">${escapeHtmlForInject(sec.label)}</td>`;
+        <td style="vertical-align:top;padding:8px 4px;border:1px solid #eef6ee;font-weight:700;width:15%;background:#fff;font-size:9px">${escapeHtmlForInject(sec.label)}</td>`;
       for (let d = 0; d < 7; d++) {
         const m = (menuTemplate[d] && menuTemplate[d][sec.key]) ? menuTemplate[d][sec.key] : "";
-        html += `<td style="vertical-align:top;padding:20px;border:1px solid #eef6ee;min-height:160px;word-break:break-word">${esc(m)}</td>`;
+        html += `<td style="vertical-align:top;padding:8px 4px;border:1px solid #eef6ee;min-height:80px;word-break:break-word;font-size:9px;line-height:1.3">${esc(m)}</td>`;
       }
       html += `</tr>`;
     }
@@ -1622,40 +1622,51 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       const filenameSafe = (userData && userData.nombre ? userData.nombre.replace(/\s+/g, "_") : "ficha") + "_" + new Date().toISOString().slice(0,10);
 
       const printCSS = `
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial; color:#062017; background: #fff; margin:0; }
-        #pdf-root { padding: 18px; }
-        .pdf-header { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
-        .pdf-logo { width:64px; height:64px; flex:0 0 64px; display:flex; align-items:center; justify-content:center; background:#064e3b; border-radius:8px; color:#fff; font-weight:700; }
-        h1 { margin:0; font-size:18px; color:#064e3b; }
-        .pdf-meta { font-size:13px; color:#374151; }
-        .print-calendar th, .print-calendar td { padding:24px 16px; }
-        .print-calendar td { min-height:160px; vertical-align:top; word-break:break-word; }
-        .print-hist-table th, .print-hist-table td { padding:8px; font-size:11px; vertical-align:top; }
-        table { page-break-inside:auto; }
+        @page { size: A4 landscape; margin: 10mm; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial; color:#062017; background: #fff; margin:0; font-size:10px; }
+        #pdf-root { padding: 8px; max-width: 277mm; }
+        .pdf-header { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+        .pdf-logo { width:40px; height:40px; flex:0 0 40px; display:flex; align-items:center; justify-content:center; background:#064e3b; border-radius:6px; color:#fff; font-weight:700; font-size:16px; }
+        h1 { margin:0; font-size:14px; color:#064e3b; }
+        .pdf-meta { font-size:10px; color:#374151; }
+        h2 { font-size:13px; margin:0 0 8px 0; color:#064e3b; }
+        .print-calendar { font-size:9px; }
+        .print-calendar th { padding:6px 4px; background:#f7fff9; border:1px solid #e6f3ea; font-size:9px; }
+        .print-calendar td { padding:8px 4px; vertical-align:top; word-break:break-word; border:1px solid #eef6ee; min-height:80px; font-size:9px; line-height:1.3; }
+        .print-calendar td:first-child { font-weight:700; width:15%; }
+        .print-hist-table { font-size:8px; }
+        .print-hist-table th, .print-hist-table td { padding:4px 2px; font-size:8px; vertical-align:top; border:1px solid #e5e7eb; }
+        .print-hist-table th { background:#f9fafb; font-weight:600; }
+        table { page-break-inside:auto; border-collapse:collapse; width:100%; }
         tr { page-break-inside:avoid; page-break-after:auto; }
         .page { page-break-after: always; break-after: page; }
         .page:last-child { page-break-after: auto; break-after: auto; }
-        @media print { #pdf-root { padding: 8mm; } }
+        .chart-print { margin:8px 0; max-height:120px; }
+        .chart-print img { max-width:100%; max-height:120px; height:auto; }
+        @media print { 
+          #pdf-root { padding: 5mm; }
+          body { font-size:9px; }
+        }
       `;
 
       const logoUrl = DEFAULT_CLINIC_LOGO;
       let logoData = null;
       try { logoData = await imgUrlToDataUrl(logoUrl); } catch (e) { logoData = null; }
 
-      const logoHtml = logoData ? `<img src="${logoData}" alt="Logo" style="width:64px;height:64px;object-fit:contain;border-radius:8px" />` : `<img src="${escapeHtmlForInject(logoUrl)}" alt="Logo" style="width:64px;height:64px;object-fit:contain;border-radius:8px" onerror="this.style.display='none'" />`;
+      const logoHtml = logoData ? `<img src="${logoData}" alt="Logo" style="width:40px;height:40px;object-fit:contain;border-radius:6px" />` : `<img src="${escapeHtmlForInject(logoUrl)}" alt="Logo" style="width:40px;height:40px;object-fit:contain;border-radius:6px" onerror="this.style.display='none'" />`;
 
       const firstPart = parts[0] || "";
-      const secondPart = parts.slice(1).join("<hr style='margin:18px 0;border:none;border-top:1px solid #eee'/>") || "";
+      const secondPart = parts.slice(1).join("<hr style='margin:12px 0;border:none;border-top:1px solid #eee'/>") || "";
 
       const pdfInner = `
         <div id="pdf-root">
           <div class="pdf-header">
             ${logoHtml}
             <div style="flex:1">
-              <h1>${headerName}</h1>
-              <div class="pdf-meta">Generado: ${headerDate}</div>
+              <h1 style="font-size:14px;margin:0">${headerName}</h1>
+              <div class="pdf-meta" style="font-size:10px">Generado: ${headerDate}</div>
             </div>
-            <div style="text-align:right;font-size:12px;color:#374151">Ficha imprimible</div>
+            <div style="text-align:right;font-size:10px;color:#374151">Ficha imprimible</div>
           </div>
 
           <div class="page">
@@ -1673,8 +1684,8 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       container.style.position = "fixed";
       container.style.left = "-9999px";
       container.style.top = "0";
-      container.style.width = "210mm";
-      container.style.height = "297mm";
+      container.style.width = "297mm";
+      container.style.height = "210mm";
       container.style.overflow = "hidden";
       container.innerHTML = `<style>${printCSS}</style>${pdfInner}`;
       document.body.appendChild(container);
@@ -1683,10 +1694,10 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
       const element = container.querySelector("#pdf-root");
       const opt = {
-        margin: 8,
+        margin: [10, 10, 10, 10],
         filename: `${filenameSafe}.pdf`,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false },
+        image: { type: "jpeg", quality: 0.95 },
+        html2canvas: { scale: 2, useCORS: true, logging: false, width: 1122, height: 793 },
         jsPDF: { unit: "mm", format: "a4", orientation: "landscape" },
       };
 
