@@ -1521,21 +1521,21 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     const esc = (s) => escapeHtmlForInject(s || "");
 
     let html = `<div class="print-section dieta-week">
-      <h2 style="margin:0 0 8px 0;color:#064e3b;font-size:13px">Dieta semanal — Plantilla</h2>
-      <table class="print-calendar" border="0" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:9px;">
+      <h2 style="margin:0 0 6px 0;color:#064e3b;font-size:14px;font-weight:700">Dieta semanal — Plantilla</h2>
+      <table class="print-calendar" border="0" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:10px;">
         <thead>
           <tr>
-            <th style="text-align:left;padding:6px 4px;background:#f7fff9;border:1px solid #e6f3ea;font-size:9px;font-weight:600">Comida / Día</th>`;
-    for (let d = 0; d < 7; d++) html += `<th style="text-align:center;padding:6px 4px;background:#f7fff9;border:1px solid #e6f3ea;font-size:9px;font-weight:600">${dayNames[d]}</th>`;
+            <th style="text-align:left;padding:5px 3px;background:#f7fff9;border:1px solid #d1d5db;font-size:10px;font-weight:700">Comida / Día</th>`;
+    for (let d = 0; d < 7; d++) html += `<th style="text-align:center;padding:5px 3px;background:#f7fff9;border:1px solid #d1d5db;font-size:10px;font-weight:700">${dayNames[d]}</th>`;
     html += `</tr></thead><tbody>`;
 
     for (let r = 0; r < ALL_SECTIONS.length; r++) {
       const sec = ALL_SECTIONS[r];
       html += `<tr>
-        <td style="vertical-align:top;padding:8px 4px;border:1px solid #eef6ee;font-weight:700;width:15%;background:#fff;font-size:9px">${escapeHtmlForInject(sec.label)}</td>`;
+        <td style="vertical-align:top;padding:6px 3px;border:1px solid #e5e7eb;font-weight:700;width:12%;background:#f9fafb;font-size:10px">${escapeHtmlForInject(sec.label)}</td>`;
       for (let d = 0; d < 7; d++) {
         const m = (menuTemplate[d] && menuTemplate[d][sec.key]) ? menuTemplate[d][sec.key] : "";
-        html += `<td style="vertical-align:top;padding:8px 4px;border:1px solid #eef6ee;min-height:80px;word-break:break-word;font-size:9px;line-height:1.3">${esc(m)}</td>`;
+        html += `<td style="vertical-align:top;padding:6px 3px;border:1px solid #e5e7eb;min-height:70px;word-break:break-word;font-size:10px;line-height:1.4">${esc(m)}</td>`;
       }
       html += `</tr>`;
     }
@@ -1592,8 +1592,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     }).join("");
 
     const tableHtml = `<div class="print-section pesaje-historico">
-      <h2 style="margin:0 0 12px 0;color:#064e3b">Histórico de medidas</h2>
-      ${chartImg ? `<div class="chart-print" style="margin:12px 0"><img src="${chartImg}" alt="Gráfico de peso" style="max-width:100%;height:auto;border:1px solid #eee;padding:6px;background:#fff" /></div>` : ""}
+      <h2 style="margin:0 0 8px 0;color:#064e3b;font-size:14px;font-weight:700">Histórico de medidas</h2>
       <table class="print-hist-table" style="width:100%;border-collapse:collapse">
         <thead>
           <tr>
@@ -1607,7 +1606,10 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         </tbody>
       </table>
     </div>`;
-    return tableHtml;
+    
+    const chartHtml = chartImg ? `<div class="chart-page"><h2 style="margin:0 0 15px 0;color:#064e3b;font-size:16px;font-weight:700;text-align:center">Gráfico de Evolución</h2><div class="chart-print"><img src="${chartImg}" alt="Gráfico de peso" /></div></div>` : "";
+    
+    return { tableHtml, chartHtml };
   };
 
   const ensureHtml2Pdf = () => {
@@ -1633,10 +1635,12 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     setShowPrintDialog(false);
     try {
       const parts = [];
+      let chartContent = "";
       if (printOptions.dietaMensual) parts.push(buildDietaWeeklyHTML());
       if (printOptions.datosPesaje) {
-        const p = await buildPesajeHTML();
-        parts.push(p);
+        const { tableHtml, chartHtml } = await buildPesajeHTML();
+        parts.push(tableHtml);
+        if (chartHtml) chartContent = chartHtml;
       }
 
       const headerName = escapeHtmlForInject(userData ? (userData.nombre ? `${userData.nombre} ${userData.apellidos || ""}` : userData.email || "Usuario") : "Usuario");
@@ -1644,30 +1648,31 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       const filenameSafe = (userData && userData.nombre ? userData.nombre.replace(/\s+/g, "_") : "ficha") + "_" + new Date().toISOString().slice(0,10);
 
       const printCSS = `
-        @page { size: A4 landscape; margin: 10mm; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial; color:#062017; background: #fff; margin:0; font-size:10px; }
-        #pdf-root { padding: 8px; max-width: 277mm; }
-        .pdf-header { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
-        .pdf-logo { width:40px; height:40px; flex:0 0 40px; display:flex; align-items:center; justify-content:center; background:#064e3b; border-radius:6px; color:#fff; font-weight:700; font-size:16px; }
-        h1 { margin:0; font-size:14px; color:#064e3b; }
+        @page { size: A4 landscape; margin: 8mm; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial; color:#062017; background: #fff; margin:0; font-size:11px; }
+        #pdf-root { padding: 4px; max-width: 100%; }
+        .pdf-header { display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+        .pdf-logo { width:35px; height:35px; flex:0 0 35px; display:flex; align-items:center; justify-content:center; background:#064e3b; border-radius:4px; color:#fff; font-weight:700; font-size:14px; }
+        h1 { margin:0; font-size:15px; color:#064e3b; font-weight:700; }
         .pdf-meta { font-size:10px; color:#374151; }
-        h2 { font-size:13px; margin:0 0 8px 0; color:#064e3b; }
-        .print-calendar { font-size:9px; }
-        .print-calendar th { padding:6px 4px; background:#f7fff9; border:1px solid #e6f3ea; font-size:9px; }
-        .print-calendar td { padding:8px 4px; vertical-align:top; word-break:break-word; border:1px solid #eef6ee; min-height:80px; font-size:9px; line-height:1.3; }
-        .print-calendar td:first-child { font-weight:700; width:15%; }
-        .print-hist-table { font-size:8px; }
-        .print-hist-table th, .print-hist-table td { padding:4px 2px; font-size:8px; vertical-align:top; border:1px solid #e5e7eb; }
-        .print-hist-table th { background:#f9fafb; font-weight:600; }
+        h2 { font-size:14px; margin:0 0 6px 0; color:#064e3b; font-weight:700; }
+        .print-calendar { font-size:10px; width:100%; }
+        .print-calendar th { padding:5px 3px; background:#f7fff9; border:1px solid #d1d5db; font-size:10px; font-weight:700; }
+        .print-calendar td { padding:6px 3px; vertical-align:top; word-break:break-word; border:1px solid #e5e7eb; min-height:70px; font-size:10px; line-height:1.4; }
+        .print-calendar td:first-child { font-weight:700; width:12%; background:#f9fafb; }
+        .print-hist-table { font-size:9px; width:100%; }
+        .print-hist-table th, .print-hist-table td { padding:3px 2px; font-size:9px; vertical-align:top; border:1px solid #d1d5db; }
+        .print-hist-table th { background:#f3f4f6; font-weight:700; }
         table { page-break-inside:auto; border-collapse:collapse; width:100%; }
         tr { page-break-inside:avoid; page-break-after:auto; }
         .page { page-break-after: always; break-after: page; }
         .page:last-child { page-break-after: auto; break-after: auto; }
-        .chart-print { margin:8px 0; max-height:120px; }
-        .chart-print img { max-width:100%; max-height:120px; height:auto; }
+        .chart-page { page-break-before: always; break-before: page; padding-top:20px; }
+        .chart-print { margin:20px auto; text-align:center; }
+        .chart-print img { max-width:95%; height:auto; border:2px solid #e5e7eb; padding:10px; background:#fff; border-radius:4px; }
         @media print { 
-          #pdf-root { padding: 5mm; }
-          body { font-size:9px; }
+          #pdf-root { padding: 3mm; }
+          body { font-size:10px; }
         }
       `;
 
@@ -1685,7 +1690,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           <div class="pdf-header">
             ${logoHtml}
             <div style="flex:1">
-              <h1 style="font-size:14px;margin:0">${headerName}</h1>
+              <h1 style="font-size:15px;margin:0;font-weight:700">${headerName}</h1>
               <div class="pdf-meta" style="font-size:10px">Generado: ${headerDate}</div>
             </div>
             <div style="text-align:right;font-size:10px;color:#374151">Ficha imprimible</div>
@@ -1695,9 +1700,9 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
             ${firstPart}
           </div>
 
-          <div class="page">
-            ${secondPart}
-          </div>
+          ${secondPart ? `<div class="page">${secondPart}</div>` : ""}
+          
+          ${chartContent}
         </div>
       `;
 
