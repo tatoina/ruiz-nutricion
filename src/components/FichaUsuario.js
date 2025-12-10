@@ -3139,41 +3139,6 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                         <span style={{ fontSize: "18px" }}>🍎</span>
                         <span>SNACK's</span>
                       </button>
-
-                      {/* Botón de Tarifas */}
-                      <button
-                        onClick={() => {
-                          setShowTarifasModal(true);
-                          loadTarifas();
-                        }}
-                        style={{
-                          padding: "8px 16px",
-                          borderRadius: "20px",
-                          backgroundColor: "#16a34a",
-                          color: "white",
-                          border: "none",
-                          cursor: "pointer",
-                          fontSize: "14px",
-                          fontWeight: "600",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          boxShadow: "0 2px 8px rgba(22, 163, 74, 0.3)",
-                          transition: "all 0.2s ease"
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = "scale(1.05)";
-                          e.currentTarget.style.backgroundColor = "#15803d";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = "scale(1)";
-                          e.currentTarget.style.backgroundColor = "#16a34a";
-                        }}
-                        title="Ver tarifas"
-                      >
-                        <span style={{ fontSize: "18px" }}>💰</span>
-                        <span>Tarifas</span>
-                      </button>
                     </div>
                     <div>
                       <div className="weekly-menu-grid">
