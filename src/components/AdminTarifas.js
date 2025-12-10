@@ -253,23 +253,6 @@ export default function AdminTarifas() {
               {uploading ? "Subiendo..." : "📤 Subir imagen"}
             </button>
           </div>
-          
-          <div style={{ 
-            marginTop: 12, 
-            padding: 12, 
-            backgroundColor: "#fef3c7", 
-            borderRadius: 6,
-            fontSize: 13,
-            color: "#92400e"
-          }}>
-            <strong>💡 Recomendaciones:</strong>
-            <ul style={{ margin: "8px 0 0 0", paddingLeft: 20 }}>
-              <li>Usa imágenes en formato JPG o PNG</li>
-              <li>Resolución recomendada: 1920x1080px o superior</li>
-              <li>La imagen se mostrará optimizada para visualización en pantalla</li>
-              <li>Los clientes podrán maximizarla para verla en detalle</li>
-            </ul>
-          </div>
         </div>
       </div>
 

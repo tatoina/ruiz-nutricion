@@ -313,9 +313,40 @@ export default function AdminUsers() {
         </div>
         
         <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+          <button 
+            onClick={() => navigate("/admin/tarifas")} 
+            style={{
+              width: "50px",
+              height: "50px",
+              borderRadius: "50%",
+              backgroundColor: "#16a34a",
+              color: "white",
+              border: "none",
+              cursor: "pointer",
+              fontSize: "20px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 4px 12px rgba(22, 163, 74, 0.3)",
+              transition: "all 0.2s ease",
+              fontWeight: "bold"
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "scale(1.1)";
+              e.currentTarget.style.backgroundColor = "#15803d";
+              e.currentTarget.style.boxShadow = "0 6px 16px rgba(22, 163, 74, 0.4)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "scale(1)";
+              e.currentTarget.style.backgroundColor = "#16a34a";
+              e.currentTarget.style.boxShadow = "0 4px 12px rgba(22, 163, 74, 0.3)";
+            }}
+            title="Tarifas"
+          >
+            💰
+          </button>
           <button className="btn primary" onClick={() => navigate("/admin/menus")}>📋 Menús</button>
           <button className="btn primary" onClick={() => navigate("/admin/agenda")}>📅 Agenda</button>
-          <button className="btn primary" onClick={() => navigate("/admin/tarifas")}>💰 Tarifas</button>
           <button className="btn primary" onClick={() => navigate("/register")}>Nuevo cliente</button>
           <button className="btn danger" onClick={handleSignOut}>Cerrar sesión</button>
         </div>
