@@ -315,6 +315,7 @@ export default function AdminUsers() {
         <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
           <button className="btn primary" onClick={() => navigate("/admin/menus")}>📋 Menús</button>
           <button className="btn primary" onClick={() => navigate("/admin/agenda")}>📅 Agenda</button>
+          <button className="btn primary" onClick={() => navigate("/admin/tarifas")}>💰 Tarifas</button>
           <button className="btn primary" onClick={() => navigate("/register")}>Nuevo cliente</button>
           <button className="btn danger" onClick={handleSignOut}>Cerrar sesión</button>
         </div>

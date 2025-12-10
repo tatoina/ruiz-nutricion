@@ -5,6 +5,7 @@ import AdminUsers from "./components/AdminUsers";
 import AdminAgenda from "./components/AdminAgenda";
 import AdminMenus from "./components/AdminMenus";
 import AdminTipoDieta from "./components/AdminTipoDieta";
+import AdminTarifas from "./components/AdminTarifas";
 import FichaUsuario from "./components/FichaUsuario";
 import Login from "./components/Login";
 import Register from "./components/Register";
@@ -118,6 +119,15 @@ export default function App() {
           element={
             <PrivateRoute>
               <AdminMenus />
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/admin/tarifas"
+          element={
+            <PrivateRoute>
+              <AdminTarifas />
             </PrivateRoute>
           }
         />

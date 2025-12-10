@@ -89,6 +89,9 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const [showSnacksModal, setShowSnacksModal] = useState(false);
   const [snacksList, setSnacksList] = useState([]);
   const [loadingSnacks, setLoadingSnacks] = useState(false);
+  const [showTarifasModal, setShowTarifasModal] = useState(false);
+  const [tarifasUrl, setTarifasUrl] = useState("");
+  const [loadingTarifas, setLoadingTarifas] = useState(false);
 
   const [peso, setPeso] = useState("");
   const [altura, setAltura] = useState("");
@@ -627,6 +630,25 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       console.error("Error cargando snacks:", err);
     } finally {
       setLoadingSnacks(false);
+    }
+  };
+
+  const loadTarifas = async () => {
+    setLoadingTarifas(true);
+    try {
+      const tarifasRef = doc(db, "settings", "tarifas");
+      const tarifasSnap = await getDoc(tarifasRef);
+      if (tarifasSnap.exists()) {
+        const data = tarifasSnap.data();
+        setTarifasUrl(data.imageUrl || "");
+      } else {
+        setTarifasUrl("");
+      }
+    } catch (err) {
+      console.error("Error cargando tarifas:", err);
+      setTarifasUrl("");
+    } finally {
+      setLoadingTarifas(false);
     }
   };
 
@@ -3112,6 +3134,41 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                         <span style={{ fontSize: "18px" }}>🍎</span>
                         <span>SNACK's</span>
                       </button>
+
+                      {/* Botón de Tarifas */}
+                      <button
+                        onClick={() => {
+                          setShowTarifasModal(true);
+                          loadTarifas();
+                        }}
+                        style={{
+                          padding: "8px 16px",
+                          borderRadius: "20px",
+                          backgroundColor: "#16a34a",
+                          color: "white",
+                          border: "none",
+                          cursor: "pointer",
+                          fontSize: "14px",
+                          fontWeight: "600",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          boxShadow: "0 2px 8px rgba(22, 163, 74, 0.3)",
+                          transition: "all 0.2s ease"
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = "scale(1.05)";
+                          e.currentTarget.style.backgroundColor = "#15803d";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = "scale(1)";
+                          e.currentTarget.style.backgroundColor = "#16a34a";
+                        }}
+                        title="Ver tarifas"
+                      >
+                        <span style={{ fontSize: "18px" }}>💰</span>
+                        <span>Tarifas</span>
+                      </button>
                     </div>
                     <div>
                       <div className="weekly-menu-grid">
@@ -3922,6 +3979,114 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
             }}>
               {snacksList.length > 0 && `${snacksList.length} snack${snacksList.length !== 1 ? 's' : ''} disponible${snacksList.length !== 1 ? 's' : ''}`}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Tarifas */}
+      {showTarifasModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            backgroundColor: "rgba(0, 0, 0, 0.9)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 2000,
+            padding: "20px",
+            cursor: "pointer"
+          }}
+          onClick={() => setShowTarifasModal(false)}
+        >
+          <div
+            style={{
+              position: "relative",
+              maxWidth: "95%",
+              maxHeight: "95%",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center"
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Botón cerrar */}
+            <button
+              onClick={() => setShowTarifasModal(false)}
+              style={{
+                position: "absolute",
+                top: "-50px",
+                right: "0",
+                background: "#16a34a",
+                border: "none",
+                borderRadius: "50%",
+                width: "40px",
+                height: "40px",
+                fontSize: "24px",
+                cursor: "pointer",
+                color: "white",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+                fontWeight: "700",
+                transition: "all 0.2s"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "#15803d";
+                e.currentTarget.style.transform = "scale(1.1)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "#16a34a";
+                e.currentTarget.style.transform = "scale(1)";
+              }}
+            >
+              ✕
+            </button>
+
+            {/* Contenido */}
+            {loadingTarifas ? (
+              <div style={{ 
+                backgroundColor: "white", 
+                padding: "40px", 
+                borderRadius: "12px",
+                textAlign: "center"
+              }}>
+                <div style={{ fontSize: "18px", color: "#6b7280" }}>Cargando tarifas...</div>
+              </div>
+            ) : !tarifasUrl ? (
+              <div style={{ 
+                backgroundColor: "white", 
+                padding: "40px", 
+                borderRadius: "12px",
+                textAlign: "center",
+                maxWidth: "400px"
+              }}>
+                <div style={{ fontSize: "48px", marginBottom: "16px" }}>💰</div>
+                <div style={{ fontSize: "20px", fontWeight: "600", marginBottom: "8px", color: "#374151" }}>
+                  No hay tarifas disponibles
+                </div>
+                <div style={{ fontSize: "14px", color: "#6b7280" }}>
+                  El administrador aún no ha subido la imagen de tarifas
+                </div>
+              </div>
+            ) : (
+              <img
+                src={tarifasUrl}
+                alt="Tarifas"
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "calc(100vh - 100px)",
+                  objectFit: "contain",
+                  borderRadius: "8px",
+                  boxShadow: "0 20px 50px rgba(0, 0, 0, 0.5)",
+                  backgroundColor: "white"
+                }}
+              />
+            )}
           </div>
         </div>
       )}
