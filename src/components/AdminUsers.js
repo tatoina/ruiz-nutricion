@@ -313,39 +313,13 @@ export default function AdminUsers() {
         </div>
         
         <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-          <button 
-            onClick={() => navigate("/admin/tarifas")} 
-            style={{
-              width: "60px",
-              height: "60px",
-              borderRadius: "50%",
-              backgroundColor: "#16a34a",
-              color: "white",
-              border: "3px solid #fff",
-              cursor: "pointer",
-              fontSize: "28px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: "0 4px 16px rgba(22, 163, 74, 0.4)",
-              transition: "all 0.2s ease",
-              fontWeight: "bold",
-              flexShrink: 0
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = "scale(1.15)";
-              e.currentTarget.style.backgroundColor = "#15803d";
-              e.currentTarget.style.boxShadow = "0 6px 20px rgba(22, 163, 74, 0.6)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = "scale(1)";
-              e.currentTarget.style.backgroundColor = "#16a34a";
-              e.currentTarget.style.boxShadow = "0 4px 16px rgba(22, 163, 74, 0.4)";
-            }}
-            title="Tarifas"
-          >
-            💰
-          </button>
+          <button className="btn primary" onClick={() => navigate("/admin/tarifas")}>Tarifas</button>
+          <div style={{ 
+            height: "30px", 
+            width: "2px", 
+            backgroundColor: "#d1d5db", 
+            margin: "0 4px" 
+          }}></div>
           <button className="btn primary" onClick={() => navigate("/admin/menus")}>📋 Menús</button>
           <button className="btn primary" onClick={() => navigate("/admin/agenda")}>📅 Agenda</button>
           <button className="btn primary" onClick={() => navigate("/register")}>Nuevo cliente</button>
