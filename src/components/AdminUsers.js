@@ -316,30 +316,31 @@ export default function AdminUsers() {
           <button 
             onClick={() => navigate("/admin/tarifas")} 
             style={{
-              width: "50px",
-              height: "50px",
+              width: "60px",
+              height: "60px",
               borderRadius: "50%",
               backgroundColor: "#16a34a",
               color: "white",
-              border: "none",
+              border: "3px solid #fff",
               cursor: "pointer",
-              fontSize: "20px",
+              fontSize: "28px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 4px 12px rgba(22, 163, 74, 0.3)",
+              boxShadow: "0 4px 16px rgba(22, 163, 74, 0.4)",
               transition: "all 0.2s ease",
-              fontWeight: "bold"
+              fontWeight: "bold",
+              flexShrink: 0
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.transform = "scale(1.1)";
+              e.currentTarget.style.transform = "scale(1.15)";
               e.currentTarget.style.backgroundColor = "#15803d";
-              e.currentTarget.style.boxShadow = "0 6px 16px rgba(22, 163, 74, 0.4)";
+              e.currentTarget.style.boxShadow = "0 6px 20px rgba(22, 163, 74, 0.6)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = "scale(1)";
               e.currentTarget.style.backgroundColor = "#16a34a";
-              e.currentTarget.style.boxShadow = "0 4px 12px rgba(22, 163, 74, 0.3)";
+              e.currentTarget.style.boxShadow = "0 4px 16px rgba(22, 163, 74, 0.4)";
             }}
             title="Tarifas"
           >
