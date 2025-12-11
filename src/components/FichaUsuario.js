@@ -2648,7 +2648,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                             {(!rowsDesc || rowsDesc.length === 0) ? (
                               <th style={{ padding: 8, border: "1px solid #cbd5e1", textAlign: "center", color: "#94a3b8" }}>Sin datos</th>
                             ) : (
-                              rowsDesc.slice(0, histLimit).map((r, i) => {
+                              rowsDesc.slice(0, histLimit).reverse().map((r, i) => {
                                 const formatShortDate = (dateStr) => {
                                   if (!dateStr) return "";
                                   const d = new Date(dateStr);
@@ -2696,7 +2696,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                                 <td style={{ position: "sticky", left: 0, background: fieldIdx % 2 === 0 ? "#fff" : "#fafafa", fontWeight: 500, padding: "6px 8px", fontSize: "10.5px", width: "100px", minWidth: "100px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", border: "1px solid #cbd5e1", boxShadow: "3px 0 4px rgba(0,0,0,0.1)", color: "#1e293b", borderRight: "3px solid #cbd5e1" }}>
                                   {field.label}
                                 </td>
-                                {rowsDesc.slice(0, histLimit).map((r, i) => {
+                                {rowsDesc.slice(0, histLimit).reverse().map((r, i) => {
                                   const key = `cell-${fieldIdx}-${i}`;
                                   let value = "—";
                                   if (field.isTa) {
