@@ -421,12 +421,42 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     try {
       const menuToSave = Array.isArray(editable.menu) ? editable.menu : Array.from({ length: 7 }, () => ({ ...emptyDayMenu() }));
       const timestamp = new Date().toISOString();
+      const now = new Date();
+      
+      // Get existing diet history
+      const snap = await getDoc(doc(db, "users", uid));
+      const currentData = snap.exists() ? snap.data() : {};
+      const dietasHistorico = Array.isArray(currentData.dietasHistorico) ? currentData.dietasHistorico : [];
+      
+      // Update previous version's fechaHasta if exists
+      if (dietasHistorico.length > 0) {
+        const lastVersion = dietasHistorico[dietasHistorico.length - 1];
+        if (!lastVersion.fechaHasta) {
+          lastVersion.fechaHasta = timestamp;
+        }
+      }
+      
+      // Create new version
+      const versionNumber = String(dietasHistorico.length + 1).padStart(3, '0');
+      const newVersion = {
+        numero: versionNumber,
+        fechaDesde: timestamp,
+        fechaHasta: null, // Will be set when next version is created
+        menu: menuToSave,
+        createdAt: timestamp
+      };
+      
+      // Save to dietasHistorico (new field) and also to menuHistorico (backwards compatibility)
       await updateDoc(doc(db, "users", uid), { 
+        dietasHistorico: [...dietasHistorico, newVersion],
         menuHistorico: arrayUnion({ createdAt: timestamp, menu: menuToSave }), 
         updatedAt: serverTimestamp() 
       });
-      const snap = await getDoc(doc(db, "users", uid));
-      if (snap.exists()) setUserData(snap.data());
+      
+      const newSnap = await getDoc(doc(db, "users", uid));
+      if (newSnap.exists()) setUserData(newSnap.data());
+      
+      alert(`✅ Dieta #${versionNumber} guardada correctamente`);
     } catch (err) {
       console.error("[FichaUsuario] saveVersionMenu error:", err);
       setError(err?.message || "No se pudo guardar la versión del menú.");
@@ -1744,6 +1774,142 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     }
   };
 
+  const generateHistoricalDietPDF = async (dietaVersion) => {
+    try {
+      const fechaDesde = new Date(dietaVersion.fechaDesde);
+      const fechaHasta = dietaVersion.fechaHasta ? new Date(dietaVersion.fechaHasta) : new Date();
+      const formatFecha = (date) => {
+        const d = date.getDate().toString().padStart(2, '0');
+        const m = (date.getMonth() + 1).toString().padStart(2, '0');
+        const y = date.getFullYear();
+        return `${d}/${m}/${y}`;
+      };
+      
+      // Build weekly diet HTML for this specific version
+      const menuSemanal = Array.isArray(dietaVersion.menu) ? dietaVersion.menu : [];
+      const dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+      
+      let rows = "";
+      const cells = ["desayuno", "almuerzo", "comida", "merienda", "cena", "consejos"];
+      const cellsLabels = ["Desayuno", "Almuerzo", "Comida", "Merienda", "Cena", "Consejos"];
+      
+      cells.forEach((cell, cellIdx) => {
+        let row = `<tr><td style="font-weight:700;background:#f9fafb">${cellsLabels[cellIdx]}</td>`;
+        for (let d = 0; d < 7; d++) {
+          const dayObj = menuSemanal[d] || {};
+          const val = dayObj[cell] || "";
+          row += `<td>${escapeHtmlForInject(val)}</td>`;
+        }
+        row += "</tr>";
+        rows += row;
+      });
+      
+      const dietaHTML = `
+        <div style="margin-bottom:12px">
+          <h2 style="font-size:14px;margin:0 0 6px 0;color:#064e3b;font-weight:700">
+            Dieta Semanal #${dietaVersion.numero}
+          </h2>
+          <div style="font-size:10px;color:#6b7280;margin-bottom:8px">
+            Período: ${formatFecha(fechaDesde)} - ${formatFecha(fechaHasta)}
+          </div>
+          <table class="print-calendar">
+            <thead>
+              <tr>
+                <th style="width:12%"></th>
+                ${dias.map(d => `<th>${d}</th>`).join("")}
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+        </div>
+      `;
+      
+      const headerName = escapeHtmlForInject(userData ? (userData.nombre ? `${userData.nombre} ${userData.apellidos || ""}` : userData.email || "Usuario") : "Usuario");
+      const headerDate = new Date().toLocaleString();
+      const filenameSafe = `dieta_${dietaVersion.numero}_${userData?.nombre?.replace(/\s+/g, "_") || "usuario"}`;
+      
+      const printCSS = `
+        @page { size: A4 landscape; margin: 8mm; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial; color:#062017; background: #fff; margin:0; font-size:11px; }
+        #pdf-root { padding: 4px; max-width: 100%; }
+        .pdf-header { display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+        .pdf-logo { width:35px; height:35px; flex:0 0 35px; display:flex; align-items:center; justify-content:center; background:#064e3b; border-radius:4px; color:#fff; font-weight:700; font-size:14px; }
+        h1 { margin:0; font-size:15px; color:#064e3b; font-weight:700; }
+        .pdf-meta { font-size:10px; color:#374151; }
+        h2 { font-size:14px; margin:0 0 6px 0; color:#064e3b; font-weight:700; }
+        .print-calendar { font-size:10px; width:100%; }
+        .print-calendar th { padding:5px 3px; background:#f7fff9; border:1px solid #d1d5db; font-size:10px; font-weight:700; }
+        .print-calendar td { padding:6px 3px; vertical-align:top; word-break:break-word; border:1px solid #e5e7eb; min-height:70px; font-size:10px; line-height:1.4; }
+        .print-calendar td:first-child { font-weight:700; width:12%; background:#f9fafb; }
+        table { page-break-inside:auto; border-collapse:collapse; width:100%; }
+        tr { page-break-inside:avoid; page-break-after:auto; }
+        @media print { 
+          #pdf-root { padding: 3mm; }
+          body { font-size:10px; }
+        }
+      `;
+      
+      const logoUrl = DEFAULT_CLINIC_LOGO;
+      let logoData = null;
+      try { logoData = await imgUrlToDataUrl(logoUrl); } catch (e) { logoData = null; }
+      
+      const logoHtml = logoData ? `<img src="${logoData}" alt="Logo" style="width:40px;height:40px;object-fit:contain;border-radius:6px" />` : `<img src="${escapeHtmlForInject(logoUrl)}" alt="Logo" style="width:40px;height:40px;object-fit:contain;border-radius:6px" onerror="this.style.display='none'" />`;
+      
+      const pdfInner = `
+        <div id="pdf-root">
+          <div class="pdf-header">
+            ${logoHtml}
+            <div style="flex:1">
+              <h1 style="font-size:15px;margin:0;font-weight:700">${headerName}</h1>
+              <div class="pdf-meta" style="font-size:10px">Generado: ${headerDate}</div>
+            </div>
+            <div style="text-align:right;font-size:10px;color:#374151">Dieta #${dietaVersion.numero}</div>
+          </div>
+          
+          ${dietaHTML}
+        </div>
+      `;
+      
+      const container = document.createElement("div");
+      container.id = "pdf-temp-historical";
+      container.style.position = "fixed";
+      container.style.left = "-9999px";
+      container.style.top = "0";
+      container.style.width = "297mm";
+      container.style.height = "210mm";
+      container.style.overflow = "hidden";
+      container.innerHTML = `<style>${printCSS}</style>${pdfInner}`;
+      document.body.appendChild(container);
+      
+      await ensureHtml2Pdf();
+      
+      const element = container.querySelector("#pdf-root");
+      const opt = {
+        margin: [10, 10, 10, 10],
+        filename: `${filenameSafe}.pdf`,
+        image: { type: "jpeg", quality: 0.95 },
+        html2canvas: { scale: 2, useCORS: true, logging: false, width: 1122, height: 793 },
+        jsPDF: { unit: "mm", format: "a4", orientation: "landscape" },
+      };
+      
+      try {
+        await window.html2pdf().set(opt).from(element).save();
+      } catch (err) {
+        console.error("html2pdf error:", err);
+        alert("Ocurrió un error generando el PDF histórico.");
+      } finally {
+        setTimeout(() => {
+          try { document.body.removeChild(container); } catch (e) {}
+        }, 600);
+      }
+    } catch (err) {
+      console.error("generateHistoricalDietPDF error:", err);
+      alert("No se pudo generar el PDF histórico.");
+    }
+  };
+
   // Render UI
   if (loading) return <div className="card"><p style={{ padding: 16 }}>Cargando ficha...</p></div>;
 
@@ -1810,7 +1976,25 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                     textTransform: "uppercase",
                     letterSpacing: "0.5px"
                   }}>
-                    {userData.anamnesis.eligePlan}
+                    {userData.anamnesis.eligePlan === "Otros" && userData.anamnesis.eligePlanOtros 
+                      ? userData.anamnesis.eligePlanOtros 
+                      : userData.anamnesis.eligePlan}
+                  </span>
+                )}
+                {userData?.anamnesis?.tipoDieta && (
+                  <span style={{
+                    marginLeft: "8px",
+                    padding: "2px 8px",
+                    fontSize: "11px",
+                    fontWeight: "500",
+                    backgroundColor: "rgba(255,255,255,0.25)",
+                    borderRadius: "12px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px"
+                  }}>
+                    {userData.anamnesis.tipoDieta === "Otros" && userData.anamnesis.tipoDietaOtros 
+                      ? userData.anamnesis.tipoDietaOtros 
+                      : userData.anamnesis.tipoDieta}
                   </span>
                 )}
               </div>
@@ -3249,6 +3433,81 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                     </div>
                   </div>
 
+                  <hr style={{ margin: "12px 0" }} />
+                  
+                  {/* Historial completo de dietas */}
+                  <h4 style={{ marginTop: "20px", marginBottom: "12px", fontSize: "16px", fontWeight: "600" }}>📋 Historial de Dietas Completas</h4>
+                  <div style={{ overflowX: "auto", marginTop: 8 }}>
+                    {(() => {
+                      const dietasHistorico = Array.isArray(userData?.dietasHistorico) ? userData.dietasHistorico : [];
+                      if (dietasHistorico.length === 0) {
+                        return <div style={{ padding: 12, color: "#374151", backgroundColor: "#f9fafb", borderRadius: "6px" }}>No hay dietas guardadas. Pulsa "💾 Guardar versión" para crear la primera.</div>;
+                      }
+                      
+                      return (
+                        <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid #e5e7eb" }}>
+                          <thead>
+                            <tr style={{ backgroundColor: "#f3f4f6" }}>
+                              <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "2px solid #d1d5db", fontWeight: "600" }}>Nº Dieta</th>
+                              <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "2px solid #d1d5db", fontWeight: "600" }}>Desde</th>
+                              <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "2px solid #d1d5db", fontWeight: "600" }}>Hasta</th>
+                              <th style={{ textAlign: "center", padding: "10px 12px", borderBottom: "2px solid #d1d5db", fontWeight: "600" }}>Acción</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dietasHistorico.slice().reverse().map((dieta, idx) => {
+                              const fechaDesde = new Date(dieta.fechaDesde);
+                              const fechaHasta = dieta.fechaHasta ? new Date(dieta.fechaHasta) : null;
+                              const formatFecha = (date) => {
+                                if (!date) return "";
+                                const d = date.getDate().toString().padStart(2, '0');
+                                const m = (date.getMonth() + 1).toString().padStart(2, '0');
+                                const y = date.getFullYear();
+                                return `${d}/${m}/${y}`;
+                              };
+                              
+                              const handleViewPDF = () => {
+                                // Generar PDF de esta versión histórica
+                                generateHistoricalDietPDF(dieta);
+                              };
+                              
+                              return (
+                                <tr key={idx} style={{ borderBottom: "1px solid #e5e7eb" }}>
+                                  <td style={{ padding: "10px 12px", fontWeight: "500", color: "#3b82f6" }}>#{dieta.numero}</td>
+                                  <td style={{ padding: "10px 12px" }}>{formatFecha(fechaDesde)}</td>
+                                  <td style={{ padding: "10px 12px" }}>
+                                    {fechaHasta ? formatFecha(fechaHasta) : <span style={{ color: "#10b981", fontWeight: "500" }}>Actual</span>}
+                                  </td>
+                                  <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                                    <button
+                                      onClick={handleViewPDF}
+                                      style={{
+                                        backgroundColor: "#ef4444",
+                                        color: "white",
+                                        padding: "6px 16px",
+                                        borderRadius: "6px",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        fontWeight: "500",
+                                        fontSize: "13px",
+                                        boxShadow: "0 2px 4px rgba(239, 68, 68, 0.3)",
+                                        transition: "all 0.2s"
+                                      }}
+                                      onMouseOver={(e) => e.target.style.backgroundColor = "#dc2626"}
+                                      onMouseOut={(e) => e.target.style.backgroundColor = "#ef4444"}
+                                    >
+                                      📄 Ver PDF
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      );
+                    })()}
+                  </div>
+                  
                   <hr style={{ margin: "12px 0" }} />
                   <h4>Histórico de menús ({dayName})</h4>
                   <div style={{ overflowX: "auto", marginTop: 8 }}>
