@@ -313,6 +313,7 @@ export default function AdminUsers() {
         </div>
         
         <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+          <button className="btn primary" onClick={() => navigate("/admin/pagos")}>💰 Pagos</button>
           <button className="btn primary" onClick={() => navigate("/admin/tarifas")}>Tarifas</button>
           <div style={{ 
             height: "30px", 

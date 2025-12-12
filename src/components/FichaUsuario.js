@@ -11,6 +11,10 @@ import {
   arrayUnion,
   collection,
   getDocs,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
 } from "firebase/firestore";
 
 import { useNavigate } from "react-router-dom";
@@ -28,6 +32,7 @@ import {
 import { Line } from "react-chartjs-2";
 import DriveFolderViewer from "./DriveFolderViewer";
 import AnamnesisForm from "./AnamnesisForm";
+import AdminPagos from "./AdminPagos";
 import FileManager from "./FileManager";
 import MenuSelector from "./MenuSelector";
 ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Title, Tooltip, Legend);
@@ -73,7 +78,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const [userData, setUserData] = useState(null);
   const [editable, setEditable] = useState({});
   const [loading, setLoading] = useState(true);
-  const [tabIndex, setTabIndex] = useState(0);
+  const [tabIndex, setTabIndex] = useState(1); // Cambiado a 1 para que abra en "Dieta semanal"
   const [error, setError] = useState(null);
 
   const [showPrintDialog, setShowPrintDialog] = useState(false);
@@ -98,6 +103,36 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const todayISO = new Date().toISOString().slice(0, 10);
   const [fechaPeso, setFechaPeso] = useState(() => todayISO);
   const [savingPeso, setSavingPeso] = useState(false);
+  
+  // Estado para tipo de menú (tabla o vertical)
+  const [tipoMenu, setTipoMenu] = useState("tabla"); // "tabla" o "vertical"
+  const [menuVertical, setMenuVertical] = useState({
+    desayuno: [],
+    almuerzo: [],
+    comida: [],
+    merienda: [],
+    cena: [],
+    consejos: []
+  });
+  
+  // Estados para opciones disponibles desde BD
+  const [menuItemsDisponibles, setMenuItemsDisponibles] = useState({
+    desayuno: [],
+    almuerzo: [],
+    comida: [],
+    merienda: [],
+    cena: [],
+    consejos: []
+  });
+  const [loadingMenuItems, setLoadingMenuItems] = useState(false);
+  const [seccionesColapsadas, setSeccionesColapsadas] = useState({
+    desayuno: true,
+    almuerzo: true,
+    comida: true,
+    merienda: true,
+    cena: true,
+    consejos: true
+  });
 
   // Calcular edad desde fecha de nacimiento
   const calcularEdad = (fechaNacimiento) => {
@@ -177,7 +212,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       : baseTabs;
     
     return adminMode 
-      ? [...tabsFiltradas, { id: "anamnesis", label: "Anamnesis" }]
+      ? [...tabsFiltradas, { id: "anamnesis", label: "Anamnesis" }, { id: "pagos", label: "💰 Pagos" }]
       : tabsFiltradas;
   }, [userData, adminMode, baseTabs]);
 
@@ -207,7 +242,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const [tableZoom, setTableZoom] = useState(100); // Zoom level percentage
 
   // Estados para controlar secciones colapsables
-  const [showFormulario, setShowFormulario] = useState(true);
+  const [showFormulario, setShowFormulario] = useState(false);
   const [showHistorico, setShowHistorico] = useState(false);
   const [showGrafico, setShowGrafico] = useState(false);
 
@@ -293,6 +328,17 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           setAltura(data.altura || "");
           setUserData(data);
           
+          // Cargar tipo de menú y menú vertical
+          setTipoMenu(data.tipoMenu || "tabla");
+          setMenuVertical(data.menuVertical || {
+            desayuno: [],
+            almuerzo: [],
+            comida: [],
+            merienda: [],
+            cena: [],
+            consejos: []
+          });
+          
           // Cargar orden de campos si existe
           if (data.fieldsOrder && Array.isArray(data.fieldsOrder)) {
             setFieldsOrder(data.fieldsOrder);
@@ -344,6 +390,13 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     load();
     return () => { mounted = false; };
   }, [uid, normalizeMenu, emptyDayMenu, todayIndex]);
+
+  // Cargar items de menú disponibles cuando se activa el formato vertical
+  useEffect(() => {
+    if (tipoMenu === "vertical" && Object.keys(menuItemsDisponibles).every(k => menuItemsDisponibles[k].length === 0)) {
+      loadMenuItems();
+    }
+  }, [tipoMenu]);
 
   // autosize weekly textareas
   const autosizeTextareas = useCallback(() => {
@@ -604,6 +657,45 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     }
   }, []);
 
+  // Listener para notificaciones push desde Firestore
+  useEffect(() => {
+    if (!uid) return;
+
+    const notificationsRef = collection(db, "notifications");
+    const q = query(
+      notificationsRef,
+      where("userId", "==", uid),
+      where("read", "==", false),
+      orderBy("createdAt", "desc")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === "added") {
+          const notification = change.data();
+          
+          // Mostrar notificación del navegador
+          if ("Notification" in window && Notification.permission === "granted") {
+            new Notification(notification.title, {
+              body: notification.body,
+              icon: DEFAULT_CLINIC_LOGO,
+              badge: DEFAULT_CLINIC_LOGO,
+              tag: change.doc.id,
+            });
+          }
+
+          // Marcar como leída
+          updateDoc(doc(db, "notifications", change.doc.id), {
+            read: true,
+            readAt: serverTimestamp()
+          }).catch(err => console.error("Error marking notification as read:", err));
+        }
+      });
+    });
+
+    return () => unsubscribe();
+  }, [uid, DEFAULT_CLINIC_LOGO]);
+
   // Comprobar citas cada minuto
   useEffect(() => {
     if (!notificationsEnabled) return;
@@ -635,6 +727,120 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         updatedAt: serverTimestamp()
       });
 
+      // Enviar email al usuario notificando la nueva cita
+      const citaDateTime = new Date(`${newAppointmentDate}T${newAppointmentTime}`);
+      const userEmail = userData?.email;
+      const userName = `${userData?.nombre || ''} ${userData?.apellidos || ''}`.trim() || 'Usuario';
+      
+      if (userEmail) {
+        await setDoc(doc(collection(db, "mail")), {
+          to: userEmail,
+          message: {
+            subject: "Nueva cita programada - Ruiz Nutrición",
+            html: `
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <meta charset="utf-8">
+                <style>
+                  body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 20px;
+                  }
+                  .header {
+                    background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+                    color: white;
+                    padding: 30px 20px;
+                    border-radius: 10px 10px 0 0;
+                    text-align: center;
+                  }
+                  .content {
+                    background: #ffffff;
+                    padding: 30px;
+                    border: 1px solid #e2e8f0;
+                    border-top: none;
+                  }
+                  .cita-box {
+                    background: #f0fdf4;
+                    padding: 20px;
+                    border-radius: 8px;
+                    margin: 20px 0;
+                    border-left: 4px solid #16a34a;
+                  }
+                  .footer {
+                    text-align: center;
+                    color: #64748b;
+                    font-size: 14px;
+                    margin-top: 30px;
+                    padding-top: 20px;
+                    border-top: 1px solid #e2e8f0;
+                  }
+                </style>
+              </head>
+              <body>
+                <div class="header">
+                  <h1 style="margin: 0; font-size: 28px;">📅 Nueva Cita Programada</h1>
+                </div>
+                
+                <div class="content">
+                  <p>Hola <strong>${userName}</strong>,</p>
+                  
+                  <p>Se ha programado una nueva cita para ti:</p>
+
+                  <div class="cita-box">
+                    <h3 style="margin-top: 0; color: #15803d;">📋 Detalles de la cita</h3>
+                    <p style="margin: 10px 0;"><strong>📅 Fecha:</strong> ${citaDateTime.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                    <p style="margin: 10px 0;"><strong>🕐 Hora:</strong> ${citaDateTime.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p>
+                    ${newAppointmentNotes ? `<p style="margin: 10px 0;"><strong>📝 Notas:</strong> ${newAppointmentNotes}</p>` : ''}
+                  </div>
+
+                  <p style="margin-top: 30px;">Recibirás recordatorios automáticos:</p>
+                  <ul>
+                    <li>📧 Un email 1 día antes de la cita</li>
+                    <li>🔔 Una notificación 1 hora antes (si has activado las notificaciones en la app)</li>
+                  </ul>
+
+                  <p style="margin-top: 20px;">Si necesitas cancelar o reprogramar, por favor avísanos con antelación.</p>
+                  
+                  <p style="margin-top: 20px;">
+                    ¡Nos vemos pronto! 💪
+                  </p>
+                </div>
+
+                <div class="footer">
+                  <p><strong>Ruiz Nutrición</strong></p>
+                  <p>Este correo fue enviado automáticamente.</p>
+                </div>
+              </body>
+              </html>
+            `,
+            text: `
+Hola ${userName},
+
+Se ha programado una nueva cita para ti:
+
+📅 Fecha: ${citaDateTime.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+🕐 Hora: ${citaDateTime.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+${newAppointmentNotes ? `📝 Notas: ${newAppointmentNotes}` : ''}
+
+Recibirás recordatorios automáticos:
+- 📧 Un email 1 día antes de la cita
+- 🔔 Una notificación 1 hora antes (si has activado las notificaciones en la app)
+
+Si necesitas cancelar o reprogramar, por favor avísanos con antelación.
+
+¡Nos vemos pronto!
+Ruiz Nutrición
+            `.trim(),
+          },
+          createdAt: new Date(),
+        });
+      }
+
       setNewAppointmentDate("");
       setNewAppointmentTime("");
       setNewAppointmentNotes("");
@@ -660,6 +866,31 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       console.error("Error cargando snacks:", err);
     } finally {
       setLoadingSnacks(false);
+    }
+  };
+  
+  // Función para cargar opciones de menú disponibles desde BD
+  const loadMenuItems = async () => {
+    setLoadingMenuItems(true);
+    try {
+      const categorias = ["desayuno", "almuerzo", "comida", "merienda", "cena", "consejos"];
+      const itemsPorCategoria = {};
+      
+      for (const categoria of categorias) {
+        const itemsRef = collection(db, "menuItems", categoria, "items");
+        const snapshot = await getDocs(itemsRef);
+        const items = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        itemsPorCategoria[categoria] = items.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
+      }
+      
+      setMenuItemsDisponibles(itemsPorCategoria);
+    } catch (err) {
+      console.error("Error cargando items de menú:", err);
+    } finally {
+      setLoadingMenuItems(false);
     }
   };
 
@@ -3105,8 +3336,35 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                   🍽️ Dieta semanal
                 </h3>
 
+                {/* Selector de tipo de menú (solo admin) */}
+                {adminMode && (
+                  <div style={{ marginBottom: "20px", padding: "12px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer", fontSize: "14px", fontWeight: "500" }}>
+                      <input
+                        type="checkbox"
+                        checked={tipoMenu === "vertical"}
+                        onChange={async (e) => {
+                          const nuevoTipo = e.target.checked ? "vertical" : "tabla";
+                          setTipoMenu(nuevoTipo);
+                          // Guardar en BD
+                          try {
+                            await updateDoc(doc(db, "users", uid), {
+                              tipoMenu: nuevoTipo,
+                              updatedAt: serverTimestamp()
+                            });
+                          } catch (err) {
+                            console.error("Error guardando tipo de menú:", err);
+                          }
+                        }}
+                        style={{ width: "18px", height: "18px", cursor: "pointer" }}
+                      />
+                      <span>Usar formato de opciones múltiples (el cliente puede elegir entre varias opciones por comida)</span>
+                    </label>
+                  </div>
+                )}
+
                 {/* Vista ADMIN: Tabla horizontal de toda la semana */}
-                {adminMode ? (
+                {adminMode && tipoMenu === "tabla" ? (
                   <div style={{ overflowX: "auto", width: "100%" }}>
                     <table style={{
                       width: "100%",
@@ -3258,8 +3516,581 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                       </tbody>
                     </table>
                   </div>
+                ) : adminMode && tipoMenu === "vertical" ? (
+                  /* Vista ADMIN: Formato vertical con múltiples opciones */
+                  <div style={{ maxWidth: "900px", margin: "0 auto" }}>
+                    {loadingMenuItems ? (
+                      <div style={{ textAlign: "center", padding: "40px", color: "#6b7280" }}>
+                        Cargando opciones de menú...
+                      </div>
+                    ) : (
+                      <>
+                        {["desayuno", "almuerzo", "comida", "merienda", "cena", "consejos"].map((seccion) => {
+                          const labels = {
+                            desayuno: "🌅 Desayuno",
+                            almuerzo: "☕ Almuerzo",
+                            comida: "🍽️ Comida",
+                            merienda: "🥤 Merienda",
+                            cena: "🌙 Cena",
+                            consejos: "💡 Consejos"
+                          };
+                          
+                          const itemsDisponibles = menuItemsDisponibles[seccion] || [];
+                          const itemsSeleccionados = menuVertical[seccion] || [];
+                          
+                          const isCollapsed = seccionesColapsadas[seccion];
+                          
+                          return (
+                            <div key={seccion} style={{ marginBottom: "24px", padding: "16px", backgroundColor: "#f9fafb", borderRadius: "8px", border: "1px solid #e5e7eb" }}>
+                              <div 
+                                onClick={() => setSeccionesColapsadas(prev => ({ ...prev, [seccion]: !prev[seccion] }))}
+                                style={{ 
+                                  display: "flex", 
+                                  alignItems: "center", 
+                                  justifyContent: "space-between",
+                                  cursor: "pointer",
+                                  marginBottom: isCollapsed ? "0" : "12px"
+                                }}
+                              >
+                                <h4 style={{ margin: "0", fontSize: "15px", fontWeight: "600", color: "#0f172a" }}>
+                                  {labels[seccion]}
+                                </h4>
+                                <span style={{ fontSize: "18px", color: "#6b7280", transition: "transform 0.2s", transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>
+                                  ▼
+                                </span>
+                              </div>
+                              
+                              {!isCollapsed && (
+                                <>
+                                  {seccion === "consejos" ? (
+                                    <textarea
+                                      value={typeof itemsSeleccionados === 'string' ? itemsSeleccionados : (itemsSeleccionados[0] || '')}
+                                      onChange={(e) => setMenuVertical(prev => ({ ...prev, [seccion]: e.target.value }))}
+                                      placeholder="Escribe aquí los consejos del día..."
+                                      rows={4}
+                                      style={{
+                                        width: "100%",
+                                        padding: "12px",
+                                        border: "1px solid #d1d5db",
+                                        borderRadius: "6px",
+                                        fontSize: "14px",
+                                        fontFamily: "inherit",
+                                        resize: "vertical",
+                                        minHeight: "100px"
+                                      }}
+                                    />
+                                  ) : itemsDisponibles.length === 0 ? (
+                                <div style={{ padding: "12px", color: "#6b7280", fontSize: "13px", backgroundColor: "#fff", borderRadius: "6px" }}>
+                                  No hay opciones disponibles. Añade items en la sección de Menús.
+                                </div>
+                              ) : (
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "8px" }}>
+                                  {itemsDisponibles.map((item) => {
+                                    const isSelected = itemsSeleccionados.includes(item.id);
+                                    
+                                    return (
+                                      <label
+                                        key={item.id}
+                                        style={{
+                                          display: "flex",
+                                          alignItems: "center",
+                                          gap: "8px",
+                                          padding: "10px 12px",
+                                          backgroundColor: isSelected ? "#dbeafe" : "#fff",
+                                          border: isSelected ? "2px solid #3b82f6" : "1px solid #d1d5db",
+                                          borderRadius: "6px",
+                                          cursor: "pointer",
+                                          fontSize: "14px",
+                                          transition: "all 0.2s"
+                                        }}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={isSelected}
+                                          onChange={(e) => {
+                                            const nuevosSeleccionados = e.target.checked
+                                              ? [...itemsSeleccionados, item.id]
+                                              : itemsSeleccionados.filter(id => id !== item.id);
+                                            setMenuVertical(prev => ({ ...prev, [seccion]: nuevosSeleccionados }));
+                                          }}
+                                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                                        />
+                                        <span style={{ flex: 1, color: "#374151" }}>{item.nombre}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
+                        
+                        {/* Botón guardar menú vertical */}
+                        <button
+                          onClick={async () => {
+                            try {
+                              await updateDoc(doc(db, "users", uid), {
+                                menuVertical: menuVertical,
+                                updatedAt: serverTimestamp()
+                              });
+                              alert("✅ Menú guardado correctamente");
+                            } catch (err) {
+                              console.error("Error guardando menú vertical:", err);
+                              alert("❌ Error al guardar el menú");
+                            }
+                          }}
+                          style={{
+                            width: "100%",
+                            padding: "12px",
+                            backgroundColor: "#3b82f6",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            fontSize: "15px",
+                            fontWeight: "600",
+                            boxShadow: "0 2px 8px rgba(59, 130, 246, 0.3)"
+                          }}
+                        >
+                          💾 Guardar menú
+                        </button>
+                        
+                        {/* Botón Imprimir */}
+                        <button
+                          onClick={() => {
+                            const printWindow = window.open('', '_blank');
+                            const today = new Date();
+                            const fechaStr = today.toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
+                            const nombreCompleto = `${userData?.nombre || ''} ${userData?.apellidos || ''}`.trim() || 'Cliente';
+                            
+                            const menuContent = ["desayuno", "almuerzo", "comida", "merienda", "cena", "consejos"]
+                              .map((seccion) => {
+                                const labels = {
+                                  desayuno: "🌅 Desayuno",
+                                  almuerzo: "☕ Almuerzo",
+                                  comida: "🍽️ Comida",
+                                  merienda: "🥤 Merienda",
+                                  cena: "🌙 Cena",
+                                  consejos: "💡 Consejos"
+                                };
+                                
+                                const itemIds = menuVertical[seccion] || [];
+                                const itemsDisponibles = menuItemsDisponibles[seccion] || [];
+                                const itemsSeleccionados = itemIds
+                                  .map(id => itemsDisponibles.find(item => item.id === id))
+                                  .filter(item => item);
+                                
+                                if (itemsSeleccionados.length === 0) return '';
+                                
+                                const itemsHTML = itemsSeleccionados
+                                  .map(item => `<li style="margin-bottom: 6px; font-size: 14px; color: #374151;">${item.nombre}</li>`)
+                                  .join('');
+                                
+                                return `
+                                  <div style="margin-bottom: 24px; page-break-inside: avoid;">
+                                    <h4 style="margin: 0 0 12px 0; font-size: 16px; font-weight: 700; color: #1f2937; border-bottom: 2px solid #3b82f6; padding-bottom: 6px;">
+                                      ${labels[seccion]}
+                                    </h4>
+                                    <ul style="margin: 0; padding-left: 24px; list-style: disc; line-height: 1.8;">
+                                      ${itemsHTML}
+                                    </ul>
+                                  </div>
+                                `;
+                              })
+                              .filter(html => html)
+                              .join('');
+                            
+                            printWindow.document.write(`
+                              <!DOCTYPE html>
+                              <html>
+                                <head>
+                                  <meta charset="utf-8">
+                                  <title>Menú - ${nombreCompleto}</title>
+                                  <style>
+                                    @page { margin: 2cm; }
+                                    body { 
+                                      font-family: Arial, sans-serif; 
+                                      margin: 0; 
+                                      padding: 20px;
+                                      background: white;
+                                    }
+                                    .header {
+                                      display: flex;
+                                      justify-content: space-between;
+                                      align-items: center;
+                                      margin-bottom: 30px;
+                                      padding-bottom: 20px;
+                                      border-bottom: 3px solid #3b82f6;
+                                    }
+                                    .logo {
+                                      max-width: 150px;
+                                      height: auto;
+                                    }
+                                    .info {
+                                      text-align: right;
+                                    }
+                                    .nombre {
+                                      font-size: 20px;
+                                      font-weight: 700;
+                                      color: #1f2937;
+                                      margin: 0 0 8px 0;
+                                    }
+                                    .fecha {
+                                      font-size: 14px;
+                                      color: #6b7280;
+                                      margin: 0;
+                                    }
+                                    @media print {
+                                      body { padding: 0; }
+                                    }
+                                  </style>
+                                </head>
+                                <body>
+                                  <div class="header">
+                                    <img src="/logoclinica-192.png" alt="Logo" class="logo" />
+                                    <div class="info">
+                                      <p class="nombre">${nombreCompleto}</p>
+                                      <p class="fecha">${fechaStr}</p>
+                                    </div>
+                                  </div>
+                                  ${menuContent}
+                                </body>
+                              </html>
+                            `);
+                            printWindow.document.close();
+                            printWindow.focus();
+                            setTimeout(() => {
+                              printWindow.print();
+                            }, 250);
+                          }}
+                          style={{
+                            width: "100%",
+                            padding: "12px",
+                            backgroundColor: "#10b981",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            fontSize: "15px",
+                            fontWeight: "600",
+                            boxShadow: "0 2px 8px rgba(16, 185, 129, 0.3)",
+                            marginTop: "12px"
+                          }}
+                        >
+                          🖨️ Imprimir menú
+                        </button>
+                        
+                        {/* Vista previa formato A4 */}
+                        <div style={{ marginTop: "32px", padding: "24px", backgroundColor: "#fff", borderRadius: "8px", border: "2px solid #e5e7eb" }}>
+                          <h3 style={{ margin: "0 0 20px 0", fontSize: "16px", fontWeight: "600", color: "#0f172a", textAlign: "center" }}>
+                            📄 Vista Previa del Menú
+                          </h3>
+                          
+                          <div style={{ 
+                            backgroundColor: "#fff",
+                            width: "100%",
+                            maxWidth: "794px",
+                            margin: "0 auto",
+                            padding: "40px",
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                            minHeight: "400px",
+                            fontFamily: "Arial, sans-serif"
+                          }}>
+                            {["desayuno", "almuerzo", "comida", "merienda", "cena", "consejos"].map((seccion) => {
+                              const labels = {
+                                desayuno: "🌅 Desayuno",
+                                almuerzo: "☕ Almuerzo",
+                                comida: "🍽️ Comida",
+                                merienda: "🥤 Merienda",
+                                cena: "🌙 Cena",
+                                consejos: "💡 Consejos"
+                              };
+                              
+                              const itemIds = menuVertical[seccion] || [];
+                              
+                              // Para consejos, puede ser un string de texto libre
+                              if (seccion === "consejos") {
+                                const consejosText = typeof itemIds === 'string' ? itemIds : (itemIds[0] || '');
+                                if (!consejosText.trim()) return null;
+                                
+                                return (
+                                  <div key={seccion} style={{ marginBottom: "24px", pageBreakInside: "avoid" }}>
+                                    <h4 style={{ 
+                                      margin: "0 0 12px 0", 
+                                      fontSize: "16px", 
+                                      fontWeight: "700", 
+                                      color: "#1f2937",
+                                      borderBottom: "2px solid #3b82f6",
+                                      paddingBottom: "6px"
+                                    }}>
+                                      {labels[seccion]}
+                                    </h4>
+                                    <p style={{ 
+                                      margin: "0", 
+                                      fontSize: "14px", 
+                                      color: "#374151",
+                                      lineHeight: "1.8",
+                                      whiteSpace: "pre-wrap"
+                                    }}>
+                                      {consejosText}
+                                    </p>
+                                  </div>
+                                );
+                              }
+                              
+                              // Para otras secciones, son IDs de items
+                              const itemsDisponibles = menuItemsDisponibles[seccion] || [];
+                              const itemsSeleccionados = itemIds
+                                .map(id => itemsDisponibles.find(item => item.id === id))
+                                .filter(item => item);
+                              
+                              if (itemsSeleccionados.length === 0) return null;
+                              
+                              return (
+                                <div key={seccion} style={{ marginBottom: "24px", pageBreakInside: "avoid" }}>
+                                  <h4 style={{ 
+                                    margin: "0 0 12px 0", 
+                                    fontSize: "16px", 
+                                    fontWeight: "700", 
+                                    color: "#1f2937",
+                                    borderBottom: "2px solid #3b82f6",
+                                    paddingBottom: "6px"
+                                  }}>
+                                    {labels[seccion]}
+                                  </h4>
+                                  <ul style={{ 
+                                    margin: "0", 
+                                    paddingLeft: "24px", 
+                                    listStyle: "disc",
+                                    lineHeight: "1.8"
+                                  }}>
+                                    {itemsSeleccionados.map((item) => (
+                                      <li key={item.id} style={{ 
+                                        marginBottom: "6px", 
+                                        fontSize: "14px", 
+                                        color: "#374151" 
+                                      }}>
+                                        {item.nombre}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : !adminMode && tipoMenu === "vertical" ? (
+                  /* Vista USUARIO: Ver opciones múltiples */
+                  <div style={{ maxWidth: "800px", margin: "0 auto" }}>
+                    {loadingMenuItems ? (
+                      <div style={{ textAlign: "center", padding: "40px", color: "#6b7280" }}>
+                        Cargando tu menú...
+                      </div>
+                    ) : (
+                      <>
+                        {["desayuno", "almuerzo", "comida", "merienda", "cena", "consejos"].map((seccion) => {
+                          const labels = {
+                            desayuno: "🌅 Desayuno",
+                            almuerzo: "☕ Almuerzo",
+                            comida: "🍽️ Comida",
+                            merienda: "🥤 Merienda",
+                            cena: "🌙 Cena",
+                            consejos: "💡 Consejos"
+                          };
+                          
+                          const itemIds = userData?.menuVertical?.[seccion] || [];
+                          
+                          // Para consejos, puede ser texto libre
+                          if (seccion === "consejos") {
+                            const consejosText = typeof itemIds === 'string' ? itemIds : (itemIds[0] || '');
+                            if (!consejosText || !consejosText.trim()) return null;
+                            
+                            const isCollapsed = seccionesColapsadas[seccion];
+                            
+                            return (
+                              <div key={seccion} style={{ marginBottom: "20px", padding: "16px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
+                                <div 
+                                  onClick={() => setSeccionesColapsadas(prev => ({ ...prev, [seccion]: !prev[seccion] }))}
+                                  style={{ 
+                                    display: "flex", 
+                                    alignItems: "center", 
+                                    justifyContent: "space-between",
+                                    cursor: "pointer",
+                                    marginBottom: isCollapsed ? "0" : "12px"
+                                  }}
+                                >
+                                  <h4 style={{ margin: "0", fontSize: "15px", fontWeight: "600", color: "#15803d" }}>
+                                    {labels[seccion]}
+                                  </h4>
+                                  <span style={{ fontSize: "18px", color: "#15803d", transition: "transform 0.2s", transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>
+                                    ▼
+                                  </span>
+                                </div>
+                                {!isCollapsed && (
+                                  <p style={{ margin: "0", fontSize: "14px", color: "#374151", lineHeight: "1.6", whiteSpace: "pre-wrap" }}>
+                                    {consejosText}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          }
+                          
+                          // Para otras secciones, son IDs de items
+                          const filteredIds = Array.isArray(itemIds) ? itemIds.filter(id => id) : [];
+                          if (filteredIds.length === 0) return null;
+                          
+                          // Obtener nombres de los items desde menuItemsDisponibles
+                          const itemsDisponibles = menuItemsDisponibles[seccion] || [];
+                          const itemsSeleccionados = filteredIds
+                            .map(id => itemsDisponibles.find(item => item.id === id))
+                            .filter(item => item);
+                          
+                          if (itemsSeleccionados.length === 0) return null;
+                          
+                          const isCollapsed = seccionesColapsadas[seccion];
+                          
+                          return (
+                            <div key={seccion} style={{ marginBottom: "20px", padding: "16px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
+                              <div 
+                                onClick={() => setSeccionesColapsadas(prev => ({ ...prev, [seccion]: !prev[seccion] }))}
+                                style={{ 
+                                  display: "flex", 
+                                  alignItems: "center", 
+                                  justifyContent: "space-between",
+                                  cursor: "pointer",
+                                  marginBottom: isCollapsed ? "0" : "12px"
+                                }}
+                              >
+                                <h4 style={{ margin: "0", fontSize: "15px", fontWeight: "600", color: "#15803d" }}>
+                                  {labels[seccion]}
+                                </h4>
+                                <span style={{ fontSize: "18px", color: "#15803d", transition: "transform 0.2s", transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>
+                                  ▼
+                                </span>
+                              </div>
+                              {!isCollapsed && (
+                                <ul style={{ margin: "0", paddingLeft: "20px", listStyle: "disc" }}>
+                                {itemsSeleccionados.map((item) => (
+                                  <li key={item.id} style={{ marginBottom: "6px", fontSize: "14px", color: "#374151" }}>
+                                    {item.nombre}
+                                  </li>
+                                ))}
+                                </ul>
+                              )}
+                            </div>
+                          );
+                        })}
+                        
+                        {/* Vista previa formato A4para usuario */}
+                        <div style={{ marginTop: "32px", padding: "24px", backgroundColor: "#fff", borderRadius: "8px", border: "2px solid #e5e7eb" }}>
+                          <h3 style={{ margin: "0 0 20px 0", fontSize: "16px", fontWeight: "600", color: "#0f172a", textAlign: "center" }}>
+                            📄 Vista Previa del Menú
+                          </h3>
+                          
+                          <div style={{ 
+                            backgroundColor: "#fff",
+                            width: "100%",
+                            maxWidth: "794px",
+                            margin: "0 auto",
+                            padding: "40px",
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                            minHeight: "400px",
+                            fontFamily: "Arial, sans-serif"
+                          }}>
+                            {["desayuno", "almuerzo", "comida", "merienda", "cena", "consejos"].map((seccion) => {
+                              const labels = {
+                                desayuno: "🌅 Desayuno",
+                                almuerzo: "☕ Almuerzo",
+                                comida: "🍽️ Comida",
+                                merienda: "🥤 Merienda",
+                                cena: "🌙 Cena",
+                                consejos: "💡 Consejos"
+                              };
+                              
+                              const itemIds = userData?.menuVertical?.[seccion] || [];
+                              
+                              // Para consejos, puede ser texto libre
+                              if (seccion === "consejos") {
+                                const consejosText = typeof itemIds === 'string' ? itemIds : (itemIds[0] || '');
+                                if (!consejosText || !consejosText.trim()) return null;
+                                
+                                return (
+                                  <div key={seccion} style={{ marginBottom: "24px", pageBreakInside: "avoid" }}>
+                                    <h4 style={{ 
+                                      margin: "0 0 12px 0", 
+                                      fontSize: "16px", 
+                                      fontWeight: "700", 
+                                      color: "#1f2937",
+                                      borderBottom: "2px solid #3b82f6",
+                                      paddingBottom: "6px"
+                                    }}>
+                                      {labels[seccion]}
+                                    </h4>
+                                    <p style={{ 
+                                      margin: "0", 
+                                      fontSize: "14px", 
+                                      color: "#374151",
+                                      lineHeight: "1.8",
+                                      whiteSpace: "pre-wrap"
+                                    }}>
+                                      {consejosText}
+                                    </p>
+                                  </div>
+                                );
+                              }
+                              
+                              // Para otras secciones, son IDs
+                              const filteredIds = Array.isArray(itemIds) ? itemIds.filter(id => id) : [];
+                              const itemsDisponibles = menuItemsDisponibles[seccion] || [];
+                              const itemsSeleccionados = filteredIds
+                                .map(id => itemsDisponibles.find(item => item.id === id))
+                                .filter(item => item);
+                              
+                              if (itemsSeleccionados.length === 0) return null;
+                              
+                              return (
+                                <div key={seccion} style={{ marginBottom: "24px", pageBreakInside: "avoid" }}>
+                                  <h4 style={{ 
+                                    margin: "0 0 12px 0", 
+                                    fontSize: "16px", 
+                                    fontWeight: "700", 
+                                    color: "#1f2937",
+                                    borderBottom: "2px solid #3b82f6",
+                                    paddingBottom: "6px"
+                                  }}>
+                                    {labels[seccion]}
+                                  </h4>
+                                  <ul style={{ 
+                                    margin: "0", 
+                                    paddingLeft: "24px", 
+                                    listStyle: "disc",
+                                    lineHeight: "1.8"
+                                  }}>
+                                    {itemsSeleccionados.map((item) => (
+                                      <li key={item.id} style={{ 
+                                        marginBottom: "6px", 
+                                        fontSize: "14px", 
+                                        color: "#374151" 
+                                      }}>
+                                        {item.nombre}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 ) : (
-                  /* Vista USUARIO: Navegación día por día */
+                  /* Vista USUARIO: Navegación día por día (formato tabla) */
                   <>
                     <div style={{ 
                       display: "flex", 
@@ -3433,118 +4264,127 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                     </div>
                   </div>
 
-                  <hr style={{ margin: "12px 0" }} />
-                  
-                  {/* Historial completo de dietas */}
-                  <h4 style={{ marginTop: "20px", marginBottom: "12px", fontSize: "16px", fontWeight: "600" }}>📋 Historial de Dietas Completas</h4>
-                  <div style={{ overflowX: "auto", marginTop: 8 }}>
-                    {(() => {
-                      const dietasHistorico = Array.isArray(userData?.dietasHistorico) ? userData.dietasHistorico : [];
-                      if (dietasHistorico.length === 0) {
-                        return <div style={{ padding: 12, color: "#374151", backgroundColor: "#f9fafb", borderRadius: "6px" }}>No hay dietas guardadas. Pulsa "💾 Guardar versión" para crear la primera.</div>;
-                      }
+                  {adminMode && (
+                    <>
+                      <hr style={{ margin: "12px 0" }} />
                       
-                      return (
-                        <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid #e5e7eb" }}>
-                          <thead>
-                            <tr style={{ backgroundColor: "#f3f4f6" }}>
-                              <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "2px solid #d1d5db", fontWeight: "600" }}>Nº Dieta</th>
-                              <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "2px solid #d1d5db", fontWeight: "600" }}>Desde</th>
-                              <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "2px solid #d1d5db", fontWeight: "600" }}>Hasta</th>
-                              <th style={{ textAlign: "center", padding: "10px 12px", borderBottom: "2px solid #d1d5db", fontWeight: "600" }}>Acción</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {dietasHistorico.slice().reverse().map((dieta, idx) => {
-                              const fechaDesde = new Date(dieta.fechaDesde);
-                              const fechaHasta = dieta.fechaHasta ? new Date(dieta.fechaHasta) : null;
-                              const formatFecha = (date) => {
-                                if (!date) return "";
-                                const d = date.getDate().toString().padStart(2, '0');
-                                const m = (date.getMonth() + 1).toString().padStart(2, '0');
-                                const y = date.getFullYear();
-                                return `${d}/${m}/${y}`;
-                              };
-                              
-                              const handleViewPDF = () => {
-                                // Generar PDF de esta versión histórica
-                                generateHistoricalDietPDF(dieta);
-                              };
-                              
-                              return (
-                                <tr key={idx} style={{ borderBottom: "1px solid #e5e7eb" }}>
-                                  <td style={{ padding: "10px 12px", fontWeight: "500", color: "#3b82f6" }}>#{dieta.numero}</td>
-                                  <td style={{ padding: "10px 12px" }}>{formatFecha(fechaDesde)}</td>
-                                  <td style={{ padding: "10px 12px" }}>
-                                    {fechaHasta ? formatFecha(fechaHasta) : <span style={{ color: "#10b981", fontWeight: "500" }}>Actual</span>}
-                                  </td>
-                                  <td style={{ padding: "10px 12px", textAlign: "center" }}>
-                                    <button
-                                      onClick={handleViewPDF}
-                                      style={{
-                                        backgroundColor: "#ef4444",
-                                        color: "white",
-                                        padding: "6px 16px",
-                                        borderRadius: "6px",
-                                        border: "none",
-                                        cursor: "pointer",
-                                        fontWeight: "500",
-                                        fontSize: "13px",
-                                        boxShadow: "0 2px 4px rgba(239, 68, 68, 0.3)",
-                                        transition: "all 0.2s"
-                                      }}
-                                      onMouseOver={(e) => e.target.style.backgroundColor = "#dc2626"}
-                                      onMouseOut={(e) => e.target.style.backgroundColor = "#ef4444"}
-                                    >
-                                      📄 Ver PDF
-                                    </button>
-                                  </td>
+                      {/* Historial completo de dietas */}
+                      <h4 style={{ marginTop: "20px", marginBottom: "12px", fontSize: "16px", fontWeight: "600" }}>📋 Historial de Dietas Completas</h4>
+                      <div style={{ overflowX: "auto", marginTop: 8 }}>
+                        {(() => {
+                          const dietasHistorico = Array.isArray(userData?.dietasHistorico) ? userData.dietasHistorico : [];
+                          if (dietasHistorico.length === 0) {
+                            return <div style={{ padding: 12, color: "#374151", backgroundColor: "#f9fafb", borderRadius: "6px" }}>No hay dietas guardadas. Pulsa "💾 Guardar versión" para crear la primera.</div>;
+                          }
+                          
+                          return (
+                            <table style={{ width: "100%", borderCollapse: "collapse", border: "1px solid #e5e7eb" }}>
+                              <thead>
+                                <tr style={{ backgroundColor: "#f3f4f6" }}>
+                                  <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "2px solid #d1d5db", fontWeight: "600" }}>Nº Dieta</th>
+                                  <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "2px solid #d1d5db", fontWeight: "600" }}>Desde</th>
+                                  <th style={{ textAlign: "left", padding: "10px 12px", borderBottom: "2px solid #d1d5db", fontWeight: "600" }}>Hasta</th>
+                                  <th style={{ textAlign: "center", padding: "10px 12px", borderBottom: "2px solid #d1d5db", fontWeight: "600" }}>Acción</th>
                                 </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      );
-                    })()}
-                  </div>
-                  
-                  <hr style={{ margin: "12px 0" }} />
-                  <h4>Histórico de menús ({dayName})</h4>
-                  <div style={{ overflowX: "auto", marginTop: 8 }}>
-                    {menuHistoryMapped.length === 0 ? (
-                      <div style={{ padding: 12, color: "#374151" }}>No hay versiones históricas guardadas. Pulsa "Guardar versión" para crear un registro.</div>
-                    ) : (
-                      <table className="menu-hist-table" style={{ width: "100%", borderCollapse: "collapse" }}>
-                        <thead>
-                          <tr>
-                            <th style={{ textAlign: "left", padding: 8 }}>Fecha</th>
-                            <th style={{ textAlign: "left", padding: 8 }}>Desayuno</th>
-                            <th style={{ textAlign: "left", padding: 8 }}>Almuerzo</th>
-                            <th style={{ textAlign: "left", padding: 8 }}>Comida</th>
-                            <th style={{ textAlign: "left", padding: 8 }}>Merienda</th>
-                            <th style={{ textAlign: "left", padding: 8 }}>Cena</th>
-                            <th style={{ textAlign: "left", padding: 8 }}>Consejos</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {menuHistoryMapped.map((entry, i) => {
-                            const dayMenu = Array.isArray(entry.menu) ? (entry.menu[selDay] || {}) : (entry.menu || {});
-                            return (
-                              <tr key={i} style={{ borderTop: "1px solid #eee" }}>
-                                <td style={{ whiteSpace: "nowrap", padding: 8, verticalAlign: "top" }}>{formatDate(entry._t)}</td>
-                                <td style={{ padding: 8, verticalAlign: "top" }}>{renderCell(dayMenu.desayuno)}</td>
-                                <td style={{ padding: 8, verticalAlign: "top" }}>{renderCell(dayMenu.almuerzo)}</td>
-                                <td style={{ padding: 8, verticalAlign: "top" }}>{renderCell(dayMenu.comida)}</td>
-                                <td style={{ padding: 8, verticalAlign: "top" }}>{renderCell(dayMenu.merienda)}</td>
-                                <td style={{ padding: 8, verticalAlign: "top" }}>{renderCell(dayMenu.cena)}</td>
-                                <td style={{ padding: 8, verticalAlign: "top" }}>{renderCell(dayMenu.consejos)}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
+                              </thead>
+                              <tbody>
+                                {dietasHistorico.slice().reverse().map((dieta, idx) => {
+                                  const fechaDesde = new Date(dieta.fechaDesde);
+                                  const fechaHasta = dieta.fechaHasta ? new Date(dieta.fechaHasta) : null;
+                                  const formatFecha = (date) => {
+                                    if (!date) return "";
+                                    const d = date.getDate().toString().padStart(2, '0');
+                                    const m = (date.getMonth() + 1).toString().padStart(2, '0');
+                                    const y = date.getFullYear();
+                                    return `${d}/${m}/${y}`;
+                                  };
+                                  
+                                  const handleViewPDF = () => {
+                                    // Generar PDF de esta versión histórica
+                                    generateHistoricalDietPDF(dieta);
+                                  };
+                                  
+                                  const handleDelete = async () => {
+                                    if (!window.confirm(`⚠️ ¿Borrar la dieta #${dieta.numero}? Esta acción no se puede deshacer.`)) {
+                                      return;
+                                    }
+                                    try {
+                                      const actualIdx = dietasHistorico.length - 1 - idx;
+                                      const nuevasHistorico = dietasHistorico.filter((_, i) => i !== actualIdx);
+                                      await updateDoc(doc(db, "users", uid), {
+                                        dietasHistorico: nuevasHistorico,
+                                        updatedAt: serverTimestamp()
+                                      });
+                                      alert("✅ Dieta eliminada correctamente");
+                                      const snap = await getDoc(doc(db, "users", uid));
+                                      if (snap.exists()) {
+                                        setUserData(snap.data());
+                                      }
+                                    } catch (err) {
+                                      console.error("Error eliminando dieta:", err);
+                                      alert("❌ Error al eliminar la dieta");
+                                    }
+                                  };
+                                  
+                                  return (
+                                    <tr key={idx} style={{ borderBottom: "1px solid #e5e7eb" }}>
+                                      <td style={{ padding: "10px 12px", fontWeight: "500", color: "#3b82f6" }}>#{dieta.numero}</td>
+                                      <td style={{ padding: "10px 12px" }}>{formatFecha(fechaDesde)}</td>
+                                      <td style={{ padding: "10px 12px" }}>
+                                        {fechaHasta ? formatFecha(fechaHasta) : <span style={{ color: "#10b981", fontWeight: "500" }}>Actual</span>}
+                                      </td>
+                                      <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                                        <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+                                          <button
+                                            onClick={handleViewPDF}
+                                            style={{
+                                              backgroundColor: "#ef4444",
+                                              color: "white",
+                                              padding: "6px 16px",
+                                              borderRadius: "6px",
+                                              border: "none",
+                                              cursor: "pointer",
+                                              fontWeight: "500",
+                                              fontSize: "13px",
+                                              boxShadow: "0 2px 4px rgba(239, 68, 68, 0.3)",
+                                              transition: "all 0.2s"
+                                            }}
+                                            onMouseOver={(e) => e.target.style.backgroundColor = "#dc2626"}
+                                            onMouseOut={(e) => e.target.style.backgroundColor = "#ef4444"}
+                                          >
+                                            📄 Ver PDF
+                                          </button>
+                                          <button
+                                            onClick={handleDelete}
+                                            style={{
+                                              backgroundColor: "#64748b",
+                                              color: "white",
+                                              padding: "6px 16px",
+                                              borderRadius: "6px",
+                                              border: "none",
+                                              cursor: "pointer",
+                                              fontWeight: "500",
+                                              fontSize: "13px",
+                                              boxShadow: "0 2px 4px rgba(100, 116, 139, 0.3)",
+                                              transition: "all 0.2s"
+                                            }}
+                                            onMouseOver={(e) => e.target.style.backgroundColor = "#475569"}
+                                            onMouseOut={(e) => e.target.style.backgroundColor = "#64748b"}
+                                          >
+                                            🗑️ Borrar
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          );
+                        })()}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -3773,6 +4613,14 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
                     setUserData(updatedUser);
                   }} 
                   isAdmin={adminMode} 
+                />
+              </div>
+            )}
+            {tabs[tabIndex]?.id === "pagos" && adminMode && (
+              <div className="card" style={{ padding: "0", width: "100%", maxWidth: "none" }}>
+                <AdminPagos 
+                  userId={uid} 
+                  userData={userData}
                 />
               </div>
             )}
