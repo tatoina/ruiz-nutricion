@@ -279,7 +279,7 @@ export default function AdminPagos({ userId, userData }) {
           border: "1px solid #e5e7eb",
         }}
       >
-        <h3 style={{ marginBottom: "16px" }}>📝 Registrar Pago</h3>
+        <h3 style={{ marginBottom: "16px" }}>� Registrar Pago</h3>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
           {/* Tipo de pago */}

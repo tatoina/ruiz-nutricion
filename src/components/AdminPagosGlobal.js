@@ -337,7 +337,7 @@ export default function AdminPagosGlobal() {
   };
   
   return (
-    <div className="admin-fullscreen">
+    <div className="admin-fullscreen" style={{ overflowY: "auto", height: "100vh" }}>
       {/* Cabecera */}
       <div className="card header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
@@ -351,7 +351,7 @@ export default function AdminPagosGlobal() {
         </div>
       </div>
       
-      <div style={{ padding: "20px", width: "100%" }}>
+      <div style={{ padding: "20px", width: "100%", flex: 1, overflowY: "auto" }}>
         {/* Mensajes */}
         {error && (
           <div
@@ -527,30 +527,32 @@ export default function AdminPagosGlobal() {
                 </div>
               </div>
               
-              {/* Conceptos "Otros" */}
-              {editandoTarifas && (
-                <div style={{ marginTop: "20px" }}>
-                  <h4 style={{ marginBottom: "12px", fontSize: "16px" }}>➕ Otros conceptos</h4>
-                  
-                  {tarifas.otros.length > 0 && (
-                    <div style={{ marginBottom: "12px" }}>
-                      {tarifas.otros.map((otro, index) => (
-                        <div
-                          key={index}
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            padding: "8px 12px",
-                            background: "white",
-                            borderRadius: "4px",
-                            marginBottom: "6px",
-                            border: "1px solid #e5e7eb",
-                          }}
-                        >
-                          <span>
-                            <strong>{otro.concepto}</strong>: {otro.precio.toFixed(2)} €
-                          </span>
+              {/* Conceptos "Otros" - siempre visible */}
+              <div style={{ marginTop: "20px" }}>
+                <h4 style={{ marginBottom: "12px", fontSize: "16px" }}>
+                  {editandoTarifas ? "➕ Otras tarifas personalizadas" : "📋 Otras tarifas configuradas"}
+                </h4>
+                
+                {tarifas.otros.length > 0 && (
+                  <div style={{ marginBottom: editandoTarifas ? "12px" : "0" }}>
+                    {tarifas.otros.map((otro, index) => (
+                      <div
+                        key={index}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "8px 12px",
+                          background: "white",
+                          borderRadius: "4px",
+                          marginBottom: "6px",
+                          border: "1px solid #e5e7eb",
+                        }}
+                      >
+                        <span>
+                          <strong>{otro.concepto}</strong>: {otro.precio.toFixed(2)} €
+                        </span>
+                        {editandoTarifas && (
                           <button
                             onClick={() => handleEliminarOtro(index)}
                             style={{
@@ -564,18 +566,20 @@ export default function AdminPagosGlobal() {
                           >
                             🗑️
                           </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {editandoTarifas && (
                   <div style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}>
                     <div style={{ flex: 1 }}>
                       <label style={{ display: "block", marginBottom: "4px", fontSize: "13px" }}>Concepto</label>
                       <input
                         type="text"
                         className="input"
-                        placeholder="Ej: Consulta especial"
+                        placeholder="Ej: Consulta especial, Plan nutricional..."
                         value={nuevoOtro.concepto}
                         onChange={(e) => setNuevoOtro({ ...nuevoOtro, concepto: e.target.value })}
                       />
@@ -595,35 +599,18 @@ export default function AdminPagosGlobal() {
                         placeholder="0.00"
                       />
                     </div>
-                    <button className="btn ghost" onClick={handleAñadirOtro}>
-                      ➕ Añadir
+                    <button className="btn primary" onClick={handleAñadirOtro} style={{ whiteSpace: "nowrap" }}>
+                      ➕ Añadir Tarifa
                     </button>
                   </div>
-                </div>
-              )}
-              
-              {/* Mostrar tarifas "otros" en modo lectura */}
-              {!editandoTarifas && tarifas.otros.length > 0 && (
-                <div style={{ marginTop: "16px" }}>
-                  <h4 style={{ marginBottom: "8px", fontSize: "14px", color: "#666" }}>Otros conceptos configurados:</h4>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                    {tarifas.otros.map((otro, index) => (
-                      <span
-                        key={index}
-                        style={{
-                          padding: "4px 12px",
-                          background: "white",
-                          borderRadius: "16px",
-                          border: "1px solid #e5e7eb",
-                          fontSize: "13px",
-                        }}
-                      >
-                        {otro.concepto}: {otro.precio.toFixed(2)} €
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
+                )}
+                
+                {!editandoTarifas && tarifas.otros.length === 0 && (
+                  <p style={{ fontSize: "13px", color: "#999", fontStyle: "italic" }}>
+                    No hay tarifas personalizadas configuradas
+                  </p>
+                )}
+              </div>
             </>
           )}
         </div>

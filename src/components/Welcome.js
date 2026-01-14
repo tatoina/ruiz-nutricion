@@ -64,7 +64,8 @@ export default function Welcome({ onSelect }) {
         onClick={() => onSelect("register")}
         style={{
           width: "88%",
-          fontSize: "1.12rem"
+          fontSize: "1.12rem",
+          marginBottom: 15
         }}
       >
         Registrarse

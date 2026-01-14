@@ -15,9 +15,11 @@ import {
   where,
   orderBy,
   onSnapshot,
+  addDoc,
 } from "firebase/firestore";
 
 import { useNavigate } from "react-router-dom";
+import { useDevice } from "../hooks/useDevice";
 
 import {
   Chart as ChartJS,
@@ -50,15 +52,16 @@ ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Title, T
 
 export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const navigate = useNavigate();
+  const { isMobile } = useDevice();
 
   const DEFAULT_CLINIC_LOGO =
     "https://raw.githubusercontent.com/tatoina/ruiz-nutricion/564ee270d5f1a4c692bdd730ce055dd6aab0bfae/public/logoclinica-512.png";
 
   const baseTabs = [
-    { id: "pesaje", label: "Pesaje" },
-    { id: "semana", label: "Dieta semanal" },
-    { id: "ejercicios", label: "Ejercicios" },
-    { id: "citas", label: "📅 Citas" },
+    { id: "pesaje", label: "📊 Pesaje", icon: "📊" },
+    { id: "semana", label: "🍽️ Dieta", icon: "🍽️" },
+    { id: "ejercicios", label: "💪 Ejercicios", icon: "💪" },
+    { id: "citas", label: "📅 Citas", icon: "📅" },
   ];
 
   const ALL_SECTIONS = [
@@ -180,12 +183,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         updates.masaGrasaKg = masaGrasaKg.toString();
       }
       
-      // Calcular Masa Magra (kg) = Peso - Masa Grasa (kg)
-      const masaMagraKg = Math.round((pesoNum - masaGrasaKg) * 100) / 100;
-      const masaMagraKgActual = parseFloat(editable.masaMagraKg);
-      if (isNaN(masaMagraKgActual) || Math.abs(masaMagraKgActual - masaMagraKg) > 0.05) {
-        updates.masaMagraKg = masaMagraKg.toString();
-      }
+      // Masa magra ahora es editable manualmente, no se calcula automáticamente
     }
     
     // Calcular Agua Total (kg) desde Agua Total (%)
@@ -207,14 +205,30 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   // Calcular tabs filtradas según el plan del usuario
   const tabs = useMemo(() => {
     const esPlanSeguimiento = userData?.anamnesis?.eligePlan === "Seguimiento";
-    const tabsFiltradas = esPlanSeguimiento 
+    // En modo admin, mostrar siempre todas las pestañas para poder gestionar todo
+    // En modo usuario, filtrar según el plan
+    const tabsFiltradas = (esPlanSeguimiento && !adminMode)
       ? baseTabs.filter(tab => tab.id === "pesaje" || tab.id === "citas")
       : baseTabs;
     
-    return adminMode 
-      ? [...tabsFiltradas, { id: "anamnesis", label: "Anamnesis" }, { id: "pagos", label: "💰 Pagos" }]
-      : tabsFiltradas;
-  }, [userData, adminMode, baseTabs]);
+    // En modo admin móvil, reorganizar pestañas: lo importante primero
+    if (adminMode) {
+      const adminTabs = isMobile 
+        ? [
+            ...tabsFiltradas,
+            { id: "anamnesis", label: "👤 Perfil", icon: "👤" },
+            { id: "pagos", label: "💰 Pagos", icon: "💰" }
+          ]
+        : [
+            ...tabsFiltradas,
+            { id: "anamnesis", label: "Anamnesis", icon: "👤" },
+            { id: "pagos", label: "💰 Pagos", icon: "💰" }
+          ];
+      return adminTabs;
+    }
+    
+    return tabsFiltradas;
+  }, [userData, adminMode, baseTabs, isMobile]);
 
   const saveTimerRef = useRef(null);
   const [saveStatus, setSaveStatus] = useState("idle");
@@ -238,12 +252,12 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
   const [histLimit, setHistLimit] = useState(10);
   const [expandedRowsStateLocal, setExpandedRowsStateLocal] = useState({});
-  const [transposeTable, setTransposeTable] = useState(false);
+  const [transposeTable, setTransposeTable] = useState(isMobile && adminMode); // Activado por defecto en móvil admin
   const [tableZoom, setTableZoom] = useState(100); // Zoom level percentage
 
   // Estados para controlar secciones colapsables
   const [showFormulario, setShowFormulario] = useState(false);
-  const [showHistorico, setShowHistorico] = useState(false);
+  const [showHistorico, setShowHistorico] = useState(isMobile && adminMode); // Expandido por defecto en móvil admin
   const [showGrafico, setShowGrafico] = useState(false);
 
   // Estado para el orden de los campos de pesaje (solo para admin)
@@ -252,7 +266,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     "masaGrasaPct", "masaGrasaKg", "aguaTotalPct", "aguaTotalKg",
     "masaOseaKg", "masaMuscularKg", "masaMagraKg", "mbKcal", "grasaVisceralNivel",
     "imc", "edadMetabolica", "circunferenciaBrazoCm", "circunferenciaCinturaCm",
-    "circunferenciaCaderaCm", "circunferenciaPiernaCm", "indiceCinturaTalla", "tensionArterial"
+    "circunferenciaCaderaCm", "circunferenciaPiernaCm", "indiceCinturaTalla", "pliegueCintura"
   ]);
   const [draggedIndex, setDraggedIndex] = useState(null);
 
@@ -341,7 +355,20 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           
           // Cargar orden de campos si existe
           if (data.fieldsOrder && Array.isArray(data.fieldsOrder)) {
-            setFieldsOrder(data.fieldsOrder);
+            // Asegurar que el nuevo campo pliegueCintura esté incluido
+            let updatedFieldsOrder = [...data.fieldsOrder];
+            
+            // Si tiene tensionArterial pero no pliegueCintura, reemplazar
+            if (updatedFieldsOrder.includes('tensionArterial') && !updatedFieldsOrder.includes('pliegueCintura')) {
+              const index = updatedFieldsOrder.indexOf('tensionArterial');
+              updatedFieldsOrder[index] = 'pliegueCintura';
+            }
+            // Si no tiene pliegueCintura, agregarlo al final
+            else if (!updatedFieldsOrder.includes('pliegueCintura')) {
+              updatedFieldsOrder.push('pliegueCintura');
+            }
+            
+            setFieldsOrder(updatedFieldsOrder);
           }
           
           // Cargar estado de bloqueo si existe
@@ -374,7 +401,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
             circunferenciaCinturaCm: "",
             circunferenciaCaderaCm: "",
             circunferenciaPiernaCm: "",
-            tensionArterial: { sys: "", dia: "" },
+            pliegueCintura: "",
             notas: "",
           }));
           setError(null);
@@ -462,10 +489,108 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       await updateDoc(doc(db, "users", uid), { menu: menuToSave, updatedAt: serverTimestamp() });
       setSaveStatus("saved"); setTimeout(() => setSaveStatus("idle"), 1200);
       const snap = await getDoc(doc(db, "users", uid));
-      if (snap.exists()) setUserData(snap.data());
+      if (snap.exists()) {
+        setUserData(snap.data());
+        
+        // Enviar email de notificación al usuario
+        const currentData = snap.data();
+        if (currentData.email) {
+          const userName = currentData.nombre || 'Usuario';
+          await sendDietUpdateEmail(currentData.email, userName);
+        }
+      }
     } catch (err) {
       console.error("[FichaUsuario] saveSemana error:", err);
       setSaveStatus("error"); setError(err?.message || "No se pudo guardar el menú semanal.");
+    }
+  };
+
+  // Función para enviar email de notificación de dieta actualizada
+  const sendDietUpdateEmail = async (userEmail, userName) => {
+    try {
+      await addDoc(collection(db, "mail"), {
+        to: userEmail,
+        message: {
+          subject: "Tu dieta ha sido actualizada 🍎",
+          html: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Dieta Actualizada</title>
+            </head>
+            <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f5f5;">
+              <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                <tr>
+                  <td align="center" style="padding: 40px 0;">
+                    <table role="presentation" style="width: 600px; max-width: 90%; border-collapse: collapse; background-color: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+                      <!-- Header -->
+                      <tr>
+                        <td style="background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
+                          <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600;">
+                            ✅ Tu Dieta ha sido Actualizada
+                          </h1>
+                        </td>
+                      </tr>
+                      
+                      <!-- Body -->
+                      <tr>
+                        <td style="padding: 40px 30px;">
+                          <p style="color: #333; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                            Hola <strong>${userName || 'Usuario'}</strong>,
+                          </p>
+                          
+                          <p style="color: #333; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+                            Tu nutricionista ha actualizado tu dieta personalizada. Ya puedes consultarla desde la aplicación.
+                          </p>
+                          
+                          <div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 20px; margin: 30px 0; border-radius: 4px;">
+                            <p style="color: #166534; font-size: 15px; margin: 0; line-height: 1.6;">
+                              <strong>💡 ¿Qué hacer ahora?</strong><br>
+                              Accede a la aplicación para ver tu nueva dieta y todas las recomendaciones de tu nutricionista.
+                            </p>
+                          </div>
+                          
+                          <!-- CTA Button -->
+                          <table role="presentation" style="margin: 30px 0; width: 100%;">
+                            <tr>
+                              <td align="center">
+                                <a href="https://nutricionapp-b7b7d.web.app" 
+                                   style="display: inline-block; background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); color: white; text-decoration: none; padding: 16px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(22,163,74,0.3);">
+                                  📱 Ver mi Dieta
+                                </a>
+                              </td>
+                            </tr>
+                          </table>
+                          
+                          <p style="color: #666; font-size: 14px; line-height: 1.6; margin: 30px 0 0 0;">
+                            Si tienes alguna duda sobre tu nueva dieta, no dudes en contactar con tu nutricionista.
+                          </p>
+                        </td>
+                      </tr>
+                      
+                      <!-- Footer -->
+                      <tr>
+                        <td style="background-color: #f8f9fa; padding: 20px 30px; text-align: center; border-radius: 0 0 12px 12px; border-top: 1px solid #e5e7eb;">
+                          <p style="color: #6b7280; font-size: 13px; margin: 0; line-height: 1.5;">
+                            Este correo se envió automáticamente. Por favor, no respondas a este mensaje.
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </body>
+            </html>
+          `,
+        },
+      });
+      console.log(`[FichaUsuario] Email de actualización de dieta enviado a ${userEmail}`);
+    } catch (err) {
+      console.error("[FichaUsuario] Error al enviar email de actualización de dieta:", err);
+      // No lanzamos error para no interrumpir el flujo de guardado
     }
   };
 
@@ -508,6 +633,12 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       
       const newSnap = await getDoc(doc(db, "users", uid));
       if (newSnap.exists()) setUserData(newSnap.data());
+      
+      // Enviar email de notificación al usuario
+      if (currentData.email) {
+        const userName = currentData.nombre || 'Usuario';
+        await sendDietUpdateEmail(currentData.email, userName);
+      }
       
       alert(`✅ Dieta #${versionNumber} guardada correctamente`);
     } catch (err) {
@@ -963,13 +1094,12 @@ Ruiz Nutrición
 
     setSavingPeso(true); setError(null);
     let masaGrasaKg = parseNum(ed.masaGrasaKg);
-    let masaMagraKg = parseNum(ed.masaMagraKg);
+    const masaMagraKg = parseNum(ed.masaMagraKg);
     const masaGrasaPct = parseNum(ed.masaGrasaPct);
 
-    if (pesoValue !== null && masaGrasaPct !== null && (masaGrasaKg === null || masaMagraKg === null)) {
+    if (pesoValue !== null && masaGrasaPct !== null && masaGrasaKg === null) {
       const mgKgCalc = +(pesoValue * (masaGrasaPct / 100));
       masaGrasaKg = Math.round(mgKgCalc * 100) / 100;
-      masaMagraKg = Math.round((pesoValue - mgKgCalc) * 100) / 100;
     }
 
     const measuresPayload = {
@@ -989,7 +1119,7 @@ Ruiz Nutrición
       circunferenciaCinturaCm: parseNum(ed.circunferenciaCinturaCm),
       circunferenciaCaderaCm: parseNum(ed.circunferenciaCaderaCm),
       circunferenciaPiernaCm: parseNum(ed.circunferenciaPiernaCm),
-      tensionArterial: { sys: ed.tensionArterial?.sys || "", dia: ed.tensionArterial?.dia || "" },
+      pliegueCintura: parseNum(ed.pliegueCintura),
       notas: ed.notas || "", createdAt: serverTimestamp(),
     };
 
@@ -1071,7 +1201,7 @@ Ruiz Nutrición
         circunferenciaCinturaCm: "",
         circunferenciaCaderaCm: "",
         circunferenciaPiernaCm: "",
-        tensionArterial: { sys: "", dia: "" },
+        pliegueCintura: "",
         notas: "",
       });
       setError(null);
@@ -1203,7 +1333,7 @@ Ruiz Nutrición
       circunferenciaCinturaCm: record.circunferenciaCinturaCm ?? "",
       circunferenciaCaderaCm: record.circunferenciaCaderaCm ?? "",
       circunferenciaPiernaCm: record.circunferenciaPiernaCm ?? "",
-      tensionArterial: record.tensionArterial || { sys: "", dia: "" },
+      pliegueCintura: record.pliegueCintura ?? "",
       notas: record.notas ?? "",
       _t: record._t,
       createdAt: record.createdAt,
@@ -1253,7 +1383,7 @@ Ruiz Nutrición
         circunferenciaCinturaCm: parseNum(editingRecord.circunferenciaCinturaCm),
         circunferenciaCaderaCm: parseNum(editingRecord.circunferenciaCaderaCm),
         circunferenciaPiernaCm: parseNum(editingRecord.circunferenciaPiernaCm),
-        tensionArterial: editingRecord.tensionArterial || { sys: "", dia: "" },
+        pliegueCintura: parseNum(editingRecord.pliegueCintura),
         notas: editingRecord.notas || "",
         createdAt: recordToUpdate.createdAt || new Date(),
       };
@@ -1432,14 +1562,8 @@ Ruiz Nutrición
     return editable.masaGrasaKg || "";
   })();
 
-  const masaMagraKgCalc = (() => {
-    const p = parseFloat(editable.peso);
-    const mgKg = parseFloat(masaGrasaKgCalc);
-    if (!isNaN(p) && !isNaN(mgKg) && p > 0) {
-      return (Math.round((p - mgKg) * 100) / 100).toString();
-    }
-    return editable.masaMagraKg || "";
-  })();
+  // Masa magra ahora es un campo editable manualmente
+  const masaMagraKgCalc = editable.masaMagraKg || "";
 
   const aguaTotalKgCalc = (() => {
     const p = parseFloat(editable.peso);
@@ -1462,11 +1586,12 @@ Ruiz Nutrición
   // Función para renderizar cada campo de pesaje dinámicamente
   const renderPesajeField = (fieldKey) => {
     const baseStyle = {
-      padding: "9px 12px",
+      padding: isMobile ? "6px 8px" : "9px 12px",
       borderRadius: "6px",
       border: "1px solid #e2e8f0",
-      fontSize: "15px",
-      fontWeight: "500"
+      fontSize: isMobile ? "14px" : "15px",
+      fontWeight: "500",
+      width: isMobile ? "70px" : "auto"
     };
 
     const calculatedStyle = {
@@ -1566,10 +1691,9 @@ Ruiz Nutrición
               inputMode="decimal"
               step="0.01"
               className="input"
-              value={masaMagraKgCalc}
-              readOnly
-              tabIndex={-1}
-              style={calculatedStyle}
+              value={editable.masaMagraKg ?? ""}
+              onChange={(e) => setEditable((s) => ({ ...s, masaMagraKg: e.target.value }))}
+              style={baseStyle}
             />
           </div>
         );
@@ -1646,14 +1770,11 @@ Ruiz Nutrición
           </div>
         );
       
-      case "tensionArterial":
+      case "pliegueCintura":
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>TA (SYS / DIA)</label>
-            <div style={{ display: "flex", gap: "6px" }}>
-              <input type="number" className="input" placeholder="SYS" value={editable.tensionArterial?.sys ?? ""} onChange={(e) => setEditable((s) => ({ ...s, tensionArterial: { ...(s.tensionArterial || {}), sys: e.target.value } }))} style={{ flex: "1", padding: "9px 8px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "14px", textAlign: "center" }} />
-              <input type="number" className="input" placeholder="DIA" value={editable.tensionArterial?.dia ?? ""} onChange={(e) => setEditable((s) => ({ ...s, tensionArterial: { ...(s.tensionArterial || {}), dia: e.target.value } }))} style={{ flex: "1", padding: "9px 8px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "14px", textAlign: "center" }} />
-            </div>
+            <label style={{ fontSize: "11px", color: "#64748b", fontWeight: "600", textTransform: "uppercase" }}>Pliegue Cintura (mm)</label>
+            <input type="number" inputMode="decimal" step="0.1" className="input" value={editable.pliegueCintura ?? ""} onChange={(e) => setEditable((s) => ({ ...s, pliegueCintura: e.target.value }))} style={{ padding: "9px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "15px", fontWeight: "500" }} />
           </div>
         );
       
@@ -1737,10 +1858,9 @@ Ruiz Nutrición
   const exportHistoryCSV = () => {
     try {
       if (!Array.isArray(rowsDesc) || rowsDesc.length === 0) return;
-      const headers = ["Fecha","Peso","Masa grasa %","Masa grasa (kg)","Masa magra (kg)","Masa muscular (kg)","Agua (kg)","% Agua","Masa ósea (kg)","MB (kcal)","Grasa visceral","IMC","Edad metabólica","C. Brazo (cm)","C. Cintura (cm)","C. Cadera (cm)","C. Pierna (cm)","Índice C/T","TA (SYS/DIA)","Notas"];
+      const headers = ["Fecha","Peso","Masa grasa %","Masa grasa (kg)","Masa magra (kg)","Masa muscular (kg)","Agua (kg)","% Agua","Masa ósea (kg)","MB (kcal)","Grasa visceral","IMC","Edad metabólica","C. Brazo (cm)","C. Cintura (cm)","C. Cadera (cm)","C. Pierna (cm)","Índice C/T","Pliegue Cintura (mm)","Notas"];
       const rows = rowsDesc.map((r) => {
-        const ta = r.tensionArterial || {};
-        return [ r.fecha || (r._t ? new Date(r._t).toLocaleString() : ""), r.peso ?? r.pesoActual ?? "", r.masaGrasaPct ?? "", r.masaGrasaKg ?? "", r.masaMagraKg ?? "", r.masaMuscularKg ?? "", r.aguaTotalKg ?? "", r.aguaTotalPct ?? "", r.masaOseaKg ?? "", r.mbKcal ?? "", r.grasaVisceralNivel ?? "", r.imc ?? "", r.edadMetabolica ?? "", r.circunferenciaBrazoCm ?? "", r.circunferenciaCinturaCm ?? "", r.circunferenciaCaderaCm ?? "", r.circunferenciaPiernaCm ?? "", r.indiceCinturaTalla ?? "", `${ta.sys || ""}${ta.dia ? ` / ${ta.dia}` : ""}`, (r.notas || "").replace(/\n/g, " ") ];
+        return [ r.fecha || (r._t ? new Date(r._t).toLocaleString() : ""), r.peso ?? r.pesoActual ?? "", r.masaGrasaPct ?? "", r.masaGrasaKg ?? "", r.masaMagraKg ?? "", r.masaMuscularKg ?? "", r.aguaTotalKg ?? "", r.aguaTotalPct ?? "", r.masaOseaKg ?? "", r.mbKcal ?? "", r.grasaVisceralNivel ?? "", r.imc ?? "", r.edadMetabolica ?? "", r.circunferenciaBrazoCm ?? "", r.circunferenciaCinturaCm ?? "", r.circunferenciaCaderaCm ?? "", r.circunferenciaPiernaCm ?? "", r.indiceCinturaTalla ?? "", r.pliegueCintura ?? "", (r.notas || "").replace(/\n/g, " ") ];
       });
       const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))].join("\n");
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -1827,7 +1947,6 @@ Ruiz Nutrición
     }
 
     const rows = rowsDesc.map((r) => {
-      const ta = r.tensionArterial || {};
       return `<tr>
         <td>${escapeHtmlForInject(r.fecha || (r._t ? new Date(r._t).toLocaleString() : ""))}</td>
         <td>${escapeHtmlForInject(r.peso ?? r.pesoActual ?? "")}</td>
@@ -1847,7 +1966,7 @@ Ruiz Nutrición
         <td>${escapeHtmlForInject(r.circunferenciaCaderaCm ?? "")}</td>
         <td>${escapeHtmlForInject(r.circunferenciaPiernaCm ?? "")}</td>
         <td>${escapeHtmlForInject(r.indiceCinturaTalla ?? "")}</td>
-        <td>${escapeHtmlForInject(`${ta.sys || ""}${ta.dia ? ` / ${ta.dia}` : ""}`)}</td>
+        <td>${escapeHtmlForInject(r.pliegueCintura ?? "")}</td>
         <td>${escapeHtmlForInject(r.notas || "")}</td>
       </tr>`;
     }).join("");
@@ -1859,7 +1978,7 @@ Ruiz Nutrición
           <tr>
             <th>Fecha</th><th>Peso</th><th>Masa grasa %</th><th>Masa grasa (kg)</th><th>Masa magra (kg)</th>
             <th>Masa muscular (kg)</th><th>Agua (kg)</th><th>% Agua</th><th>Masa ósea (kg)</th><th>MB (kcal)</th>
-            <th>Grasa visceral</th><th>IMC</th><th>Edad metab.</th><th>C. Brazo</th><th>C. Cintura</th><th>C. Cadera</th><th>C. Pierna</th><th>Índice C/T</th><th>TA (SYS/DIA)</th><th>Notas</th>
+            <th>Grasa visceral</th><th>IMC</th><th>Edad metab.</th><th>C. Brazo</th><th>C. Cintura</th><th>C. Cadera</th><th>C. Pierna</th><th>Índice C/T</th><th>Pliegue Cintura</th><th>Notas</th>
           </tr>
         </thead>
         <tbody>
@@ -2243,10 +2362,11 @@ Ruiz Nutrición
 
           {/* Actions - iconos */}
           <div style={{ display: "flex", gap: "6px", flexShrink: 0, marginLeft: "12px" }}>
-            <button 
-              className="btn-icon-header" 
-              onClick={() => setShowProfile((s) => !s)} 
-              title="Perfil"
+            {!(adminMode && isMobile) && (
+              <button 
+                className="btn-icon-header" 
+                onClick={() => setShowProfile((s) => !s)} 
+                title="Perfil"
               style={{
                 background: "rgba(255,255,255,0.2)",
                 border: "none",
@@ -2267,6 +2387,7 @@ Ruiz Nutrición
                 <circle cx="12" cy="7" r="4" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </button>
+            )}
 
             <button 
               className="btn-icon-header" 
@@ -2458,7 +2579,7 @@ Ruiz Nutrición
         </div>
       )}
 
-      {showProfile && (
+      {showProfile && !(adminMode && isMobile) && (
         <div className="card" style={{ padding: 12, margin: "0 12px 12px 12px" }}>
           <h3>Perfil</h3>
           <div className="panel-section">
@@ -2509,10 +2630,11 @@ Ruiz Nutrición
         <>
           {/* Tabs modernos con iconos */}
           <nav className="tabs" role="tablist" aria-label="Secciones" style={{ 
-            display: "flex", 
-            gap: "6px", 
-            padding: adminMode ? "0 20px" : "0",
-            overflowX: "auto",
+            display: isMobile && adminMode ? "grid" : "flex",
+            gridTemplateColumns: isMobile && adminMode ? "repeat(6, 1fr)" : "none",
+            gap: isMobile ? "4px" : "6px", 
+            padding: adminMode ? (isMobile ? "0 8px" : "0 20px") : "0",
+            overflowX: isMobile && adminMode ? "visible" : "auto",
             WebkitOverflowScrolling: "touch",
             scrollbarWidth: "none",
             msOverflowStyle: "none",
@@ -2524,22 +2646,41 @@ Ruiz Nutrición
                 className={i === tabIndex ? "tab-modern tab-modern-active" : "tab-modern"} 
                 onClick={() => setTabIndex(i)}
                 style={{
-                  flex: "1 1 auto",
-                  minWidth: "fit-content",
-                  padding: "10px 16px",
-                  border: "none",
-                  borderRadius: "10px",
-                  background: i === tabIndex ? "linear-gradient(135deg, #16a34a 0%, #15803d 100%)" : "#f1f5f9",
+                  flex: isMobile && adminMode ? "none" : "1 1 auto",
+                  minWidth: isMobile && adminMode ? "auto" : "fit-content",
+                  padding: isMobile && adminMode ? "6px 2px" : (isMobile ? "12px 8px" : "10px 16px"),
+                  borderRadius: isMobile ? "8px" : "10px",
+                  background: i === tabIndex 
+                    ? "linear-gradient(135deg, #16a34a 0%, #15803d 100%)" 
+                    : (isMobile ? "white" : "#f1f5f9"),
+                  border: (isMobile && i !== tabIndex) ? "1px solid #e5e7eb" : "none",
                   color: i === tabIndex ? "white" : "#64748b",
-                  fontWeight: i === tabIndex ? "600" : "500",
-                  fontSize: "14px",
+                  fontWeight: i === tabIndex ? "700" : "500",
+                  fontSize: isMobile ? "13px" : "14px",
                   cursor: "pointer",
                   transition: "all 0.2s",
-                  boxShadow: i === tabIndex ? "0 2px 8px rgba(22,163,74,0.3)" : "none",
-                  whiteSpace: "nowrap"
+                  boxShadow: i === tabIndex 
+                    ? "0 4px 12px rgba(22,163,74,0.3)" 
+                    : (isMobile ? "0 1px 2px rgba(0,0,0,0.05)" : "none"),
+                  whiteSpace: isMobile && adminMode ? "normal" : "nowrap",
+                  textAlign: "center",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "2px"
                 }}
               >
-                {t.label}
+                {isMobile && adminMode ? (
+                  <>
+                    <span style={{ fontSize: "16px" }}>{t.icon}</span>
+                    <span style={{ fontSize: "9px", lineHeight: "1.1" }}>
+                      {t.label.replace(/^[^\s]+\s/, '')}
+                    </span>
+                  </>
+                ) : (
+                  t.label
+                )}
               </button>
             ))}
           </nav>
@@ -2669,27 +2810,33 @@ Ruiz Nutrición
 
                   <div className="pesaje-container">
                     {/* Fila con Fecha, Peso, Edad y Altura */}
-                    <div style={{ marginBottom: "16px", display: "grid", gridTemplateColumns: "200px 120px 80px 120px", gap: "16px", alignItems: "end" }}>
+                    <div style={{ 
+                      marginBottom: "16px", 
+                      display: "grid", 
+                      gridTemplateColumns: isMobile ? "1fr 1fr" : "200px 120px 80px 120px", 
+                      gap: isMobile ? "8px" : "16px", 
+                      alignItems: "end" 
+                    }}>
                       <div>
-                        <label style={{ display: "block", fontSize: "12px", color: "#475569", marginBottom: "6px", fontWeight: "500" }}>Fecha</label>
-                        <input type="date" className="input" value={fechaPeso} onChange={(e) => setFechaPeso(e.target.value)} style={{ width: "100%" }} />
+                        <label style={{ display: "block", fontSize: isMobile ? "11px" : "12px", color: "#475569", marginBottom: "6px", fontWeight: "500" }}>Fecha</label>
+                        <input type="date" className="input" value={fechaPeso} onChange={(e) => setFechaPeso(e.target.value)} style={{ width: "100%", fontSize: isMobile ? "14px" : "15px" }} />
                       </div>
                       <div>
-                        <label style={{ display: "block", fontSize: "12px", color: "#475569", marginBottom: "6px", fontWeight: "500" }}>Peso (kg)</label>
-                        <input type="number" step="0.1" className="input" value={editable.peso || ""} onChange={(e) => setEditable((s) => ({ ...s, peso: e.target.value }))} style={{ width: "100%" }} />
+                        <label style={{ display: "block", fontSize: isMobile ? "11px" : "12px", color: "#475569", marginBottom: "6px", fontWeight: "500" }}>Peso (kg)</label>
+                        <input type="number" step="0.1" className="input" value={editable.peso || ""} onChange={(e) => setEditable((s) => ({ ...s, peso: e.target.value }))} style={{ width: "100%", fontSize: isMobile ? "14px" : "15px" }} />
                       </div>
                       <div>
-                        <label style={{ display: "block", fontSize: "12px", color: "#475569", marginBottom: "6px", fontWeight: "500" }}>Edad</label>
-                        <input type="text" className="input" value={calcularEdad(userData?.nacimiento) || "—"} readOnly style={{ width: "100%", backgroundColor: "#f8fafc", cursor: "not-allowed" }} />
+                        <label style={{ display: "block", fontSize: isMobile ? "11px" : "12px", color: "#475569", marginBottom: "6px", fontWeight: "500" }}>Edad</label>
+                        <input type="text" className="input" value={calcularEdad(userData?.nacimiento) || "—"} readOnly style={{ width: "100%", backgroundColor: "#f8fafc", cursor: "not-allowed", fontSize: isMobile ? "14px" : "15px" }} />
                       </div>
                       <div>
-                        <label style={{ display: "block", fontSize: "12px", color: "#475569", marginBottom: "6px", fontWeight: "500" }}>Altura (cm)</label>
-                        <input type="number" step="0.1" className="input" value={altura} onChange={(e) => setAltura(e.target.value)} style={{ width: "100%" }} />
+                        <label style={{ display: "block", fontSize: isMobile ? "11px" : "12px", color: "#475569", marginBottom: "6px", fontWeight: "500" }}>Altura (cm)</label>
+                        <input type="number" step="0.1" className="input" value={altura} onChange={(e) => setAltura(e.target.value)} style={{ width: "100%", fontSize: isMobile ? "14px" : "15px" }} />
                       </div>
                     </div>
 
                     {/* Grid compacto para campos de medidas - organizados por tipo */}
-                    {adminMode && (
+                    {adminMode && !isMobile && (
                       <div style={{ marginBottom: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
                         <div style={{ padding: "8px 12px", background: "#fef3c7", borderRadius: "6px", fontSize: "13px", color: "#92400e", flex: 1 }}>
                           {fieldsLocked ? "🔒 Campos bloqueados" : "ℹ️ Arrastra los campos para reordenarlos"}
@@ -2819,7 +2966,7 @@ Ruiz Nutrición
 
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: "12px" }}>
                     <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                         <label style={{ fontSize: 13, color: "#64748b", fontWeight: "500" }}>Mostrar:</label>
                         <select value={histLimit} onChange={(e) => setHistLimit(Number(e.target.value))} className="input" style={{ 
                           width: 80, 
@@ -2834,76 +2981,76 @@ Ruiz Nutrición
                           <option value={50}>50</option>
                           <option value={100}>100</option>
                         </select>
-                      </div>
-                      
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        
                         <input 
                           type="checkbox" 
                           id="transpose-check" 
                           checked={transposeTable} 
                           onChange={(e) => setTransposeTable(e.target.checked)}
-                          style={{ cursor: "pointer" }}
+                          style={{ cursor: "pointer", marginLeft: "8px" }}
                         />
                         <label htmlFor="transpose-check" style={{ fontSize: 13, color: "#64748b", fontWeight: "500", cursor: "pointer" }}>
-                          🔄 Transponer (fechas en columnas)
+                          🔄 Transponer
                         </label>
                       </div>
 
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <label style={{ fontSize: 13, color: "#64748b", fontWeight: "500" }}>🔍 Zoom:</label>
-                        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                          <button 
-                            onClick={() => setTableZoom(Math.max(80, tableZoom - 10))}
-                            style={{
-                              padding: "4px 8px",
-                              fontSize: "14px",
-                              borderRadius: "6px",
-                              border: "1px solid #e2e8f0",
-                              background: "white",
-                              color: "#64748b",
-                              cursor: "pointer",
-                              fontWeight: "600"
-                            }}
-                            title="Reducir zoom"
-                          >
-                            −
-                          </button>
-                          <span style={{ fontSize: 12, color: "#64748b", minWidth: "45px", textAlign: "center", fontWeight: "500" }}>
-                            {tableZoom}%
-                          </span>
-                          <button 
-                            onClick={() => setTableZoom(Math.min(150, tableZoom + 10))}
-                            style={{
-                              padding: "4px 8px",
-                              fontSize: "14px",
-                              borderRadius: "6px",
-                              border: "1px solid #e2e8f0",
-                              background: "white",
-                              color: "#64748b",
-                              cursor: "pointer",
-                              fontWeight: "600"
-                            }}
-                            title="Aumentar zoom"
-                          >
-                            +
-                          </button>
-                          <button 
-                            onClick={() => setTableZoom(100)}
-                            style={{
-                              padding: "4px 8px",
-                              fontSize: "11px",
-                              borderRadius: "6px",
-                              border: "1px solid #e2e8f0",
-                              background: "white",
-                              color: "#64748b",
-                              cursor: "pointer"
-                            }}
-                            title="Resetear zoom"
-                          >
-                            Reset
-                          </button>
+                      {!isMobile && (
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <label style={{ fontSize: 13, color: "#64748b", fontWeight: "500" }}>🔍 Zoom:</label>
+                          <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                            <button 
+                              onClick={() => setTableZoom(Math.max(80, tableZoom - 10))}
+                              style={{
+                                padding: "4px 8px",
+                                fontSize: "14px",
+                                borderRadius: "6px",
+                                border: "1px solid #e2e8f0",
+                                background: "white",
+                                color: "#64748b",
+                                cursor: "pointer",
+                                fontWeight: "600"
+                              }}
+                              title="Reducir zoom"
+                            >
+                              −
+                            </button>
+                            <span style={{ fontSize: 12, color: "#64748b", minWidth: "45px", textAlign: "center", fontWeight: "500" }}>
+                              {tableZoom}%
+                            </span>
+                            <button 
+                              onClick={() => setTableZoom(Math.min(150, tableZoom + 10))}
+                              style={{
+                                padding: "4px 8px",
+                                fontSize: "14px",
+                                borderRadius: "6px",
+                                border: "1px solid #e2e8f0",
+                                background: "white",
+                                color: "#64748b",
+                                cursor: "pointer",
+                                fontWeight: "600"
+                              }}
+                              title="Aumentar zoom"
+                            >
+                              +
+                            </button>
+                            <button 
+                              onClick={() => setTableZoom(100)}
+                              style={{
+                                padding: "4px 8px",
+                                fontSize: "11px",
+                                borderRadius: "6px",
+                                border: "1px solid #e2e8f0",
+                                background: "white",
+                                color: "#64748b",
+                                cursor: "pointer"
+                              }}
+                              title="Resetear zoom"
+                            >
+                              Reset
+                            </button>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
 
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -2971,7 +3118,7 @@ Ruiz Nutrición
                             <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "50px" }}>Cadera</th>
                             <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "45px" }}>Pierna</th>
                             <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "40px" }}>IC/T</th>
-                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "60px" }}>TA</th>
+                            <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "60px" }}>Pliegue Cintura</th>
                             <th style={{ padding: "6px 8px", fontSize: "10.5px", fontWeight: "600", textAlign: "left", width: "150px", maxWidth: "150px" }}>Notas</th>
                             <th style={{ padding: "6px 4px", fontSize: "10.5px", fontWeight: "600", textAlign: "center", width: "70px" }}>Acciones</th>
                           </tr>
@@ -2981,7 +3128,6 @@ Ruiz Nutrición
                             <tr><td colSpan={21} style={{ padding: 12, textAlign: "center", color: "#94a3b8" }}>Sin registros</td></tr>
                           ) : (
                             rowsDesc.slice(0, histLimit).map((r, i) => {
-                              const ta = r.tensionArterial || {};
                               const key = `${r._t || i}-${i}`;
                               const formatShortDate = (dateStr) => {
                                 if (!dateStr) return "";
@@ -3012,7 +3158,7 @@ Ruiz Nutrición
                                     <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center" }}>{r.circunferenciaCaderaCm ?? "—"}</td>
                                     <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center" }}>{r.circunferenciaPiernaCm ?? "—"}</td>
                                     <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center" }}>{r.indiceCinturaTalla ?? "—"}</td>
-                                    <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center", whiteSpace: "nowrap" }}>{`${ta.sys || ""}${ta.dia ? `/${ta.dia}` : ""}`}</td>
+                                    <td style={{ padding: "5px 4px", fontSize: "10.5px", textAlign: "center" }}>{r.pliegueCintura ?? "—"}</td>
                                     <td style={{ padding: "5px 8px", fontSize: "10.5px", textAlign: "left", maxWidth: "150px", cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} onClick={() => toggleExpandRowLocal(i)}>{renderCell(r.notas)}</td>
                                     <td style={{ padding: "5px 4px" }}>
                                       <div style={{ display: "flex", gap: 3, justifyContent: "center" }}>
@@ -3104,7 +3250,7 @@ Ruiz Nutrición
                               { label: "Cadera", key: "circunferenciaCaderaCm" },
                               { label: "Pierna", key: "circunferenciaPiernaCm" },
                               { label: "IC/T", key: "indiceCinturaTalla" },
-                              { label: "TA", key: "tensionArterial", isTa: true },
+                              { label: "Pliegue Cintura", key: "pliegueCintura" },
                               { label: "Notas", key: "notas" }
                             ].map((field, fieldIdx) => (
                               <tr key={`row-${fieldIdx}`} style={{ background: fieldIdx % 2 === 0 ? "#fefefe" : "#fafafa" }}>
@@ -3114,12 +3260,7 @@ Ruiz Nutrición
                                 {rowsDesc.slice(0, histLimit).reverse().map((r, i) => {
                                   const key = `cell-${fieldIdx}-${i}`;
                                   let value = "—";
-                                  if (field.isTa) {
-                                    const ta = r.tensionArterial || {};
-                                    value = `${ta.sys || ""}${ta.dia ? `/${ta.dia}` : ""}`;
-                                  } else {
-                                    value = r[field.key] ?? (field.alt ? r[field.alt] : "") ?? "—";
-                                  }
+                                  value = r[field.key] ?? (field.alt ? r[field.alt] : "") ?? "—";
                                   return (
                                     <td key={key} style={{ padding: "6px 4px", textAlign: "center", fontSize: "10.5px", border: "1px solid #e2e8f0", width: "50px", minWidth: "50px", maxWidth: "50px", fontWeight: field.important ? "500" : "normal" }}>
                                       {value}
@@ -4866,29 +5007,15 @@ Ruiz Nutrición
               </div>
 
               <div className="field">
-                <label>TA (SYS / DIA)</label>
-                <div className="tension-group" style={{ display: "flex", gap: "8px" }}>
-                  <input 
-                    type="number" 
-                    className="input" 
-                    placeholder="SYS" 
-                    value={editingRecord.tensionArterial?.sys ?? ""} 
-                    onChange={(e) => setEditingRecord({ 
-                      ...editingRecord, 
-                      tensionArterial: { ...(editingRecord.tensionArterial || {}), sys: e.target.value } 
-                    })} 
-                  />
-                  <input 
-                    type="number" 
-                    className="input" 
-                    placeholder="DIA" 
-                    value={editingRecord.tensionArterial?.dia ?? ""} 
-                    onChange={(e) => setEditingRecord({ 
-                      ...editingRecord, 
-                      tensionArterial: { ...(editingRecord.tensionArterial || {}), dia: e.target.value } 
-                    })} 
-                  />
-                </div>
+                <label>Pliegue Cintura (mm)</label>
+                <input 
+                  type="number" 
+                  inputMode="decimal" 
+                  step="0.1" 
+                  className="input" 
+                  value={editingRecord.pliegueCintura ?? ""} 
+                  onChange={(e) => setEditingRecord({ ...editingRecord, pliegueCintura: e.target.value })} 
+                />
               </div>
 
               <div className="field" style={{ gridColumn: "1 / -1" }}>

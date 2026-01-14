@@ -345,8 +345,8 @@ exports.checkAppointmentReminders = onSchedule("every 1 hours", async (event) =>
 
                     <div class="cita-box">
                       <h3 style="margin-top: 0; color: #15803d;">📋 Detalles de la cita</h3>
-                      <p style="margin: 10px 0;"><strong>📅 Fecha:</strong> ${citaDate.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-                      <p style="margin: 10px 0;"><strong>🕐 Hora:</strong> ${citaDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</p>
+                      <p style="margin: 10px 0;"><strong>📅 Fecha:</strong> ${citaDate.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Europe/Madrid' })}</p>
+                      <p style="margin: 10px 0;"><strong>🕐 Hora:</strong> ${citaDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })}</p>
                       ${cita.notas ? `<p style="margin: 10px 0;"><strong>📝 Notas:</strong> ${cita.notas}</p>` : ''}
                     </div>
 
@@ -369,8 +369,8 @@ Hola ${userName},
 
 Te recordamos que MAÑANA tienes una cita programada:
 
-📅 Fecha: ${citaDate.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-🕐 Hora: ${citaDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+📅 Fecha: ${citaDate.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Europe/Madrid' })}
+🕐 Hora: ${citaDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })}
 ${cita.notas ? `📝 Notas: ${cita.notas}` : ''}
 
 Por favor, confirma tu asistencia o avisa si necesitas cancelar.
@@ -401,7 +401,7 @@ Ruiz Nutrición
             userId: userDoc.id,
             type: "appointment_reminder",
             title: "🔔 Recordatorio de Cita",
-            body: `Tu cita es en 1 hora - ${citaDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`,
+            body: `Tu cita es en 1 hora - ${citaDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })}`,
             data: {
               citaFecha: cita.fecha,
               citaNotas: cita.notas || '',

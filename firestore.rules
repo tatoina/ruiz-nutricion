@@ -37,7 +37,18 @@ service cloud.firestore {
       allow write: if isAdmin(); // Solo admins pueden escribir
     }
     
-    // Otras colecciones
+    // Colección de usuarios (nueva estructura)
+    match /usuarios/{userId} {
+      // Los usuarios pueden leer su propia información
+      // Los admins pueden leer cualquier usuario
+      allow read: if request.auth != null && 
+                     (request.auth.uid == userId || isAdmin());
+      
+      // Solo admins pueden escribir
+      allow write: if isAdmin();
+    }
+    
+    // Otras colecciones - solo admins
     match /{document=**} {
       allow read, write: if isAdmin();
     }

@@ -7,6 +7,7 @@ import AdminMenus from "./components/AdminMenus";
 import AdminTipoDieta from "./components/AdminTipoDieta";
 import AdminTarifas from "./components/AdminTarifas";
 import AdminPagosGlobal from "./components/AdminPagosGlobal";
+import AdminLayoutResponsive from "./components/Layouts/AdminLayoutResponsive";
 import FichaUsuario from "./components/FichaUsuario";
 import Login from "./components/Login";
 import Register from "./components/Register";
@@ -14,6 +15,7 @@ import ChangePassword from "./components/ChangePassword";
 import PrivateRoute from "./components/PrivateRoute";
 import { auth } from "./Firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import InstallPrompt from "./components/InstallPrompt";
 
 /**
  * LoginWrapper
@@ -101,7 +103,9 @@ export default function App() {
           path="/admin"
           element={
             <PrivateRoute>
-              <AdminUsers />
+              <AdminLayoutResponsive title="Usuarios">
+                <AdminUsers />
+              </AdminLayoutResponsive>
             </PrivateRoute>
           }
         />
@@ -110,7 +114,9 @@ export default function App() {
           path="/admin/agenda"
           element={
             <PrivateRoute>
-              <AdminAgenda />
+              <AdminLayoutResponsive title="Agenda">
+                <AdminAgenda />
+              </AdminLayoutResponsive>
             </PrivateRoute>
           }
         />
@@ -119,7 +125,9 @@ export default function App() {
           path="/admin/menus"
           element={
             <PrivateRoute>
-              <AdminMenus />
+              <AdminLayoutResponsive title="Menús">
+                <AdminMenus />
+              </AdminLayoutResponsive>
             </PrivateRoute>
           }
         />
@@ -128,7 +136,9 @@ export default function App() {
           path="/admin/tarifas"
           element={
             <PrivateRoute>
-              <AdminTarifas />
+              <AdminLayoutResponsive title="Tarifas">
+                <AdminTarifas />
+              </AdminLayoutResponsive>
             </PrivateRoute>
           }
         />
@@ -137,7 +147,9 @@ export default function App() {
           path="/admin/pagos"
           element={
             <PrivateRoute>
-              <AdminPagosGlobal />
+              <AdminLayoutResponsive title="Pagos">
+                <AdminPagosGlobal />
+              </AdminLayoutResponsive>
             </PrivateRoute>
           }
         />
@@ -146,7 +158,9 @@ export default function App() {
           path="/admin/tipodieta"
           element={
             <PrivateRoute>
-              <AdminTipoDieta />
+              <AdminLayoutResponsive title="Tipo Dieta">
+                <AdminTipoDieta />
+              </AdminLayoutResponsive>
             </PrivateRoute>
           }
         />
@@ -162,6 +176,7 @@ export default function App() {
 
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
+      <InstallPrompt />
     </BrowserRouter>
   );
 }

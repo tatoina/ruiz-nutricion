@@ -176,16 +176,6 @@ export default function FileManager({ userId, type, isAdmin }) {
     return "- KB";
   };
 
-  if (!isAdmin) {
-    return (
-      <div style={{ padding: "20px", textAlign: "center" }}>
-        <p style={{ color: "#666" }}>
-          No tienes permisos para gestionar archivos.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div style={{ padding: "12px" }}>
       <div style={{ marginBottom: "20px" }}>
@@ -193,36 +183,38 @@ export default function FileManager({ userId, type, isAdmin }) {
           {type === "ejercicios" ? "Archivos de Ejercicios" : "Archivos de Recetas"}
         </h4>
 
-        {/* Botón de subir archivo */}
-        <div style={{ marginBottom: "20px" }}>
-          <input
-            type="file"
-            id={`file-upload-${type}`}
-            onChange={handleFileUpload}
-            disabled={uploading}
-            style={{ display: "none" }}
-            accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx"
-          />
-          <label htmlFor={`file-upload-${type}`}>
-            <div
-              style={{
-                display: "inline-block",
-                padding: "10px 20px",
-                backgroundColor: uploading ? "#cbd5e0" : "#4299e1",
-                color: "white",
-                borderRadius: "6px",
-                cursor: uploading ? "not-allowed" : "pointer",
-                fontWeight: "500",
-                fontSize: "14px",
-              }}
-            >
-              {uploading ? `Subiendo... ${uploadProgress}%` : "📤 Subir archivo"}
-            </div>
-          </label>
-          <p style={{ fontSize: "12px", color: "#718096", marginTop: "8px" }}>
-            Formatos permitidos: PDF, imágenes (JPG, PNG, GIF), Word. Máximo 10MB.
-          </p>
-        </div>
+        {/* Botón de subir archivo - Solo para admins */}
+        {isAdmin && (
+          <div style={{ marginBottom: "20px" }}>
+            <input
+              type="file"
+              id={`file-upload-${type}`}
+              onChange={handleFileUpload}
+              disabled={uploading}
+              style={{ display: "none" }}
+              accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx"
+            />
+            <label htmlFor={`file-upload-${type}`}>
+              <div
+                style={{
+                  display: "inline-block",
+                  padding: "10px 20px",
+                  backgroundColor: uploading ? "#cbd5e0" : "#4299e1",
+                  color: "white",
+                  borderRadius: "6px",
+                  cursor: uploading ? "not-allowed" : "pointer",
+                  fontWeight: "500",
+                  fontSize: "14px",
+                }}
+              >
+                {uploading ? `Subiendo... ${uploadProgress}%` : "📤 Subir archivo"}
+              </div>
+            </label>
+            <p style={{ fontSize: "12px", color: "#718096", marginTop: "8px" }}>
+              Formatos permitidos: PDF, imágenes (JPG, PNG, GIF), Word. Máximo 10MB.
+            </p>
+          </div>
+        )}
 
         {/* Barra de progreso */}
         {uploading && (
@@ -326,21 +318,23 @@ export default function FileManager({ userId, type, isAdmin }) {
                 >
                   👁️ Ver
                 </a>
-                <button
-                  onClick={() => handleDelete(file)}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: "#f56565",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                  }}
-                >
-                  🗑️ Eliminar
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => handleDelete(file)}
+                    style={{
+                      padding: "8px 16px",
+                      backgroundColor: "#f56565",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "14px",
+                      fontWeight: "500",
+                    }}
+                  >
+                    🗑️ Eliminar
+                  </button>
+                )}
               </div>
             </div>
           ))}

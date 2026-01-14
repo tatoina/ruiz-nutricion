@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../Firebase";
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore";
+import { useDevice } from "../hooks/useDevice";
 
 const CATEGORIAS = [
   { id: "desayuno", label: "🌅 Desayuno", color: "#fef3c7", borderColor: "#f59e0b" },
@@ -14,6 +15,7 @@ const CATEGORIAS = [
 
 export default function AdminMenus() {
   const navigate = useNavigate();
+  const { isMobile } = useDevice(); // Detectar móvil
   const [categoriaActiva, setCategoriaActiva] = useState("desayuno");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -103,7 +105,7 @@ export default function AdminMenus() {
     <div style={{ 
       minHeight: "100vh",
       background: "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)",
-      padding: "24px"
+      padding: isMobile ? "12px" : "24px"
     }}>
       <div style={{ 
         maxWidth: "1200px",
@@ -112,52 +114,56 @@ export default function AdminMenus() {
         {/* Header */}
         <div style={{
           background: "white",
-          borderRadius: "12px",
-          padding: "24px",
-          marginBottom: "24px",
+          borderRadius: isMobile ? "8px" : "12px",
+          padding: isMobile ? "16px" : "24px",
+          marginBottom: isMobile ? "16px" : "24px",
           boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
         }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <h1 style={{ 
-                margin: "0 0 8px 0", 
-                fontSize: "28px", 
-                fontWeight: "700", 
-                color: "#15803d" 
-              }}>
-                📋 Gestión de Menús
-              </h1>
-              <p style={{ margin: 0, color: "#64748b", fontSize: "14px" }}>
-                Administra los productos disponibles para cada categoría de comida
-              </p>
-            </div>
-            <button
-              onClick={() => navigate("/admin")}
-              style={{
-                padding: "10px 20px",
-                borderRadius: "8px",
-                border: "2px solid #16a34a",
-                background: "white",
-                color: "#16a34a",
-                fontWeight: "600",
-                fontSize: "15px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                transition: "all 0.2s"
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.background = "#16a34a";
-                e.target.style.color = "white";
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.background = "white";
-                e.target.style.color = "#16a34a";
-              }}
-            >
-              ← Volver
-            </button>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexDirection: isMobile ? "column" : "row", gap: isMobile ? "12px" : "0" }}>
+            {!isMobile && (
+              <>
+                <div style={{ width: "auto" }}>
+                  <h1 style={{ 
+                    margin: "0 0 8px 0", 
+                    fontSize: "28px", 
+                    fontWeight: "700", 
+                    color: "#15803d" 
+                  }}>
+                    📋 Gestión de Menús
+                  </h1>
+                  <p style={{ margin: 0, color: "#64748b", fontSize: "14px" }}>
+                    Administra los productos disponibles para cada categoría de comida
+                  </p>
+                </div>
+                <button
+                  onClick={() => navigate("/admin")}
+                  style={{
+                    padding: "10px 20px",
+                    borderRadius: "8px",
+                    border: "2px solid #16a34a",
+                    background: "white",
+                    color: "#16a34a",
+                    fontWeight: "600",
+                    fontSize: "15px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    transition: "all 0.2s"
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = "#16a34a";
+                    e.target.style.color = "white";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = "white";
+                    e.target.style.color = "#16a34a";
+                  }}
+                >
+                  ← Volver
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -173,14 +179,14 @@ export default function AdminMenus() {
               key={cat.id}
               onClick={() => setCategoriaActiva(cat.id)}
               style={{
-                padding: "12px 24px",
+                padding: isMobile ? "8px 12px" : "12px 24px",
                 borderRadius: "10px",
                 border: categoriaActiva === cat.id ? `3px solid ${cat.borderColor}` : "2px solid #e2e8f0",
                 background: categoriaActiva === cat.id ? cat.color : "white",
                 color: categoriaActiva === cat.id ? "#1e293b" : "#64748b",
                 cursor: "pointer",
                 fontWeight: categoriaActiva === cat.id ? "700" : "600",
-                fontSize: "16px",
+                fontSize: isMobile ? "13px" : "16px",
                 transition: "all 0.2s",
                 boxShadow: categoriaActiva === cat.id ? "0 4px 12px rgba(0,0,0,0.15)" : "0 2px 4px rgba(0,0,0,0.05)"
               }}
@@ -193,8 +199,8 @@ export default function AdminMenus() {
         {/* Contenido principal */}
         <div style={{
           background: "white",
-          borderRadius: "12px",
-          padding: "24px",
+          borderRadius: isMobile ? "8px" : "12px",
+          padding: isMobile ? "16px" : "24px",
           boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
         }}>
           {/* Formulario agregar */}
@@ -395,6 +401,78 @@ export default function AdminMenus() {
           </div>
         </div>
       </div>
+
+      {/* Navegación inferior para móvil */}
+      {isMobile && (
+        <div style={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          backgroundColor: "white",
+          borderTop: "1px solid #e0e0e0",
+          boxShadow: "0 -2px 4px rgba(0,0,0,0.1)",
+          zIndex: 100,
+          display: "flex",
+          justifyContent: "space-around",
+          padding: "8px 4px"
+        }}>
+          <button
+            onClick={() => navigate("/admin")}
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              padding: "6px",
+              border: "none",
+              background: "none",
+              color: "#666",
+              fontSize: "11px",
+              cursor: "pointer"
+            }}
+          >
+            <span style={{ fontSize: "20px" }}>👥</span>
+            <span>Usuarios</span>
+          </button>
+          <button
+            onClick={() => navigate("/admin/agenda")}
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              padding: "6px",
+              border: "none",
+              background: "none",
+              color: "#666",
+              fontSize: "11px",
+              cursor: "pointer"
+            }}
+          >
+            <span style={{ fontSize: "20px" }}>📅</span>
+            <span>Agenda</span>
+          </button>
+          <button
+            onClick={() => navigate("/admin/menus")}
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              padding: "6px",
+              border: "none",
+              background: "none",
+              color: "#2196F3",
+              fontSize: "11px",
+              cursor: "pointer"
+            }}
+          >
+            <span style={{ fontSize: "20px" }}>📋</span>
+            <span>Menús</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

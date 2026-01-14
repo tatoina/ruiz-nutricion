@@ -4,10 +4,16 @@ import { db } from "../Firebase";
 import { useNavigate } from "react-router-dom";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "../Firebase";
+import { useDevice } from "../hooks/useDevice";
 
 export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
   const navigate = useNavigate();
+  const { isMobile } = useDevice();
   const [formData, setFormData] = useState({
+    // TIPO DE ATENCIÓN
+    atencionOnline: user.anamnesis?.atencionOnline || false,
+    notasEntrevista: user.anamnesis?.notasEntrevista || "",
+    
     // DATOS LABORALES
     dedicacion: user.anamnesis?.dedicacion || "",
     tipoTrabajo: user.anamnesis?.tipoTrabajo || "",
@@ -110,6 +116,8 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
   const [saveStatus, setSaveStatus] = useState("");
 
   // Estados para mostrar/ocultar secciones
+  const [showTipoAtencion, setShowTipoAtencion] = useState(true);
+  const [showNotasEntrevista, setShowNotasEntrevista] = useState(true);
   const [showDatosPersonales, setShowDatosPersonales] = useState(true);
   const [showObjetivos, setShowObjetivos] = useState(true);
   const [showHistoriaPonderal, setShowHistoriaPonderal] = useState(true);
@@ -137,6 +145,8 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
 
   // Función para colapsar/expandir todas las secciones
   const toggleAllSections = (show) => {
+    setShowTipoAtencion(show);
+    setShowNotasEntrevista(show);
     setShowDatosPersonales(show);
     setShowObjetivos(show);
     setShowHistoriaPonderal(show);
@@ -164,7 +174,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
   };
 
   // Verificar si todas las secciones están visibles
-  const allSectionsVisible = showDatosPersonales && showObjetivos && showHistoriaPonderal && 
+  const allSectionsVisible = showTipoAtencion && showNotasEntrevista && showDatosPersonales && showObjetivos && showHistoriaPonderal && 
     showDatosClinicos && showTemasDigestivos && showPreferenciasGustos && 
     showActividadFisica && showRevisionSeguimiento && showPreferenciaPlan && 
     showSuplementacion && showFarmacos && showSueno && showEstiloVida && 
@@ -229,28 +239,28 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
   }
 
   return (
-    <div className="anamnesis-container" style={{ padding: "20px 24px 80px 24px", width: "100%", boxSizing: "border-box", position: "relative" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-        <h2 style={{ color: "#4a5568", fontSize: "24px", fontWeight: "600", margin: 0 }}>ANAMNESIS</h2>
+    <div className="anamnesis-container" style={{ padding: isMobile ? "12px 12px 80px 12px" : "20px 24px 80px 24px", width: "100%", boxSizing: "border-box", position: "relative" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? "16px" : "24px" }}>
+        <h2 style={{ color: "#4a5568", fontSize: isMobile ? "18px" : "24px", fontWeight: "600", margin: 0 }}>ANAMNESIS</h2>
         <button
           type="button"
           onClick={() => toggleAllSections(!allSectionsVisible)}
           style={{
-            padding: "10px 20px",
+            padding: isMobile ? "8px 12px" : "10px 20px",
             borderRadius: "8px",
             border: "2px solid #4299e1",
             background: allSectionsVisible ? "#4299e1" : "white",
             color: allSectionsVisible ? "white" : "#4299e1",
             cursor: "pointer",
             fontWeight: "600",
-            fontSize: "14px",
+            fontSize: isMobile ? "13px" : "14px",
             display: "flex",
             alignItems: "center",
-            gap: "8px",
+            gap: "6px",
             transition: "all 0.2s"
           }}
         >
-          {allSectionsVisible ? "➖ Ocultar todo" : "➕ Mostrar todo"}
+          {allSectionsVisible ? (isMobile ? "➖" : "➖ Ocultar todo") : (isMobile ? "➕" : "➕ Mostrar todo")}
         </button>
       </div>
 
@@ -310,6 +320,117 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
         </button>
       </div>
 
+      {/* TIPO DE ATENCIÓN */}
+      <section style={{ backgroundColor: "#e6fffa", padding: isMobile ? "10px 12px" : "12px 16px", borderRadius: "6px", marginBottom: isMobile ? "12px" : "16px", border: "1px solid #38b2ac" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: showTipoAtencion ? (isMobile ? "8px" : "10px") : "0" }}>
+          <h3 style={{ margin: 0, fontSize: isMobile ? "14px" : "16px", fontWeight: "600", color: "#2c7a7b" }}>🌐 Tipo de Atención</h3>
+          <button
+            type="button"
+            onClick={() => setShowTipoAtencion(!showTipoAtencion)}
+            style={{
+              padding: isMobile ? "4px 8px" : "6px 12px",
+              borderRadius: "6px",
+              border: "1px solid #38b2ac",
+              background: "white",
+              color: "#2c7a7b",
+              cursor: "pointer",
+              fontWeight: "500",
+              fontSize: isMobile ? "16px" : "13px"
+            }}
+          >
+            {showTipoAtencion ? "➖" : "➕"}
+          </button>
+        </div>
+        {showTipoAtencion && (
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <label style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              cursor: "pointer",
+              fontSize: isMobile ? "12px" : "13px",
+              fontWeight: "500",
+              color: "#2c7a7b"
+            }}>
+              <input
+                type="checkbox"
+                name="atencionOnline"
+                checked={formData.atencionOnline}
+                onChange={(e) => setFormData({...formData, atencionOnline: e.target.checked})}
+                style={{ 
+                  marginRight: "8px",
+                  width: "16px",
+                  height: "16px",
+                  cursor: "pointer"
+                }}
+              />
+              Cliente atendido online
+            </label>
+            {formData.atencionOnline && (
+              <span style={{
+                backgroundColor: "#38b2ac",
+                color: "white",
+                padding: "2px 8px",
+                borderRadius: "10px",
+                fontSize: "11px",
+                fontWeight: "600"
+              }}>
+                ONLINE
+              </span>
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* NOTAS DE ENTREVISTA */}
+      <section style={{ backgroundColor: "#f7fafc", padding: isMobile ? "12px" : "20px", borderRadius: "8px", marginBottom: isMobile ? "12px" : "16px", border: "1px solid #e2e8f0" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: showNotasEntrevista ? (isMobile ? "8px" : "12px") : "0" }}>
+          <label style={{ 
+            display: "block",
+            fontSize: isMobile ? "14px" : "16px",
+            fontWeight: "600",
+            color: "#2d3748",
+            margin: 0
+          }}>
+            📝 Notas durante la entrevista
+          </label>
+          <button
+            type="button"
+            onClick={() => setShowNotasEntrevista(!showNotasEntrevista)}
+            style={{
+              padding: isMobile ? "4px 8px" : "6px 12px",
+              borderRadius: "6px",
+              border: "1px solid #cbd5e0",
+              background: "white",
+              color: "#4a5568",
+              cursor: "pointer",
+              fontWeight: "500",
+              fontSize: isMobile ? "16px" : "13px"
+            }}
+          >
+            {showNotasEntrevista ? "➖" : "➕"}
+          </button>
+        </div>
+        {showNotasEntrevista && (
+          <textarea
+            name="notasEntrevista"
+            value={formData.notasEntrevista}
+            onChange={(e) => setFormData({...formData, notasEntrevista: e.target.value})}
+            placeholder="Escribe aquí las notas durante la entrevista con el cliente..."
+            rows={isMobile ? 4 : 6}
+            style={{
+              width: "100%",
+              padding: isMobile ? "10px" : "12px",
+              border: "2px solid #e2e8f0",
+              borderRadius: "8px",
+              fontSize: isMobile ? "13px" : "14px",
+              fontFamily: "inherit",
+              resize: "vertical",
+              minHeight: isMobile ? "80px" : "120px",
+              lineHeight: "1.5"
+            }}
+          />
+        )}
+      </section>
      
         {/* DATOS LABORALES */}
         <section style={{ backgroundColor: "#f7fafc", padding: "24px", borderRadius: "8px" }}>

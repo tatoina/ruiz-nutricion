@@ -1,15 +1,18 @@
 import React, { useEffect, useState, useRef } from "react";
-import { auth, db } from "../Firebase";
+import { auth, db, functions } from "../Firebase";
 import { onAuthStateChanged, signOut, getIdTokenResult } from "firebase/auth";
-import { collection, getDocs, query, orderBy, doc, deleteDoc } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, doc, deleteDoc, updateDoc } from "firebase/firestore";
+import { httpsCallable } from "firebase/functions";
 import { useNavigate } from "react-router-dom";
 import FichaUsuario from "./FichaUsuario";
+import { useDevice } from "../hooks/useDevice";
 
 /**
  * AdminUsers — panel admin con columna izquierda redimensionable.
  * - Soporta detection de admin por custom claim "admin" y por lista de emails.
  * - Left panel resizable, ancho persistido en localStorage (adminLeftWidth).
  * - Fallback para consultas Firestore si falta índice compuesto.
+ * - RESPONSIVE: Detecta móvil y muestra interfaz adaptada
  */
 
 export default function AdminUsers() {
@@ -17,6 +20,7 @@ export default function AdminUsers() {
   const DESKTOP_MIN_WIDTH = 900;
 
   const navigate = useNavigate();
+  const { isMobile } = useDevice(); // Detectar si es móvil
   const [currentUser, setCurrentUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isDesktop, setIsDesktop] = useState(typeof window !== "undefined" ? window.innerWidth >= DESKTOP_MIN_WIDTH : true);
@@ -40,8 +44,26 @@ export default function AdminUsers() {
   const MIN_LEFT = 240;
   const MAX_LEFT = 720;
 
-  // Estado para ocultar/mostrar el panel lateral
+  // Estado para ocultar/mostrar el panel lateral (visible por defecto)
   const [panelVisible, setPanelVisible] = useState(true);
+
+  // Estados para modal de crear/editar usuario
+  const [showModal, setShowModal] = useState(false);
+  const [modalMode, setModalMode] = useState("create"); // "create" o "edit"
+  const [editingUser, setEditingUser] = useState(null);
+  const [formData, setFormData] = useState({
+    nombre: "",
+    apellidos: "",
+    email: "",
+    emailConfirmacion: "",
+    password: "000000",
+    nacimiento: "",
+    telefono: "",
+    objetivoNutricional: "",
+    pesoActual: ""
+  });
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState("");
 
   // Debug log helper
   const logDebug = (...args) => {
@@ -195,13 +217,32 @@ export default function AdminUsers() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  // Resetear el índice seleccionado cuando cambie el filtro
+  useEffect(() => {
+    const filtered = users.filter((u) => {
+      if (!filter) return true;
+      const s = filter.toLowerCase();
+      return (u.apellidos || "").toLowerCase().includes(s) || (u.nombre || "").toLowerCase().includes(s) || (u.email || "").toLowerCase().includes(s);
+    });
+    
+    // Si el índice actual está fuera del rango del array filtrado, resetearlo
+    if (selectedIndex >= filtered.length) {
+      setSelectedIndex(filtered.length > 0 ? 0 : -1);
+    }
+  }, [filter, users, selectedIndex]);
+
   const prevUser = () => {
     setSelectedIndex((s) => Math.max(0, (s || 0) - 1));
     scrollListIntoView(Math.max(0, (selectedIndex || 0) - 1));
   };
   const nextUser = () => {
-    setSelectedIndex((s) => Math.min(users.length - 1, (s || 0) + 1));
-    scrollListIntoView(Math.min(users.length - 1, (selectedIndex || 0) + 1));
+    const filtered = users.filter((u) => {
+      if (!filter) return true;
+      const s = filter.toLowerCase();
+      return (u.apellidos || "").toLowerCase().includes(s) || (u.nombre || "").toLowerCase().includes(s) || (u.email || "").toLowerCase().includes(s);
+    });
+    setSelectedIndex((s) => Math.min(filtered.length - 1, (s || 0) + 1));
+    scrollListIntoView(Math.min(filtered.length - 1, (selectedIndex || 0) + 1));
   };
   const scrollListIntoView = (index) => {
     const container = listRef.current;
@@ -262,6 +303,112 @@ export default function AdminUsers() {
     }
   };
 
+  // Abrir modal para crear nuevo cliente
+  const handleNuevoCliente = () => {
+    setModalMode("create");
+    setEditingUser(null);
+    setFormData({
+      nombre: "",
+      apellidos: "",
+      email: "",
+      emailConfirmacion: "",
+      password: "000000",
+      nacimiento: "",
+      telefono: "",
+      objetivoNutricional: "",
+      pesoActual: ""
+    });
+    setModalError("");
+    setShowModal(true);
+  };
+
+  // Abrir modal para editar cliente
+  const handleEditarCliente = (usuario, e) => {
+    e.stopPropagation();
+    setModalMode("edit");
+    setEditingUser(usuario);
+    setFormData({
+      nombre: usuario.nombre || "",
+      apellidos: usuario.apellidos || "",
+      email: usuario.email || "",
+      password: "",
+      nacimiento: usuario.nacimiento || "",
+      telefono: usuario.telefono || "",
+      objetivoNutricional: usuario.objetivoNutricional || "",
+      pesoActual: usuario.pesoActual || ""
+    });
+    setModalError("");
+    setShowModal(true);
+  };
+
+  // Guardar (crear o editar)
+  const handleGuardar = async (e) => {
+    e.preventDefault();
+    setModalLoading(true);
+    setModalError("");
+
+    try {
+      if (modalMode === "create") {
+        // Validar que los emails coincidan
+        if (formData.email !== formData.emailConfirmacion) {
+          setModalError("Los emails no coinciden. Por favor, verifícalos.");
+          setModalLoading(false);
+          return;
+        }
+
+        // Crear nuevo usuario usando Cloud Function
+        const createUser = httpsCallable(functions, "createUser");
+        await createUser({
+          nombre: formData.nombre,
+          apellidos: formData.apellidos,
+          email: formData.email,
+          password: formData.password,
+          nacimiento: formData.nacimiento,
+          telefono: formData.telefono,
+          objetivoNutricional: formData.objetivoNutricional,
+          pesoActual: formData.pesoActual ? parseFloat(formData.pesoActual) : null
+        });
+        alert("Cliente creado correctamente");
+        
+        // Recargar usuarios
+        const q = query(collection(db, "users"), orderBy("apellidos", "asc"), orderBy("nombre", "asc"));
+        const snap = await getDocs(q);
+        const list = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((u) => !ADMIN_EMAILS.includes((u.email || "").toLowerCase()));
+        setUsers(list);
+      } else {
+        // Editar usuario existente
+        const userRef = doc(db, "users", editingUser.id);
+        const updateData = {
+          nombre: formData.nombre,
+          apellidos: formData.apellidos,
+          nacimiento: formData.nacimiento,
+          telefono: formData.telefono,
+          objetivoNutricional: formData.objetivoNutricional,
+          pesoActual: formData.pesoActual ? parseFloat(formData.pesoActual) : null
+        };
+        await updateDoc(userRef, updateData);
+        
+        // Actualizar en la lista local
+        setUsers((prevUsers) =>
+          prevUsers.map((u) =>
+            u.id === editingUser.id ? { ...u, ...updateData } : u
+          )
+        );
+        
+        alert("Cliente actualizado correctamente");
+      }
+
+      setShowModal(false);
+    } catch (err) {
+      console.error("Error al guardar:", err);
+      setModalError(err.message || "Error al guardar el cliente");
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
   if (!currentUser) {
     return (
       <div className="layout admin-fullscreen">
@@ -302,56 +449,109 @@ export default function AdminUsers() {
 
   // admin allowed even on small screens for convenience
   return (
-    <div className="admin-fullscreen" ref={containerRef}>
-      <div className="card header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <div className="title">Panel administrativo</div>
-          <div className="subtitle">Navega por los usuarios y edita sus fichas</div>
-          <div style={{ fontSize: 12, color: "#666", marginTop: 6 }}>
-            Autenticado como: <strong>{currentUser.email}</strong> — isAdmin: <strong>{String(isAdmin)}</strong>
-          </div>
+    <div className="admin-fullscreen" ref={containerRef} style={{ width: '100%', maxWidth: '100vw', overflowX: 'hidden' }}>
+      <div className="card header" style={{ 
+        display: "flex", 
+        justifyContent: "space-between", 
+        alignItems: "center", 
+        padding: isMobile ? "6px 8px" : "8px 12px",
+        flexDirection: isMobile ? "column" : "row",
+        gap: isMobile ? "8px" : "0",
+        width: '100%',
+        boxSizing: 'border-box',
+        overflowX: 'hidden'
+      }}>
+        <div style={{ width: isMobile ? "100%" : "auto", textAlign: isMobile ? "center" : "left" }}>
+          <div className="title" style={{ fontSize: isMobile ? "14px" : "16px", marginBottom: "2px" }}>Panel administrativo</div>
+          {!isMobile && <div className="subtitle" style={{ fontSize: "11px" }}>Navega por los usuarios y edita sus fichas</div>}
         </div>
         
-        <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-          <button className="btn primary" onClick={() => navigate("/admin/pagos")}>💰 Pagos</button>
-          <button className="btn primary" onClick={() => navigate("/admin/tarifas")}>Tarifas</button>
-          <div style={{ 
-            height: "30px", 
-            width: "2px", 
-            backgroundColor: "#d1d5db", 
-            margin: "0 4px" 
-          }}></div>
-          <button className="btn primary" onClick={() => navigate("/admin/menus")}>📋 Menús</button>
-          <button className="btn primary" onClick={() => navigate("/admin/agenda")}>📅 Agenda</button>
-          <button className="btn primary" onClick={() => navigate("/register")}>Nuevo cliente</button>
-          <button className="btn danger" onClick={handleSignOut}>Cerrar sesión</button>
+        <div style={{ display: "flex", gap: isMobile ? "4px" : "6px", alignItems: "center", flexWrap: "wrap", justifyContent: isMobile ? "center" : "flex-start", width: isMobile ? "100%" : "auto", maxWidth: '100%', overflow: 'hidden' }}>
+          {!isMobile && (
+            <>
+              <button className="btn primary" onClick={() => navigate("/admin/pagos")} style={{ padding: "6px 10px", fontSize: "13px" }}>💰 Pagos</button>
+              <button className="btn primary" onClick={() => navigate("/admin/tarifas")} style={{ padding: "6px 10px", fontSize: "13px" }}>Tarifas</button>
+              <div style={{ 
+                height: "20px", 
+                width: "1px", 
+                backgroundColor: "#d1d5db", 
+                margin: "0 2px" 
+              }}></div>
+              <button className="btn primary" onClick={() => navigate("/admin/menus")} style={{ padding: "6px 10px", fontSize: "13px" }}>📋 Menús</button>
+              <button className="btn primary" onClick={() => navigate("/admin/agenda")} style={{ padding: "6px 10px", fontSize: "13px" }}>📅 Agenda</button>
+            </>
+          )}
+          {!isMobile && <button className="btn primary" onClick={handleNuevoCliente} style={{ fontWeight: "bold", padding: "6px 10px", fontSize: "13px" }}>➕ Nuevo cliente</button>}
+          {!isMobile && <button className="btn danger" onClick={handleSignOut} style={{ padding: "6px 10px", fontSize: "13px" }}>Cerrar sesión</button>}
+          {isMobile && (
+            <button 
+              className="btn" 
+              onClick={() => setPanelVisible(!panelVisible)} 
+              style={{ padding: "8px 12px", fontSize: "14px", backgroundColor: panelVisible ? "#666" : "#2196F3", color: "white" }}
+            >
+              {panelVisible ? "✕ Ocultar lista" : "👥 Ver lista"}
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="admin-columns" style={{ marginTop: 12 }}>
+      <div className="admin-columns" style={{ marginTop: 8, flexDirection: isMobile ? "column" : "row", width: '100%', boxSizing: 'border-box' }}>
         {/* Left panel: listado (ancho controlado por leftWidth) */}
         {panelVisible && (
           <>
             <div
               className="card admin-left"
-              style={{ padding: 12, width: `${leftWidth}px`, flexShrink: 0 }}
+              style={{ padding: isMobile ? 12 : 8, width: isMobile ? "100%" : `${leftWidth}px`, flexShrink: 0, marginBottom: isMobile ? "12px" : "0", boxSizing: 'border-box', overflowX: 'hidden', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
             >
-              <input className="input" placeholder="Buscar por apellidos, nombre o email..." value={filter} onChange={(e) => setFilter(e.target.value)} style={{ width: "100%" }} />
-              <div ref={listRef} style={{ marginTop: 8, maxHeight: "calc(100vh - 180px)", overflowY: "auto" }}>
+              <input className="input" placeholder="Buscar por apellidos, nombre o email..." value={filter} onChange={(e) => setFilter(e.target.value)} style={{ width: "100%", padding: isMobile ? "10px 12px" : "6px 8px", fontSize: isMobile ? "15px" : "13px", flexShrink: 0, borderRadius: "8px", border: isMobile ? "2px solid #e5e7eb" : "1px solid #ddd" }} />
+              <div ref={listRef} style={{ marginTop: isMobile ? 10 : 6, flex: 1, overflowY: "auto", overflowX: "hidden" }}>
                 {loading ? (
-                  <div style={{ padding: 8 }}>Cargando usuarios...</div>
+                  <div style={{ padding: isMobile ? 16 : 8, textAlign: "center", color: "#64748b" }}>Cargando usuarios...</div>
                 ) : error ? (
-                  <div style={{ color: "var(--danger, #b91c1c)", padding: 8 }}>{error}</div>
+                  <div style={{ color: "var(--danger, #b91c1c)", padding: isMobile ? 16 : 8, background: "#fee2e2", borderRadius: "8px" }}>{error}</div>
                 ) : filtered.length === 0 ? (
-                  <div style={{ padding: 8 }}>No se encontraron usuarios.</div>
+                  <div style={{ padding: isMobile ? 16 : 8, textAlign: "center", color: "#64748b" }}>No se encontraron usuarios.</div>
+                ) : isMobile ? (
+                  // Vista móvil - Lista simple
+                  <div style={{ display: "flex", flexDirection: "column", gap: "1px", padding: "0" }}>
+                    {filtered.map((u, i) => (
+                      <div
+                        key={u.id}
+                        data-user-index={i}
+                        style={{
+                          padding: "12px 10px",
+                          background: i === selectedIndex ? "#dcfce7" : "white",
+                          borderLeft: `3px solid ${i === selectedIndex ? '#16a34a' : 'transparent'}`,
+                          cursor: "pointer",
+                          transition: "all 0.15s",
+                          borderBottom: "1px solid #f1f5f9"
+                        }}
+                        onClick={() => setSelectedIndex(i)}
+                      >
+                        <div style={{ fontSize: "15px", fontWeight: "600", color: "#0f172a", marginBottom: "3px" }}>
+                          {`${(u.apellidos || "").trim()} ${(u.nombre || "").trim()}`.trim() || u.email}
+                        </div>
+                        <div style={{ fontSize: "12px", color: "#64748b", display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span>{u.email}</span>
+                          {u.pesoActual && (
+                            <>
+                              <span>•</span>
+                              <span>{u.pesoActual} kg</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
+                  // Vista desktop - Lista compacta
                   <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
                     {filtered.map((u, i) => (
                       <li
                         key={u.id}
                         data-user-index={i}
                         style={{
-                          padding: 10,
+                          padding: 6,
                           borderBottom: "1px solid #eee",
                           display: "flex",
                           justifyContent: "space-between",
@@ -362,19 +562,48 @@ export default function AdminUsers() {
                         onClick={() => setSelectedIndex(i)}
                       >
                         <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-                          <strong style={{ fontSize: 14 }}>{`${(u.apellidos || "").trim()} ${(u.nombre || "").trim()}`.trim() || u.email}</strong>
-                          <small style={{ color: "#666" }}>{u.email}</small>
+                          <strong style={{ fontSize: 13 }}>{`${(u.apellidos || "").trim()} ${(u.nombre || "").trim()}`.trim() || u.email}</strong>
+                          <small style={{ color: "#666", fontSize: "11px" }}>{u.email}</small>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <div style={{ fontSize: 12, color: "#666" }}>{u.pesoActual ? `${u.pesoActual} kg` : ""}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+                          <div style={{ fontSize: 11, color: "#666" }}>{u.pesoActual ? `${u.pesoActual} kg` : ""}</div>
+                          <button
+                            onClick={(e) => handleEditarCliente(u, e)}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              cursor: "pointer",
+                              padding: "3px 5px",
+                              borderRadius: "3px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              transition: "all 0.2s",
+                              color: "#2196F3",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = "rgba(33, 150, 243, 0.1)";
+                              e.currentTarget.style.transform = "scale(1.1)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = "transparent";
+                              e.currentTarget.style.transform = "scale(1)";
+                            }}
+                            title="Editar usuario"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                          </button>
                           <button
                             onClick={(e) => handleDeleteUser(u.id, `${(u.apellidos || "").trim()} ${(u.nombre || "").trim()}`.trim() || u.email, u.email, e)}
                             style={{
                               background: "transparent",
                               border: "none",
                               cursor: "pointer",
-                              padding: "4px 8px",
-                              borderRadius: "4px",
+                              padding: "3px 5px",
+                              borderRadius: "3px",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
@@ -391,7 +620,7 @@ export default function AdminUsers() {
                             }}
                             title="Eliminar usuario"
                           >
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <polyline points="3 6 5 6 21 6"></polyline>
                               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                               <line x1="10" y1="11" x2="10" y2="17"></line>
@@ -417,23 +646,25 @@ export default function AdminUsers() {
             </div>
 
             {/* Resizer divider */}
-            <div
-              className="resizer"
-              onMouseDown={startResizing}
-              onDoubleClick={resetLeftWidth}
-              onTouchStart={startResizingTouch}
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Redimensionar panel izquierdo"
-              title="Arrastra para redimensionar (doble clic para reset)"
-            />
+            {!isMobile && (
+              <div
+                className="resizer"
+                onMouseDown={startResizing}
+                onDoubleClick={resetLeftWidth}
+                onTouchStart={startResizingTouch}
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Redimensionar panel izquierdo"
+                title="Arrastra para redimensionar (doble clic para reset)"
+              />
+            )}
           </>
         )}
 
         {/* Right panel: ficha */}
-        <div className="card admin-right" style={{ padding: 0, position: 'relative' }}>
-          {users.length > 0 && selectedIndex >= 0 ? (
-            <div style={{ padding: 12 }}>
+        <div className="card admin-right" style={{ padding: 0, position: 'relative', boxSizing: 'border-box', overflowX: 'hidden', width: '100%' }}>
+          {filtered.length > 0 && selectedIndex >= 0 && selectedIndex < filtered.length ? (
+            <div style={{ padding: 8 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", position: 'relative' }}>
                 {/* Botón para ocultar/mostrar panel */}
                 <button
@@ -441,20 +672,20 @@ export default function AdminUsers() {
                   title={panelVisible ? "Ocultar panel de usuarios" : "Mostrar panel de usuarios"}
                   style={{
                     position: 'absolute',
-                    top: '-8px',
-                    left: '-8px',
+                    top: '-6px',
+                    left: '-6px',
                     zIndex: 10,
                     background: 'rgba(22, 163, 74, 0.9)',
                     color: 'white',
                     border: 'none',
                     borderRadius: '3px',
-                    width: '24px',
-                    height: '24px',
+                    width: '20px',
+                    height: '20px',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '12px',
+                    fontSize: '11px',
                     fontWeight: 'bold',
                     boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
                     transition: 'background 0.2s'
@@ -465,15 +696,19 @@ export default function AdminUsers() {
                   {panelVisible ? '◀' : '▶'}
                 </button>
 
-                <h3 style={{ margin: 0 }}>{users[selectedIndex].apellidos ? `${users[selectedIndex].apellidos} ${users[selectedIndex].nombre || ""}` : (users[selectedIndex].nombre || users[selectedIndex].email)}</h3>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button className="btn ghost" onClick={() => prevUser()} disabled={selectedIndex <= 0}>Anterior</button>
-                  <button className="btn ghost" onClick={() => nextUser()} disabled={selectedIndex >= users.length - 1}>Siguiente</button>
-                </div>
+                {!isMobile && (
+                  <>
+                    <h3 style={{ margin: 0, fontSize: "16px" }}>{filtered[selectedIndex].apellidos ? `${filtered[selectedIndex].apellidos} ${filtered[selectedIndex].nombre || ""}` : (filtered[selectedIndex].nombre || filtered[selectedIndex].email)}</h3>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button className="btn ghost" onClick={() => prevUser()} disabled={selectedIndex <= 0} style={{ padding: "5px 10px", fontSize: "12px" }}>Anterior</button>
+                      <button className="btn ghost" onClick={() => nextUser()} disabled={selectedIndex >= filtered.length - 1} style={{ padding: "5px 10px", fontSize: "12px" }}>Siguiente</button>
+                    </div>
+                  </>
+                )}
               </div>
 
-              <div style={{ marginTop: 10 }}>
-                <FichaUsuario targetUid={users[selectedIndex].id} adminMode={true} />
+              <div style={{ marginTop: 8 }}>
+                <FichaUsuario targetUid={filtered[selectedIndex].id} adminMode={true} />
               </div>
             </div>
           ) : (
@@ -481,6 +716,239 @@ export default function AdminUsers() {
           )}
         </div>
       </div>
+
+      {/* Modal para crear/editar usuario */}
+      {showModal && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0,0,0,0.5)",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: isMobile ? "flex-start" : "center",
+          zIndex: 10000,
+          overflowY: "auto",
+          padding: isMobile ? "0" : "20px"
+        }}>
+          <div style={{
+            backgroundColor: "white",
+            padding: isMobile ? "16px" : "20px",
+            borderRadius: isMobile ? "0" : "8px",
+            width: isMobile ? "100%" : "95%",
+            maxWidth: isMobile ? "100%" : "900px",
+            minHeight: isMobile ? "100vh" : "auto",
+            maxHeight: isMobile ? "100vh" : "95vh",
+            overflowY: "auto",
+            boxSizing: "border-box"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <h2 style={{ fontSize: isMobile ? "18px" : "16px", margin: "0", padding: "4px 0", color: "#0f172a" }}>
+                {modalMode === "create" ? "➕ Nuevo Cliente" : "✏️ Editar Cliente"}
+              </h2>
+              {isMobile && (
+                <button
+                  onClick={() => setShowModal(false)}
+                  style={{
+                    background: "#fee2e2",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: "32px",
+                    height: "32px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    fontSize: "18px",
+                    color: "#dc2626"
+                  }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            
+            {modalError && (
+              <div style={{ color: "#dc2626", marginBottom: isMobile ? 12 : 2, padding: isMobile ? 12 : 3, backgroundColor: "#fee2e2", borderRadius: isMobile ? "8px" : "4px", fontSize: isMobile ? "14px" : "12px", border: "2px solid #dc2626" }}>
+                ⚠️ {modalError}
+              </div>
+            )}
+
+            <form onSubmit={handleGuardar}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? "12px" : "8px" }}>
+                <div style={{ marginBottom: isMobile ? 0 : 6 }}>
+                  <label style={{ display: "block", marginBottom: isMobile ? 6 : 2, fontWeight: "600", fontSize: isMobile ? "14px" : "13px", color: "#0f172a" }}>Nombre *</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.nombre}
+                    onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                    style={{ width: "100%", padding: isMobile ? "12px" : "6px", fontSize: isMobile ? "16px" : "13px", border: "2px solid #e5e7eb", borderRadius: isMobile ? "8px" : "4px", boxSizing: "border-box" }}
+                  />
+                </div>
+
+              <div style={{ marginBottom: isMobile ? 0 : 6 }}>
+                <label style={{ display: "block", marginBottom: isMobile ? 6 : 2, fontWeight: "600", fontSize: isMobile ? "14px" : "13px", color: "#0f172a" }}>Apellidos *</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.apellidos}
+                  onChange={(e) => setFormData({ ...formData, apellidos: e.target.value })}
+                  style={{ width: "100%", padding: isMobile ? "12px" : "6px", fontSize: isMobile ? "16px" : "13px", border: "2px solid #e5e7eb", borderRadius: isMobile ? "8px" : "4px", boxSizing: "border-box" }}
+                />
+              </div>
+
+              <div style={{ marginBottom: isMobile ? 0 : 6, gridColumn: isMobile ? "1" : "span 2" }}>
+                <label style={{ display: "block", marginBottom: isMobile ? 6 : 2, fontWeight: "600", fontSize: isMobile ? "14px" : "13px", color: "#0f172a" }}>Email *</label>
+                <input
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  disabled={modalMode === "edit"}
+                  style={{ 
+                    width: "100%", 
+                    padding: isMobile ? "12px" : "6px", 
+                    fontSize: isMobile ? "16px" : "13px", 
+                    border: "2px solid #e5e7eb", 
+                    borderRadius: isMobile ? "8px" : "4px",
+                    backgroundColor: modalMode === "edit" ? "#f5f5f5" : "white",
+                    boxSizing: "border-box"
+                  }}
+                />
+                {modalMode === "edit" && (
+                  <small style={{ color: "#64748b", fontSize: isMobile ? "13px" : "11px", marginTop: "4px", display: "block" }}>El email no se puede modificar</small>
+                )}
+              </div>
+
+              {modalMode === "create" && (
+                <div style={{ marginBottom: isMobile ? 0 : 6, gridColumn: isMobile ? "1" : "span 2" }}>
+                  <label style={{ display: "block", marginBottom: isMobile ? 6 : 2, fontWeight: "600", fontSize: isMobile ? "14px" : "13px", color: "#0f172a" }}>Confirmar Email *</label>
+                  <input
+                    type="email"
+                    required
+                    value={formData.emailConfirmacion}
+                    onChange={(e) => setFormData({ ...formData, emailConfirmacion: e.target.value })}
+                    style={{ 
+                      width: "100%", 
+                      padding: isMobile ? "12px" : "6px", 
+                      fontSize: isMobile ? "16px" : "13px", 
+                      border: `2px solid ${formData.emailConfirmacion && formData.email !== formData.emailConfirmacion ? '#dc2626' : '#e5e7eb'}`, 
+                      borderRadius: isMobile ? "8px" : "4px",
+                      boxSizing: "border-box"
+                    }}
+                    placeholder="Escribe el email nuevamente"
+                  />
+                  {formData.emailConfirmacion && formData.email !== formData.emailConfirmacion && (
+                    <small style={{ color: "#dc2626", display: "block", marginTop: isMobile ? 6 : 2, fontSize: isMobile ? "13px" : "11px" }}>
+                      ⚠️ Los emails no coinciden
+                    </small>
+                  )}
+                  {formData.emailConfirmacion && formData.email === formData.emailConfirmacion && (
+                    <small style={{ color: "#16a34a", display: "block", marginTop: isMobile ? 6 : 2, fontSize: isMobile ? "13px" : "11px" }}>
+                      ✓ Los emails coinciden
+                    </small>
+                  )}
+                </div>
+              )}
+
+              {modalMode === "create" && (
+                <div style={{ marginBottom: isMobile ? 0 : 6 }}>
+                  <label style={{ display: "block", marginBottom: isMobile ? 6 : 2, fontWeight: "600", fontSize: isMobile ? "14px" : "13px", color: "#0f172a" }}>Contraseña *</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    style={{ width: "100%", padding: isMobile ? "12px" : "6px", fontSize: isMobile ? "16px" : "13px", border: "2px solid #e5e7eb", borderRadius: isMobile ? "8px" : "4px", boxSizing: "border-box" }}
+                  />
+                  <small style={{ color: "#64748b", fontSize: isMobile ? "13px" : "11px", marginTop: "4px", display: "block" }}>Por defecto: 000000</small>
+                </div>
+              )}
+
+              <div style={{ marginBottom: isMobile ? 0 : 6 }}>
+                <label style={{ display: "block", marginBottom: isMobile ? 6 : 2, fontWeight: "600", fontSize: isMobile ? "14px" : "13px", color: "#0f172a" }}>Fecha de Nacimiento</label>
+                <input
+                  type="date"
+                  value={formData.nacimiento}
+                  onChange={(e) => setFormData({ ...formData, nacimiento: e.target.value })}
+                  style={{ width: "100%", padding: isMobile ? "12px" : "6px", fontSize: isMobile ? "16px" : "13px", border: "2px solid #e5e7eb", borderRadius: isMobile ? "8px" : "4px", boxSizing: "border-box" }}
+                />
+              </div>
+
+              <div style={{ marginBottom: isMobile ? 0 : 6 }}>
+                <label style={{ display: "block", marginBottom: isMobile ? 6 : 2, fontWeight: "600", fontSize: isMobile ? "14px" : "13px", color: "#0f172a" }}>Teléfono</label>
+                <input
+                  type="tel"
+                  value={formData.telefono}
+                  onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                  style={{ width: "100%", padding: isMobile ? "12px" : "6px", fontSize: isMobile ? "16px" : "13px", border: "2px solid #e5e7eb", borderRadius: isMobile ? "8px" : "4px", boxSizing: "border-box" }}
+                />
+              </div>
+
+              <div style={{ marginBottom: isMobile ? 0 : 6, gridColumn: isMobile ? "1" : "span 2" }}>
+                <label style={{ display: "block", marginBottom: isMobile ? 6 : 2, fontWeight: "600", fontSize: isMobile ? "14px" : "13px", color: "#0f172a" }}>Objetivo Nutricional</label>
+                <input
+                  type="text"
+                  value={formData.objetivoNutricional}
+                  onChange={(e) => setFormData({ ...formData, objetivoNutricional: e.target.value })}
+                  style={{ width: "100%", padding: isMobile ? "12px" : "6px", fontSize: isMobile ? "16px" : "13px", border: "2px solid #e5e7eb", borderRadius: isMobile ? "8px" : "4px", boxSizing: "border-box" }}
+                  placeholder="Ej: Pérdida de peso, ganar masa muscular..."
+                />
+              </div>
+
+              <div style={{ marginBottom: isMobile ? 0 : 6 }}>
+                <label style={{ display: "block", marginBottom: isMobile ? 6 : 2, fontWeight: "600", fontSize: isMobile ? "14px" : "13px", color: "#0f172a" }}>Peso Actual (kg)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={formData.pesoActual}
+                  onChange={(e) => setFormData({ ...formData, pesoActual: e.target.value })}
+                  style={{ width: "100%", padding: isMobile ? "12px" : "6px", fontSize: isMobile ? "16px" : "13px", border: "2px solid #e5e7eb", borderRadius: isMobile ? "8px" : "4px", boxSizing: "border-box" }}
+                />
+            </div>
+              </div>
+
+              <div style={{ display: "flex", gap: isMobile ? 10 : 8, marginTop: isMobile ? 16 : 8, flexDirection: isMobile ? "column-reverse" : "row" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  disabled={modalLoading}
+                  className="btn ghost"
+                  style={{
+                    flex: 1,
+                    padding: isMobile ? "14px 16px" : "8px 16px",
+                    fontSize: isMobile ? "16px" : "13px",
+                    cursor: modalLoading ? "not-allowed" : "pointer",
+                    opacity: modalLoading ? 0.6 : 1,
+                    borderRadius: isMobile ? "8px" : "4px"
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={modalLoading}
+                  className="btn primary"
+                  style={{
+                    flex: 1,
+                    padding: isMobile ? "14px 16px" : "8px 16px",
+                    fontSize: isMobile ? "16px" : "13px",
+                    cursor: modalLoading ? "not-allowed" : "pointer",
+                    opacity: modalLoading ? 0.6 : 1,
+                    borderRadius: isMobile ? "8px" : "4px",
+                    fontWeight: "700"
+                  }}
+                >
+                  {modalLoading ? "Guardando..." : "✓ Guardar"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

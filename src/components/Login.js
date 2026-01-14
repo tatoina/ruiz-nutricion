@@ -4,14 +4,16 @@ import { signInWithEmailAndPassword, updatePassword } from "firebase/auth";
 import { auth, db } from "../Firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import logo from "../assets/logo.png";
-import pkg from "../../package.json";
 import { useNavigate } from "react-router-dom";
+import { useDevice } from "../hooks/useDevice";
+import { APP_VERSION } from "../config/version";
 
 export default function Login({ onLogin /* onShowRegister no usado ahora */ }) {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const { isMobile } = useDevice();
 
   const navigate = useNavigate();
 
@@ -25,7 +27,8 @@ export default function Login({ onLogin /* onShowRegister no usado ahora */ }) {
     })
     .replace(/^./, (c) => c.toUpperCase());
 
-  const appVersion = process.env.REACT_APP_VERSION || (pkg && pkg.version) || "dev";
+  const deviceIcon = isMobile ? "📱" : "💻";
+  const deviceLabel = isMobile ? "Móvil" : "PC";
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -83,7 +86,11 @@ export default function Login({ onLogin /* onShowRegister no usado ahora */ }) {
     <div className="login-page">
       <div className="login-header" aria-hidden="true">
         <div className="login-date">{dateStr}</div>
-        <div className="app-version">v{appVersion}</div>
+        <div className="app-version" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '16px' }}>{deviceIcon}</span>
+          <span>{deviceLabel}</span>
+          <span style={{ marginLeft: '4px', opacity: 0.7 }}>v{APP_VERSION}</span>
+        </div>
       </div>
 
       <div className="login-card card">
