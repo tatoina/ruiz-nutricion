@@ -3149,10 +3149,14 @@ Ruiz Nutrición
                           id="transpose-check" 
                           checked={transposeTable} 
                           onChange={(e) => setTransposeTable(e.target.checked)}
-                          style={{ cursor: "pointer", marginLeft: "8px" }}
+                          style={{ 
+                            cursor: "pointer", 
+                            marginLeft: "8px",
+                            accentColor: "#64748b"
+                          }}
                         />
                         <label htmlFor="transpose-check" style={{ fontSize: 13, color: "#64748b", fontWeight: "500", cursor: "pointer" }}>
-                          {transposeTable ? 'VER' : 'HOR'}
+                          VER/HOR
                         </label>
                       </div>
 
