@@ -6,6 +6,7 @@ import { httpsCallable } from "firebase/functions";
 import { useNavigate } from "react-router-dom";
 import FichaUsuario from "./FichaUsuario";
 import { useDevice } from "../hooks/useDevice";
+import logger from "../utils/logger";
 
 /**
  * AdminUsers — panel admin con columna izquierda redimensionable.
