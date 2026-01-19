@@ -271,7 +271,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
   const [histLimit, setHistLimit] = useState(10);
   const [expandedRowsStateLocal, setExpandedRowsStateLocal] = useState({});
-  const [transposeTable, setTransposeTable] = useState(isMobile && adminMode); // Activado por defecto en móvil admin
+  const [transposeTable, setTransposeTable] = useState(true); // Siempre vertical por defecto
   const [tableZoom, setTableZoom] = useState(100); // Zoom level percentage
 
   // Estados para controlar secciones colapsables
@@ -3152,7 +3152,7 @@ Ruiz Nutrición
                           style={{ cursor: "pointer", marginLeft: "8px" }}
                         />
                         <label htmlFor="transpose-check" style={{ fontSize: 13, color: "#64748b", fontWeight: "500", cursor: "pointer" }}>
-                          🔄 Transponer
+                          {transposeTable ? 'VER' : 'HOR'}
                         </label>
                       </div>
 
