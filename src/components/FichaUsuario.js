@@ -20,6 +20,7 @@ import {
 
 import { useNavigate } from "react-router-dom";
 import { useDevice } from "../hooks/useDevice";
+import logger from "../utils/logger";
 
 import {
   Chart as ChartJS,
@@ -305,7 +306,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     try {
       await signOut(auth);
     } catch (err) {
-      console.error("[FichaUsuario] signOut error:", err);
+      logger.error("[FichaUsuario] signOut error:", err);
       setError("No se pudo cerrar sesión.");
     }
   }
@@ -423,7 +424,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           setError(null);
         }
       } catch (err) {
-        console.error("[FichaUsuario] load error:", err);
+        logger.error("[FichaUsuario] load error:", err);
         setError(err?.message || "Error al cargar la ficha.");
         setUserData(null);
       } finally {
@@ -477,7 +478,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         await updateDoc(doc(db, "users", uid), { menu: menuToSave, updatedAt: serverTimestamp() });
         setSaveStatus("saved"); setTimeout(() => setSaveStatus("idle"), 1200);
       } catch (err) {
-        console.error("[FichaUsuario] autosave error:", err);
+        logger.error("[FichaUsuario] autosave error:", err);
         const notFoundCodes = ["not-found", "notFound", "404"];
         const isNotFound = err?.code ? notFoundCodes.some((c) => String(err.code).toLowerCase().includes(String(c).toLowerCase())) : false;
         if (isNotFound) {
@@ -485,7 +486,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
             await setDoc(doc(db, "users", uid), { menu: Array.isArray(editable.menu) ? editable.menu : Array.from({ length: 7 }, () => ({ ...emptyDayMenu() })), updatedAt: serverTimestamp(), createdAt: serverTimestamp() }, { merge: true });
             setSaveStatus("saved"); setTimeout(() => setSaveStatus("idle"), 1200);
           } catch (err2) {
-            console.error("[FichaUsuario] autosave fallback error:", err2);
+            logger.error("[FichaUsuario] autosave fallback error:", err2);
             setSaveStatus("error"); setError(err2?.message || "No se pudo guardar el menú.");
           }
         } else {
@@ -516,7 +517,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         }
       }
     } catch (err) {
-      console.error("[FichaUsuario] saveSemana error:", err);
+      logger.error("[FichaUsuario] saveSemana error:", err);
       setSaveStatus("error"); setError(err?.message || "No se pudo guardar el menú semanal.");
     }
   };
@@ -603,9 +604,9 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           `,
         },
       });
-      console.log(`[FichaUsuario] Email de actualización de dieta enviado a ${userEmail}`);
+      logger.log(`[FichaUsuario] Email de actualización de dieta enviado a ${userEmail}`);
     } catch (err) {
-      console.error("[FichaUsuario] Error al enviar email de actualización de dieta:", err);
+      logger.error("[FichaUsuario] Error al enviar email de actualización de dieta:", err);
       // No lanzamos error para no interrumpir el flujo de guardado
     }
   };
@@ -736,7 +737,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
               }
             }
           } else {
-            console.log('No hay citas futuras o es admin:', { futureAppts: futureAppts.length, adminMode });
+            logger.log('No hay citas futuras o es admin:', { futureAppts: futureAppts.length, adminMode });
           }
         } else {
           setAppointments([]);
@@ -1353,9 +1354,9 @@ Ruiz Nutrición
       const medidasArray = Array.isArray(data?.medidasHistorico) ? [...data.medidasHistorico] : [];
       const pesoArray = Array.isArray(data?.pesoHistorico) ? [...data.pesoHistorico] : [];
 
-      console.log("Intentando borrar índice:", index);
-      console.log("Total registros en rowsDesc:", rowsDesc.length);
-      console.log("Registro a borrar:", rowsDesc[index]);
+      logger.debug("Intentando borrar índice:", index);
+      logger.debug("Total registros en rowsDesc:", rowsDesc.length);
+      logger.debug("Registro a borrar:", rowsDesc[index]);
 
       // Eliminar por índice del array ordenado
       if (index >= 0 && index < rowsDesc.length) {
@@ -1371,16 +1372,16 @@ Ruiz Nutrición
           const mTimestamp = timestampToMs(m.createdAt);
           const sameTimestamp = mTimestamp === recordToDelete._t;
           
-          console.log("Comparando medida:", { sameDate, samePeso, sameTimestamp, m, recordToDelete });
+          logger.debug("Comparando medida:", { sameDate, samePeso, sameTimestamp, m, recordToDelete });
           
           return (sameDate && samePeso) || sameTimestamp;
         });
         
-        console.log("Índice encontrado en medidasHistorico:", medidasIndex);
+        logger.debug("Índice encontrado en medidasHistorico:", medidasIndex);
         
         if (medidasIndex !== -1) {
           medidasArray.splice(medidasIndex, 1);
-          console.log("Eliminado de medidasHistorico");
+          logger.debug("Eliminado de medidasHistorico");
         }
 
         // Buscar y eliminar en pesoHistorico
@@ -1390,16 +1391,16 @@ Ruiz Nutrición
           const pTimestamp = timestampToMs(p.createdAt);
           const sameTimestamp = pTimestamp === recordToDelete._t;
           
-          console.log("Comparando peso:", { sameDate, samePeso, sameTimestamp, p, recordToDelete });
+          logger.debug("Comparando peso:", { sameDate, samePeso, sameTimestamp, p, recordToDelete });
           
           return (sameDate && samePeso) || sameTimestamp;
         });
         
-        console.log("Índice encontrado en pesoHistorico:", pesoIndex);
+        logger.debug("Índice encontrado en pesoHistorico:", pesoIndex);
         
         if (pesoIndex !== -1) {
           pesoArray.splice(pesoIndex, 1);
-          console.log("Eliminado de pesoHistorico");
+          logger.debug("Eliminado de pesoHistorico");
         }
 
         // Actualizar Firestore

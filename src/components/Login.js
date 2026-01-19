@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import "./estilos.css";
 import { signInWithEmailAndPassword, updatePassword } from "firebase/auth";
+import logger from "../utils/logger";
 import { auth, db } from "../Firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import logo from "../assets/logo.png";
@@ -38,7 +39,7 @@ export default function Login({ onLogin /* onShowRegister no usado ahora */ }) {
       const cred = await signInWithEmailAndPassword(auth, email.trim(), pass);
       const user = cred?.user;
       const normalizedEmail = String(user?.email || "").trim().toLowerCase();
-      console.debug("[LOGIN] signIn success", { uid: user?.uid, email: user?.email, normalizedEmail });
+      logger.debug("[LOGIN] signIn success", { uid: user?.uid, email: user?.email, normalizedEmail });
 
       // Verificar si debe cambiar la contraseña
       if (normalizedEmail !== "admin@admin.es") {
@@ -53,9 +54,9 @@ export default function Login({ onLogin /* onShowRegister no usado ahora */ }) {
         try {
           // Pass the firebase user object (callback or wrapper will normalize as needed)
           onLogin(user);
-          console.debug("[LOGIN] onLogin callback invoked.");
+          logger.debug("[LOGIN] onLogin callback invoked.");
         } catch (cbErr) {
-          console.error("[LOGIN] onLogin callback threw:", cbErr);
+          logger.error("[LOGIN] onLogin callback threw:", cbErr);
           // As fallback, navigate based on email
           if (normalizedEmail === "admin@admin.es") {
             navigate("/admin");
@@ -73,7 +74,7 @@ export default function Login({ onLogin /* onShowRegister no usado ahora */ }) {
       }
     } catch (err) {
       setError(err?.message || "Error al iniciar sesión");
-      console.error("[LOGIN] signIn error:", err);
+      logger.error("[LOGIN] signIn error:", err);
     } finally {
       setLoading(false);
     }

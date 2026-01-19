@@ -87,7 +87,7 @@ export default function AdminUsers() {
         setIsAdmin(resolvedIsAdmin);
         logDebug("Auth:", { uid: u.uid, email: u.email, claims: token?.claims, byEmail, resolvedIsAdmin });
       } catch (err) {
-        console.error("getIdTokenResult error:", err);
+        logger.error("getIdTokenResult error:", err);
         const byEmail = ADMIN_EMAILS.includes((u.email || "").toLowerCase());
         setIsAdmin(byEmail);
         logDebug("Fallback isAdmin by email:", { email: u.email, byEmail });
