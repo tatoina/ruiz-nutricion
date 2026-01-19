@@ -570,17 +570,23 @@ export default function AdminUsers() {
                           {u.pesoActual && (
                             <>
                               <span>•</span>
-                              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '4px', position: 'relative' }}>
                                 {u.pesoActual} kg
                                 {(() => {
                                   const trend = getPesoTrend(u);
                                   if (!trend) return null;
+                                  const tooltipText = `${trend.direccion === 'down' ? 'Bajó' : 'Subió'} ${trend.diferencia}kg`;
                                   return (
-                                    <span style={{ 
-                                      fontSize: '14px',
-                                      color: trend.direccion === 'down' ? '#16a34a' : '#dc2626',
-                                      fontWeight: 'bold'
-                                    }} title={`${trend.direccion === 'down' ? 'Bajó' : 'Subió'} ${trend.diferencia}kg`}>
+                                    <span 
+                                      style={{ 
+                                        fontSize: '14px',
+                                        color: trend.direccion === 'down' ? '#16a34a' : '#dc2626',
+                                        fontWeight: 'bold',
+                                        cursor: 'help'
+                                      }} 
+                                      title={tooltipText}
+                                      aria-label={tooltipText}
+                                    >
                                       {trend.direccion === 'down' ? '↓' : '↑'}
                                     </span>
                                   );
@@ -615,18 +621,25 @@ export default function AdminUsers() {
                           <small style={{ color: "#666", fontSize: "11px" }}>{u.email}</small>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-                          <div style={{ fontSize: 11, color: "#666", display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <div style={{ fontSize: 11, color: "#666", display: 'flex', alignItems: 'center', gap: '3px', position: 'relative' }}>
                             {u.pesoActual ? `${u.pesoActual} kg` : ""}
                             {u.pesoActual && (() => {
                               const trend = getPesoTrend(u);
                               if (!trend) return null;
+                              const tooltipText = `${trend.direccion === 'down' ? 'Bajó' : 'Subió'} ${trend.diferencia}kg`;
                               return (
-                                <span style={{ 
-                                  fontSize: '13px',
-                                  color: trend.direccion === 'down' ? '#16a34a' : '#dc2626',
-                                  fontWeight: 'bold',
-                                  marginLeft: '2px'
-                                }} title={`${trend.direccion === 'down' ? 'Bajó' : 'Subió'} ${trend.diferencia}kg`}>
+                                <span 
+                                  style={{ 
+                                    fontSize: '13px',
+                                    color: trend.direccion === 'down' ? '#16a34a' : '#dc2626',
+                                    fontWeight: 'bold',
+                                    marginLeft: '2px',
+                                    cursor: 'help',
+                                    position: 'relative'
+                                  }} 
+                                  title={tooltipText}
+                                  aria-label={tooltipText}
+                                >
                                   {trend.direccion === 'down' ? '↓' : '↑'}
                                 </span>
                               );
