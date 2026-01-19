@@ -33,6 +33,7 @@ export default function AdminLayout({ children, title = "Panel Admin" }) {
     { path: '/admin/tipodieta', label: '📋 Tipo Dieta', icon: '📋' },
     { path: '/admin/tarifas', label: '💰 Tarifas', icon: '💰' },
     { path: '/admin/pagos', label: '💳 Pagos', icon: '💳' },
+    { path: '/admin/gym', label: '🏋️ GYM', icon: '🏋️' },
   ];
 
   const currentPath = location.pathname;
@@ -78,14 +79,14 @@ export default function AdminLayout({ children, title = "Panel Admin" }) {
             <div style={styles.bottomNavLabel}>Menús</div>
           </button>
           <button
-            onClick={() => navigate('/register')}
+            onClick={() => navigate('/admin/gym')}
             style={{
               ...styles.bottomNavItem,
-              color: '#16a34a'
+              ...(currentPath === '/admin/gym' ? styles.bottomNavItemActive : {})
             }}
           >
-            <div style={styles.bottomNavIcon}>➕</div>
-            <div style={styles.bottomNavLabel}>Nuevo</div>
+            <div style={styles.bottomNavIcon}>🏋️</div>
+            <div style={styles.bottomNavLabel}>GYM</div>
           </button>
           <button
             onClick={handleSignOut}

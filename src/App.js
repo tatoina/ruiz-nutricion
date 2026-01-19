@@ -7,15 +7,16 @@ import AdminMenus from "./components/AdminMenus";
 import AdminTipoDieta from "./components/AdminTipoDieta";
 import AdminTarifas from "./components/AdminTarifas";
 import AdminPagosGlobal from "./components/AdminPagosGlobal";
+import AdminGymGestion from "./components/AdminGymGestion";
 import AdminLayoutResponsive from "./components/Layouts/AdminLayoutResponsive";
 import FichaUsuario from "./components/FichaUsuario";
 import Login from "./components/Login";
 import Register from "./components/Register";
 import ChangePassword from "./components/ChangePassword";
 import PrivateRoute from "./components/PrivateRoute";
+import FloatingInstallButton from "./components/FloatingInstallButton";
 import { auth } from "./Firebase";
 import { onAuthStateChanged } from "firebase/auth";
-import InstallPrompt from "./components/InstallPrompt";
 
 /**
  * LoginWrapper
@@ -85,6 +86,7 @@ function RegisterWrapper() {
 export default function App() {
   return (
     <BrowserRouter>
+      <FloatingInstallButton />
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginWrapper />} />
@@ -166,6 +168,17 @@ export default function App() {
         />
 
         <Route
+          path="/admin/gym"
+          element={
+            <PrivateRoute>
+              <AdminLayoutResponsive title="GYM">
+                <AdminGymGestion />
+              </AdminLayoutResponsive>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
           path="/cambiar-password"
           element={
             <PrivateRoute>
@@ -176,7 +189,6 @@ export default function App() {
 
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
-      <InstallPrompt />
     </BrowserRouter>
   );
 }

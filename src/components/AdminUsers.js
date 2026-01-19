@@ -479,6 +479,7 @@ export default function AdminUsers() {
               }}></div>
               <button className="btn primary" onClick={() => navigate("/admin/menus")} style={{ padding: "6px 10px", fontSize: "13px" }}>📋 Menús</button>
               <button className="btn primary" onClick={() => navigate("/admin/agenda")} style={{ padding: "6px 10px", fontSize: "13px" }}>📅 Agenda</button>
+              <button className="btn primary" onClick={() => navigate("/admin/gym")} style={{ padding: "6px 10px", fontSize: "13px" }}>🏋️ GYM</button>
             </>
           )}
           {!isMobile && <button className="btn primary" onClick={handleNuevoCliente} style={{ fontWeight: "bold", padding: "6px 10px", fontSize: "13px" }}>➕ Nuevo cliente</button>}

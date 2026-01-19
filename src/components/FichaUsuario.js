@@ -37,6 +37,8 @@ import AnamnesisForm from "./AnamnesisForm";
 import AdminPagos from "./AdminPagos";
 import FileManager from "./FileManager";
 import MenuSelector from "./MenuSelector";
+import ListaCompra from "./ListaCompra";
+import CitaReminder from "./CitaReminder";
 ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Title, Tooltip, Legend);
 
 /**
@@ -60,6 +62,8 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const baseTabs = [
     { id: "pesaje", label: "📊 Pesaje", icon: "📊" },
     { id: "semana", label: "🍽️ Dieta", icon: "🍽️" },
+    { id: "lista-compra", label: "🛒 Lista Compra", icon: "🛒" },
+    { id: "gym", label: "🏋️ GYM", icon: "🏋️" },
     { id: "ejercicios", label: "💪 Ejercicios", icon: "💪" },
     { id: "citas", label: "📅 Citas", icon: "📅" },
   ];
@@ -81,7 +85,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const [userData, setUserData] = useState(null);
   const [editable, setEditable] = useState({});
   const [loading, setLoading] = useState(true);
-  const [tabIndex, setTabIndex] = useState(1); // Cambiado a 1 para que abra en "Dieta semanal"
+  const [tabIndex, setTabIndex] = useState(1); // Pestaña Dieta por defecto
   const [error, setError] = useState(null);
 
   const [showPrintDialog, setShowPrintDialog] = useState(false);
@@ -153,6 +157,18 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   // Estados para notificaciones
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notifiedAppointments, setNotifiedAppointments] = useState(new Set());
+  
+  // Estado para recordatorio de citas
+  const [showCitaReminder, setShowCitaReminder] = useState(false);
+  const [citaToRemind, setCitaToRemind] = useState(null);
+  const [dismissedReminders, setDismissedReminders] = useState(() => {
+    try {
+      const saved = localStorage.getItem('dismissedCitaReminders');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
 
   // Calcular campos automáticamente cuando cambian peso, altura o porcentajes
   useEffect(() => {
@@ -668,15 +684,10 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     }
   };
 
-  // Ref para evitar múltiples cargas
-  const loadingCitasRef = useRef(false);
-  const lastLoadedTabRef = useRef(null);
-
   // Función para recargar citas
-  const loadAppointments = useCallback(() => {
-    if (!uid || loadingCitasRef.current) return;
+  const loadAppointments = () => {
+    if (!uid) return;
     
-    loadingCitasRef.current = true;
     setLoadingAppointments(true);
     
     getDoc(doc(db, "users", uid))
@@ -689,10 +700,44 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           // Encontrar próxima cita
           const now = new Date();
           const futureAppts = appts
-            .filter(apt => new Date(apt.fecha + 'T' + apt.hora) > now)
+            .filter(apt => {
+              try {
+                return new Date(apt.fecha + 'T' + apt.hora) > now;
+              } catch (e) {
+                return false;
+              }
+            })
             .sort((a, b) => new Date(a.fecha + 'T' + a.hora) - new Date(b.fecha + 'T' + b.hora));
           
           setNextAppointment(futureAppts[0] || null);
+          
+          // Mostrar recordatorio solo si NO es admin y hay cita futura
+          if (futureAppts.length > 0 && !adminMode) {
+            const nextCita = futureAppts[0];
+            if (nextCita && nextCita.fecha && nextCita.hora) {
+              const citaKey = `${nextCita.fecha}_${nextCita.hora}`;
+              
+              // Obtener dismissed reminders del localStorage
+              let currentDismissed = {};
+              try {
+                const saved = localStorage.getItem('dismissedCitaReminders');
+                currentDismissed = saved ? JSON.parse(saved) : {};
+              } catch {
+                currentDismissed = {};
+              }
+              
+              // Verificar si no está descartada
+              if (!currentDismissed[citaKey]) {
+                console.log('Mostrando recordatorio para cita:', nextCita);
+                setCitaToRemind(nextCita);
+                setShowCitaReminder(true);
+              } else {
+                console.log('Cita ya descartada:', citaKey);
+              }
+            }
+          } else {
+            console.log('No hay citas futuras o es admin:', { futureAppts: futureAppts.length, adminMode });
+          }
         } else {
           setAppointments([]);
           setNextAppointment(null);
@@ -705,24 +750,18 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       })
       .finally(() => {
         setLoadingAppointments(false);
-        loadingCitasRef.current = false;
       });
-  }, [uid]);
+  };
 
   // Cargar citas cuando se accede al tab
   useEffect(() => {
     const currentTabId = tabs[tabIndex]?.id;
     
     if (currentTabId === "citas" && uid) {
-      // Solo cargar si cambiamos al tab de citas
-      if (lastLoadedTabRef.current !== "citas") {
-        lastLoadedTabRef.current = "citas";
-        loadAppointments();
-      }
-    } else {
-      lastLoadedTabRef.current = currentTabId;
+      loadAppointments();
     }
-  }, [tabIndex, tabs, uid, loadAppointments]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabIndex, uid]);
 
   // Solicitar permisos de notificación
   const requestNotificationPermission = useCallback(async () => {
@@ -822,6 +861,9 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           }).catch(err => console.error("Error marking notification as read:", err));
         }
       });
+    }, (error) => {
+      // Silenciar errores de permisos de la colección notifications
+      console.log("Notifications listener disabled (permissions not configured)");
     });
 
     return () => unsubscribe();
@@ -980,6 +1022,86 @@ Ruiz Nutrición
       console.error("Error adding appointment:", err);
       setError("No se pudo agregar la cita.");
     }
+  };
+
+  // Funciones para manejar el recordatorio de citas
+  const handleDismissCitaReminder = () => {
+    // Solo cerrar el modal, NO guardar en localStorage
+    // Para que vuelva a aparecer la próxima vez
+    setShowCitaReminder(false);
+    setCitaToRemind(null);
+  };
+
+  const handleDismissAllCitaReminders = () => {
+    // Guardar en localStorage para NO volver a mostrar esta cita
+    if (citaToRemind) {
+      const citaKey = `${citaToRemind.fecha}_${citaToRemind.hora}`;
+      const newDismissed = { ...dismissedReminders, [citaKey]: true };
+      setDismissedReminders(newDismissed);
+      localStorage.setItem('dismissedCitaReminders', JSON.stringify(newDismissed));
+    }
+    setShowCitaReminder(false);
+    setCitaToRemind(null);
+  };
+
+  const handleAddToCalendar = () => {
+    if (!citaToRemind) return;
+
+    const { fecha, hora } = citaToRemind;
+    const [year, month, day] = fecha.split('-');
+    const [hours, minutes] = hora.split(':');
+    
+    // Crear fecha de inicio (fecha y hora de la cita)
+    const startDate = new Date(year, month - 1, day, hours, minutes);
+    
+    // Crear fecha de fin (1 hora después)
+    const endDate = new Date(startDate);
+    endDate.setHours(endDate.getHours() + 1);
+    
+    // Formatear fechas para ICS (formato: YYYYMMDDTHHmmss)
+    const formatDateToICS = (date) => {
+      const pad = (n) => n.toString().padStart(2, '0');
+      return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}T${pad(date.getHours())}${pad(date.getMinutes())}00`;
+    };
+    
+    const start = formatDateToICS(startDate);
+    const end = formatDateToICS(endDate);
+    
+    // Crear contenido del archivo ICS
+    const icsContent = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Ruiz Nutrición//ES',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      `DTSTART:${start}`,
+      `DTEND:${end}`,
+      'SUMMARY:Cita con Pablo - Ruiz Nutrición',
+      'DESCRIPTION:Cita de consulta nutricional',
+      'LOCATION:Ruiz Nutrición',
+      'STATUS:CONFIRMED',
+      'SEQUENCE:0',
+      'BEGIN:VALARM',
+      'TRIGGER:-PT1H',
+      'DESCRIPTION:Recordatorio de cita',
+      'ACTION:DISPLAY',
+      'END:VALARM',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n');
+    
+    // Crear blob y descargar
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.download = `cita-nutricion-${fecha}.ics`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Cerrar el recordatorio después de descargar
+    handleDismissCitaReminder();
   };
 
   // Función para cargar snacks desde Firestore
@@ -2416,31 +2538,60 @@ Ruiz Nutrición
             </button>
 
             {(!targetUid || targetUid === authUid) && (
-              <button 
-                className="btn-icon-header" 
-                onClick={handleSignOut} 
-                title="Cerrar sesión"
-                style={{
-                  background: "rgba(239,68,68,0.9)",
-                  border: "none",
-                  borderRadius: "8px",
-                  width: "36px",
-                  height: "36px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: "pointer",
-                  transition: "background 0.2s"
-                }}
-                onMouseEnter={(e) => e.target.style.background = "rgba(220,38,38,1)"}
-                onMouseLeave={(e) => e.target.style.background = "rgba(239,68,68,0.9)"}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+              <>
+                <button 
+                  className="btn-icon-header" 
+                  onClick={() => window.location.reload(true)} 
+                  title="Refrescar"
+                  style={{
+                    background: "rgba(255,255,255,0.2)",
+                    border: "none",
+                    borderRadius: "8px",
+                    width: "36px",
+                    height: "36px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    transition: "background 0.2s"
+                  }}
+                  onMouseEnter={(e) => e.target.style.background = "rgba(255,255,255,0.3)"}
+                  onMouseLeave={(e) => e.target.style.background = "rgba(255,255,255,0.2)"}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                    <path d="M21 2v6h-6" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M3 12a9 9 0 0 1 15-6.7L21 8" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M3 22v-6h6" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M21 12a9 9 0 0 1-15 6.7L3 16" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+
+                <button 
+                  className="btn-icon-header" 
+                  onClick={handleSignOut} 
+                  title="Cerrar sesión"
+                  style={{
+                    background: "rgba(239,68,68,0.9)",
+                    border: "none",
+                    borderRadius: "8px",
+                    width: "36px",
+                    height: "36px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    transition: "background 0.2s"
+                  }}
+                  onMouseEnter={(e) => e.target.style.background = "rgba(220,38,38,1)"}
+                  onMouseLeave={(e) => e.target.style.background = "rgba(239,68,68,0.9)"}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
                   <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round"/>
                   <polyline points="16 17 21 12 16 7" strokeLinecap="round" strokeLinejoin="round"/>
                   <line x1="21" y1="12" x2="9" y2="12" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </button>
+              </>
             )}
           </div>
         </div>
@@ -4738,12 +4889,200 @@ Ruiz Nutrición
                 )}
               </div>
             )}
+            {tabs[tabIndex]?.id === "lista-compra" && (
+              <div className="card" style={{ padding: adminMode ? "16px 20px" : "12px", width: "100%", maxWidth: "none" }}>
+                <ListaCompra 
+                  menu={tipoMenu === "vertical" ? menuVertical : editable.menu}
+                  tipoMenu={tipoMenu}
+                />
+              </div>
+            )}
+            {tabs[tabIndex]?.id === "gym" && (
+              <div className="card" style={{ padding: adminMode ? "16px 20px" : "8px", width: "100%", maxWidth: "none" }}>
+                <h3 style={{ fontSize: "18px", marginBottom: "12px" }}>🏋️ Mi Tabla GYM</h3>
+                {userData?.tablaGym && userData.tablaGym.length > 0 ? (
+                  <div style={{ marginTop: "8px" }}>
+                    <div style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px"
+                    }}>
+                      {userData.tablaGym.map((ejercicio, index) => (
+                        <div 
+                          key={ejercicio.id} 
+                          style={{
+                            padding: "10px",
+                            backgroundColor: "#f0f7ff",
+                            border: "2px solid #2196F3",
+                            borderRadius: "8px",
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
+                          }}
+                        >
+                          <div style={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: "10px"
+                          }}>
+                            <div style={{
+                              fontSize: "16px",
+                              fontWeight: "700",
+                              color: "#1976d2",
+                              minWidth: "32px",
+                              height: "32px",
+                              borderRadius: "50%",
+                              backgroundColor: "white",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              border: "2px solid #2196F3",
+                              flexShrink: 0
+                            }}>
+                              {index + 1}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{
+                                fontSize: "15px",
+                                fontWeight: "600",
+                                color: "#333",
+                                marginBottom: "3px"
+                              }}>
+                                {ejercicio.nombre}
+                              </div>
+                              <div style={{
+                                fontSize: "12px",
+                                color: "#1976d2",
+                                marginBottom: "6px",
+                                fontWeight: "500"
+                              }}>
+                                📁 {ejercicio.categoria}
+                              </div>
+                              
+                              {/* Parámetros del ejercicio */}
+                              {(ejercicio.series || ejercicio.repeticiones || ejercicio.peso || ejercicio.tiempo || ejercicio.intervalo) && (
+                                <div style={{
+                                  display: "flex",
+                                  flexWrap: "wrap",
+                                  gap: "4px",
+                                  marginBottom: "6px"
+                                }}>
+                                  {ejercicio.series && (
+                                    <span style={{ 
+                                      backgroundColor: "white", 
+                                      padding: "3px 8px", 
+                                      borderRadius: "4px", 
+                                      fontSize: "11px",
+                                      fontWeight: "500",
+                                      border: "1px solid #e0e0e0"
+                                    }}>
+                                      📊 {ejercicio.series}
+                                    </span>
+                                  )}
+                                  {ejercicio.repeticiones && (
+                                    <span style={{ 
+                                      backgroundColor: "white", 
+                                      padding: "3px 8px", 
+                                      borderRadius: "4px", 
+                                      fontSize: "11px",
+                                      fontWeight: "500",
+                                      border: "1px solid #e0e0e0"
+                                    }}>
+                                      🔢 {ejercicio.repeticiones}
+                                    </span>
+                                  )}
+                                  {ejercicio.peso && (
+                                    <span style={{ 
+                                      backgroundColor: "white", 
+                                      padding: "3px 8px", 
+                                      borderRadius: "4px", 
+                                      fontSize: "11px",
+                                      fontWeight: "500",
+                                      border: "1px solid #e0e0e0"
+                                    }}>
+                                      ⚖️ {ejercicio.peso}
+                                    </span>
+                                  )}
+                                  {ejercicio.tiempo && (
+                                    <span style={{ 
+                                      backgroundColor: "white", 
+                                      padding: "3px 8px", 
+                                      borderRadius: "4px", 
+                                      fontSize: "11px",
+                                      fontWeight: "500",
+                                      border: "1px solid #e0e0e0"
+                                    }}>
+                                      ⏱️ {ejercicio.tiempo}
+                                    </span>
+                                  )}
+                                  {ejercicio.intervalo && (
+                                    <span style={{ 
+                                      backgroundColor: "white", 
+                                      padding: "3px 8px", 
+                                      borderRadius: "4px", 
+                                      fontSize: "11px",
+                                      fontWeight: "500",
+                                      border: "1px solid #e0e0e0"
+                                    }}>
+                                      ⏸️ {ejercicio.intervalo}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              
+                              {/* Video preview si existe */}
+                              {ejercicio.videoUrl && (
+                                <div style={{ marginTop: "6px" }}>
+                                  <video 
+                                    controls 
+                                    style={{
+                                      width: "100%",
+                                      maxHeight: "150px",
+                                      borderRadius: "6px",
+                                      backgroundColor: "#000"
+                                    }}
+                                  >
+                                    <source src={ejercicio.videoUrl} type="video/mp4" />
+                                    Tu navegador no soporta el elemento de video.
+                                  </video>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{
+                    textAlign: "center",
+                    padding: "40px 20px",
+                    color: "#999"
+                  }}>
+                    <p style={{ fontSize: "48px", margin: "0 0 16px 0" }}>🏋️</p>
+                    <p style={{ fontSize: "16px", margin: 0 }}>
+                      {adminMode 
+                        ? "Este usuario no tiene tabla GYM asignada"
+                        : "Aún no tienes ejercicios asignados"}
+                    </p>
+                    <p style={{ fontSize: "14px", color: "#bbb", marginTop: "8px" }}>
+                      {adminMode 
+                        ? "Ve a la sección GYM del panel de admin para asignar ejercicios"
+                        : "Consulta con tu nutricionista"}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
             {tabs[tabIndex]?.id === "ejercicios" && (
               <div className="card" style={{ padding: adminMode ? "16px 20px" : "12px", width: "100%", maxWidth: "none" }}>
                 <h3>Ejercicios</h3>
                 <div className="panel-section" style={{ maxWidth: "none" }}>
                   <FileManager userId={uid} type="ejercicios" isAdmin={adminMode} />
                 </div>
+                {adminMode && (
+                  <div style={{ marginTop: "20px", paddingTop: "20px", borderTop: "1px solid #ddd" }}>
+                    <h4 style={{ marginBottom: "12px" }}>📁 Archivos adicionales</h4>
+                  </div>
+                )}
               </div>
             )}
             {tabs[tabIndex]?.id === "anamnesis" && adminMode && (
@@ -5293,6 +5632,16 @@ Ruiz Nutrición
             )}
           </div>
         </div>
+      )}
+
+      {/* Recordatorio de cita */}
+      {showCitaReminder && citaToRemind && (
+        <CitaReminder
+          cita={citaToRemind}
+          onDismiss={handleDismissCitaReminder}
+          onDismissAll={handleDismissAllCitaReminders}
+          onAddToCalendar={handleAddToCalendar}
+        />
       )}
     </div>
   );
