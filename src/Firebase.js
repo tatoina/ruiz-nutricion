@@ -6,12 +6,12 @@ import { getStorage } from "firebase/storage";
 import { getFunctions } from "firebase/functions";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAPfkczL6ekY_82BQHpMrT5Rd1lwpTrRNQ",
-  authDomain: "nutricionapp-b7b7d.firebaseapp.com",
-  projectId: "nutricionapp-b7b7d",
-  storageBucket: "nutricionapp-b7b7d.firebasestorage.app",
-  messagingSenderId: "23998467905",
-  appId: "1:23998467905:web:c619b3390f5831eccadbc0"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID
 };
 
 const app = initializeApp(firebaseConfig);
