@@ -273,6 +273,38 @@ export default function AdminUsers() {
     return (u.apellidos || "").toLowerCase().includes(s) || (u.nombre || "").toLowerCase().includes(s) || (u.email || "").toLowerCase().includes(s);
   });
 
+  // Función para obtener la tendencia del peso (comparar con peso anterior)
+  const getPesoTrend = (user) => {
+    if (!user.pesoActual) return null;
+    
+    const pesoActual = parseFloat(user.pesoActual);
+    if (isNaN(pesoActual)) return null;
+
+    // Buscar peso anterior en medidasHistorico o pesoHistorico
+    const historial = user.medidasHistorico || user.pesoHistorico || [];
+    if (!Array.isArray(historial) || historial.length < 2) return null;
+
+    // Ordenar por fecha (más reciente primero)
+    const sorted = [...historial].sort((a, b) => {
+      const dateA = a.createdAt?.toMillis?.() || a.createdAt || 0;
+      const dateB = b.createdAt?.toMillis?.() || b.createdAt || 0;
+      return dateB - dateA;
+    });
+
+    // El segundo elemento es el peso anterior
+    const pesoAnterior = parseFloat(sorted[1]?.peso || sorted[1]?.pesoActual);
+    if (isNaN(pesoAnterior)) return null;
+
+    const diferencia = pesoActual - pesoAnterior;
+    
+    if (Math.abs(diferencia) < 0.1) return null; // Sin cambio significativo
+
+    return {
+      direccion: diferencia > 0 ? 'up' : 'down',
+      diferencia: Math.abs(diferencia).toFixed(1)
+    };
+  };
+
   // Función para eliminar usuario
   const handleDeleteUser = async (userId, userName, userEmail, e) => {
     e.stopPropagation(); // Evitar que se seleccione el usuario al hacer clic en eliminar
@@ -538,7 +570,22 @@ export default function AdminUsers() {
                           {u.pesoActual && (
                             <>
                               <span>•</span>
-                              <span>{u.pesoActual} kg</span>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                {u.pesoActual} kg
+                                {(() => {
+                                  const trend = getPesoTrend(u);
+                                  if (!trend) return null;
+                                  return (
+                                    <span style={{ 
+                                      fontSize: '14px',
+                                      color: trend.direccion === 'down' ? '#16a34a' : '#dc2626',
+                                      fontWeight: 'bold'
+                                    }} title={`${trend.direccion === 'down' ? 'Bajó' : 'Subió'} ${trend.diferencia}kg`}>
+                                      {trend.direccion === 'down' ? '↓' : '↑'}
+                                    </span>
+                                  );
+                                })()}
+                              </span>
                             </>
                           )}
                         </div>
@@ -568,7 +615,23 @@ export default function AdminUsers() {
                           <small style={{ color: "#666", fontSize: "11px" }}>{u.email}</small>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-                          <div style={{ fontSize: 11, color: "#666" }}>{u.pesoActual ? `${u.pesoActual} kg` : ""}</div>
+                          <div style={{ fontSize: 11, color: "#666", display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            {u.pesoActual ? `${u.pesoActual} kg` : ""}
+                            {u.pesoActual && (() => {
+                              const trend = getPesoTrend(u);
+                              if (!trend) return null;
+                              return (
+                                <span style={{ 
+                                  fontSize: '13px',
+                                  color: trend.direccion === 'down' ? '#16a34a' : '#dc2626',
+                                  fontWeight: 'bold',
+                                  marginLeft: '2px'
+                                }} title={`${trend.direccion === 'down' ? 'Bajó' : 'Subió'} ${trend.diferencia}kg`}>
+                                  {trend.direccion === 'down' ? '↓' : '↑'}
+                                </span>
+                              );
+                            })()}
+                          </div>
                           <button
                             onClick={(e) => handleEditarCliente(u, e)}
                             style={{
