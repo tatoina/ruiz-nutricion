@@ -3,9 +3,20 @@
  * Actualiza este archivo cuando hagas cambios importantes
  */
 
-export const APP_VERSION = "2.0.1";
+export const APP_VERSION = "2.0.2";
 
 export const VERSION_HISTORY = [
+  {
+    version: "2.0.2",
+    date: "2026-01-19",
+    changes: [
+      "⚡ Optimización de rendimiento con React.memo y useMemo",
+      "🚀 Reducción significativa de re-renders innecesarios",
+      "📊 Memoización de cálculos pesados (historial de pesaje, gráficos)",
+      "🎯 useCallback en funciones críticas",
+      "💾 Mejor eficiencia de memoria"
+    ]
+  },
   {
     version: "2.0.1",
     date: "2026-01-19",
