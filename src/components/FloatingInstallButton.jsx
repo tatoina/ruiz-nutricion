@@ -18,8 +18,16 @@ export default function FloatingInstallButton() {
     // Detectar si ya está instalada (standalone mode)
     const standalone = window.matchMedia('(display-mode: standalone)').matches 
                     || window.navigator.standalone 
-                    || document.referrer.includes('android-app://');
+                    || document.referrer.includes('android-app://')
+                    || window.location.search.includes('utm_source=homescreen');
+    
     setIsStandalone(standalone);
+
+    // Si ya está instalada, no mostrar nada
+    if (standalone) {
+      setIsVisible(false);
+      return;
+    }
 
     // Detectar iOS
     const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
