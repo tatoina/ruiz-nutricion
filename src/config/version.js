@@ -3,9 +3,19 @@
  * Actualiza este archivo cuando hagas cambios importantes
  */
 
-export const APP_VERSION = "2.0";
+export const APP_VERSION = "2.0.1";
 
 export const VERSION_HISTORY = [
+  {
+    version: "2.0.1",
+    date: "2026-01-19",
+    changes: [
+      "🔒 Migración de credenciales Firebase a variables de entorno (.env)",
+      "📝 Sistema de logging condicional (solo en desarrollo)",
+      "🛡️ Mejoras de seguridad: logs sensibles eliminados en producción",
+      "⚡ Optimización de rendimiento con logger inteligente"
+    ]
+  },
   {
     version: "2.0",
     date: "2026-01-13",
