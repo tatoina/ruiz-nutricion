@@ -6,7 +6,7 @@ import { collection, getDocs } from "firebase/firestore";
  * Componente que muestra la lista de compra de un usuario
  * basándose en los platos de su menú semanal
  */
-export default function ListaCompra({ menu, tipoMenu }) {
+const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
   const [listaCompra, setListaCompra] = useState({});
   const [loading, setLoading] = useState(false);
   const [seccionesColapsadas, setSeccionesColapsadas] = useState({
@@ -563,4 +563,6 @@ export default function ListaCompra({ menu, tipoMenu }) {
       `}</style>
     </div>
   );
-}
+});
+
+export default ListaCompra;

@@ -60,23 +60,25 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const DEFAULT_CLINIC_LOGO =
     "https://raw.githubusercontent.com/tatoina/ruiz-nutricion/564ee270d5f1a4c692bdd730ce055dd6aab0bfae/public/logoclinica-512.png";
 
-  const baseTabs = [
+  // Memoizar baseTabs para evitar recrearlas en cada render
+  const baseTabs = useMemo(() => [
     { id: "pesaje", label: "📊 Pesaje", icon: "📊" },
     { id: "semana", label: "🍽️ Dieta", icon: "🍽️" },
     { id: "lista-compra", label: "🛒 Lista Compra", icon: "🛒" },
     { id: "gym", label: "🏋️ GYM", icon: "🏋️" },
     { id: "ejercicios", label: "💪 Ejercicios", icon: "💪" },
     { id: "citas", label: "📅 Citas", icon: "📅" },
-  ];
+  ], []);
 
-  const ALL_SECTIONS = [
+  // Memoizar ALL_SECTIONS (constante)
+  const ALL_SECTIONS = useMemo(() => [
     { key: "desayuno", label: "Desayuno" },
     { key: "almuerzo", label: "Almuerzo" },
     { key: "comida", label: "Comida" },
     { key: "merienda", label: "Merienda" },
     { key: "cena", label: "Cena" },
     { key: "consejos", label: "Consejos del día" },
-  ];
+  ], []);
 
   const DRIVE_FOLDER_EXERCISES = "1EN-1h1VcV4K4kG2JgmRpxFSY-izas-9c";
   const DRIVE_FOLDER_RECIPES = "1FBwJtFBj0gWr0W9asHdGrkR7Q1FzkKK3";
@@ -498,7 +500,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     return () => { if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; } };
   }, [editable.menu, uid, emptyDayMenu]);
 
-  const saveSemana = async () => {
+  const saveSemana = useCallback(async () => {
     if (!uid) { setError("Usuario objetivo no disponible."); return; }
     setSaveStatus("saving");
     try {
@@ -520,7 +522,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       logger.error("[FichaUsuario] saveSemana error:", err);
       setSaveStatus("error"); setError(err?.message || "No se pudo guardar el menú semanal.");
     }
-  };
+  }, [uid, emptyDayMenu, editable.menu]);
 
   // Función para enviar email de notificación de dieta actualizada
   const sendDietUpdateEmail = async (userEmail, userName) => {
@@ -1645,7 +1647,8 @@ Ruiz Nutrición
     return d.toLocaleString();
   };
 
-  const rowsDesc = (() => {
+  // Memoizar el procesamiento del historial de pesajes (cálculo pesado)
+  const rowsDesc = useMemo(() => {
     const rawHistory =
       Array.isArray(userData?.medidasHistorico) && userData.medidasHistorico.length > 0
         ? userData.medidasHistorico
@@ -1670,32 +1673,39 @@ Ruiz Nutrición
       return hasFecha || hasPeso;
     });
     return mapped.sort((a, b) => (b._t || 0) - (a._t || 0));
-  })();
+  }, [userData?.medidasHistorico, userData?.pesoHistorico]);
 
-  const mappedForChart = rowsDesc.map((p) => ({ ...p })).sort((a, b) => (a._t || 0) - (b._t || 0));
-  const labels = mappedForChart.map((s) => s.fecha || (s._t ? new Date(s._t).toLocaleDateString() : ""));
+  // Memoizar datos para el gráfico
+  const mappedForChart = useMemo(() => 
+    rowsDesc.map((p) => ({ ...p })).sort((a, b) => (a._t || 0) - (b._t || 0))
+  , [rowsDesc]);
+
+  const labels = useMemo(() => 
+    mappedForChart.map((s) => s.fecha || (s._t ? new Date(s._t).toLocaleDateString() : ""))
+  , [mappedForChart]);
   
-  // Calcular valores de campos calculados automáticamente
-  const masaGrasaKgCalc = (() => {
+  // Memoizar cálculo de masa grasa en kg
+  const masaGrasaKgCalc = useMemo(() => {
     const p = parseFloat(editable.peso);
     const mgPct = parseFloat(editable.masaGrasaPct);
     if (!isNaN(p) && !isNaN(mgPct) && p > 0 && mgPct >= 0) {
       return (Math.round((p * mgPct / 100) * 100) / 100).toString();
     }
     return editable.masaGrasaKg || "";
-  })();
+  }, [editable.peso, editable.masaGrasaPct, editable.masaGrasaKg]);
 
   // Masa magra ahora es un campo editable manualmente
   const masaMagraKgCalc = editable.masaMagraKg || "";
 
-  const aguaTotalKgCalc = (() => {
+  // Memoizar cálculo de agua total en kg
+  const aguaTotalKgCalc = useMemo(() => {
     const p = parseFloat(editable.peso);
     const atPct = parseFloat(editable.aguaTotalPct);
     if (!isNaN(p) && !isNaN(atPct) && p > 0 && atPct >= 0) {
       return (Math.round((p * atPct / 100) * 100) / 100).toString();
     }
     return editable.aguaTotalKg || "";
-  })();
+  }, [editable.peso, editable.aguaTotalPct, editable.aguaTotalKg]);
 
   const masaMuscularKgCalc = (() => {
     const mmKg = parseFloat(editable.masaMuscularKg);

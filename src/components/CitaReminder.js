@@ -1,7 +1,7 @@
 import React from 'react';
 import './estilos.css';
 
-const CitaReminder = ({ cita, onDismiss, onDismissAll, onAddToCalendar }) => {
+const CitaReminder = React.memo(({ cita, onDismiss, onDismissAll, onAddToCalendar }) => {
   if (!cita) return null;
 
   const formatDate = (dateStr) => {
@@ -196,6 +196,8 @@ const CitaReminder = ({ cita, onDismiss, onDismissAll, onAddToCalendar }) => {
       `}</style>
     </div>
   );
-};
+});
+
+CitaReminder.displayName = 'CitaReminder';
 
 export default CitaReminder;

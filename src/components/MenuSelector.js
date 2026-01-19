@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { db } from "../Firebase";
 import { collection, getDocs } from "firebase/firestore";
 
-export default function MenuSelector({ categoria, value, onChange, readOnly = false }) {
+const MenuSelector = React.memo(function MenuSelector({ categoria, value, onChange, readOnly = false }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [platosSeleccionados, setPlatosSeleccionados] = useState([]);
@@ -238,4 +238,6 @@ export default function MenuSelector({ categoria, value, onChange, readOnly = fa
       )}
     </div>
   );
-}
+});
+
+export default MenuSelector;
