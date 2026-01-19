@@ -15,16 +15,18 @@ export default function FloatingInstallButton() {
   const [isDismissed, setIsDismissed] = useState(false);
 
   useEffect(() => {
-    // Detectar si ya está instalada (standalone mode)
+    // Detectar si ya está instalada (standalone mode) - múltiples métodos
     const standalone = window.matchMedia('(display-mode: standalone)').matches 
                     || window.navigator.standalone 
                     || document.referrer.includes('android-app://')
-                    || window.location.search.includes('utm_source=homescreen');
+                    || window.location.search.includes('utm_source=homescreen')
+                    || localStorage.getItem('pwa-installed') === 'true';
     
     setIsStandalone(standalone);
 
-    // Si ya está instalada, no mostrar nada
+    // Si ya está instalada, marcar en localStorage y no mostrar
     if (standalone) {
+      localStorage.setItem('pwa-installed', 'true');
       setIsVisible(false);
       return;
     }
@@ -32,6 +34,13 @@ export default function FloatingInstallButton() {
     // Detectar iOS
     const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     setIsIOS(iOS);
+
+    // Verificar si el usuario ya descartó el botón permanentemente
+    const dismissedPermanently = localStorage.getItem('installButtonDismissedForever');
+    if (dismissedPermanently === 'true') {
+      setIsDismissed(true);
+      return;
+    }
 
     // Verificar si el usuario ya descartó el botón en esta sesión
     const dismissed = sessionStorage.getItem('installButtonDismissed');
@@ -60,6 +69,7 @@ export default function FloatingInstallButton() {
       setDeferredPrompt(null);
       setIsStandalone(true);
       setIsVisible(false);
+      localStorage.setItem('pwa-installed', 'true');
     };
 
     window.addEventListener('appinstalled', handleAppInstalled);
@@ -104,7 +114,8 @@ export default function FloatingInstallButton() {
   const handleDismiss = () => {
     setIsDismissed(true);
     setIsVisible(false);
-    sessionStorage.setItem('installButtonDismissed', 'true');
+    // Guardar en localStorage para que no vuelva a aparecer nunca
+    localStorage.setItem('installButtonDismissedForever', 'true');
   };
 
   // No mostrar si está instalada, descartada o no es visible
