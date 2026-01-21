@@ -277,7 +277,8 @@ exports.checkAppointmentReminders = onSchedule("every 1 hours", async (event) =>
     const userName = `${userData.nombre || ''} ${userData.apellidos || ''}`.trim() || 'Usuario';
     
     for (const cita of citas) {
-      const citaDate = new Date(cita.fecha);
+      // Combinar fecha y hora para crear el objeto Date correcto
+      const citaDate = new Date(`${cita.fecha}T${cita.hora}:00`);
       const timeDiff = citaDate.getTime() - now.getTime();
       const hoursDiff = timeDiff / (1000 * 60 * 60);
       const daysDiff = timeDiff / (1000 * 60 * 60 * 24);

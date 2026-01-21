@@ -6,6 +6,7 @@ import EjerciciosForm from './EjerciciosForm';
 import RecetasForm from './RecetasForm';
 import DietaActualForm from './DietaActualForm';
 import AnamnesisForm from './AnamnesisForm';
+import MensajesUsuario from './MensajesUsuario';
 
 const tabs = [
   { name: "Datos personales", comp: DatosPersonalesForm },
@@ -14,6 +15,7 @@ const tabs = [
   { name: "Ejercicios", comp: EjerciciosForm },
   { name: "Recetas", comp: RecetasForm },
   { name: "Dieta actual", comp: DietaActualForm },
+  { name: "MSG", comp: MensajesUsuario },
   { name: "Anamnesis", comp: AnamnesisForm, adminOnly: true }
 ];
 

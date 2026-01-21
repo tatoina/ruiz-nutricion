@@ -34,6 +34,7 @@ export default function AdminLayout({ children, title = "Panel Admin" }) {
     { path: '/admin/tarifas', label: '💰 Tarifas', icon: '💰' },
     { path: '/admin/pagos', label: '💳 Pagos', icon: '💳' },
     { path: '/admin/gym', label: '🏋️ GYM', icon: '🏋️' },
+    { path: '/admin/mensajes', label: '💬 MSG', icon: '💬' },
   ];
 
   const currentPath = location.pathname;
@@ -87,6 +88,16 @@ export default function AdminLayout({ children, title = "Panel Admin" }) {
           >
             <div style={styles.bottomNavIcon}>🏋️</div>
             <div style={styles.bottomNavLabel}>GYM</div>
+          </button>
+          <button
+            onClick={() => navigate('/admin/mensajes')}
+            style={{
+              ...styles.bottomNavItem,
+              ...(currentPath === '/admin/mensajes' ? styles.bottomNavItemActive : {})
+            }}
+          >
+            <div style={styles.bottomNavIcon}>💬</div>
+            <div style={styles.bottomNavLabel}>MSG</div>
           </button>
           <button
             onClick={handleSignOut}

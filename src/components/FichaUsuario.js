@@ -40,6 +40,7 @@ import FileManager from "./FileManager";
 import MenuSelector from "./MenuSelector";
 import ListaCompra from "./ListaCompra";
 import CitaReminder from "./CitaReminder";
+import MensajesUsuario from "./MensajesUsuario";
 ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Title, Tooltip, Legend);
 
 /**
@@ -68,6 +69,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     { id: "gym", label: "🏋️ GYM", icon: "🏋️" },
     { id: "ejercicios", label: "💪 Ejercicios", icon: "💪" },
     { id: "citas", label: "📅 Citas", icon: "📅" },
+    { id: "mensajes", label: "💬 MSG", icon: "💬" },
   ], []);
 
   // Memoizar ALL_SECTIONS (constante)
@@ -172,6 +174,17 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       return {};
     }
   });
+
+  // Estados para mensajes del admin
+  const [showMensajeModal, setShowMensajeModal] = useState(false);
+  const [mensajesPendientes, setMensajesPendientes] = useState([]);
+  const [mensajeActual, setMensajeActual] = useState(null);
+  const [currentMensajeIndex, setCurrentMensajeIndex] = useState(0);
+
+  // Estados para solicitud de cambio de tabla GYM
+  const [showSolicitudTabla, setShowSolicitudTabla] = useState(false);
+  const [solicitudTablaTexto, setSolicitudTablaTexto] = useState('');
+  const [enviandoSolicitud, setEnviandoSolicitud] = useState(false);
 
   // Calcular campos automáticamente cuando cambian peso, altura o porcentajes
   useEffect(() => {
@@ -882,6 +895,104 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
     return () => clearInterval(interval);
   }, [notificationsEnabled, checkUpcomingAppointments]);
+
+  // Cargar mensajes pendientes al abrir la app
+  useEffect(() => {
+    if (!uid) return;
+
+    const loadMensajes = async () => {
+      try {
+        // Cargar mensajes del usuario
+        const mensajesRef = collection(db, 'users', uid, 'mensajes');
+        const q = query(mensajesRef, where('leido', '==', false));
+        const mensajesSnapshot = await getDocs(q);
+        
+        const mensajes = mensajesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        console.log('Mensajes encontrados:', mensajes.length, mensajes);
+
+        if (mensajes.length > 0) {
+          setMensajesPendientes(mensajes);
+          setMensajeActual(mensajes[0]);
+          setCurrentMensajeIndex(0);
+          setShowMensajeModal(true);
+        }
+      } catch (err) {
+        console.error('Error al cargar mensajes:', err);
+        // Mostrar el error en consola para debugging
+        alert('Error al cargar mensajes: ' + err.message);
+      }
+    };
+
+    loadMensajes();
+  }, [uid]);
+
+  // Función para marcar mensaje como leído y pasar al siguiente
+  const handleCerrarMensaje = async () => {
+    if (!mensajeActual) return;
+
+    try {
+      // Marcar mensaje actual como leído
+      const mensajeRef = doc(db, 'users', uid, 'mensajes', mensajeActual.id);
+      await updateDoc(mensajeRef, {
+        leido: true,
+        leidoEn: serverTimestamp()
+      });
+
+      // Pasar al siguiente mensaje o cerrar modal
+      const nextIndex = currentMensajeIndex + 1;
+      if (nextIndex < mensajesPendientes.length) {
+        setCurrentMensajeIndex(nextIndex);
+        setMensajeActual(mensajesPendientes[nextIndex]);
+      } else {
+        setShowMensajeModal(false);
+        setMensajeActual(null);
+        setMensajesPendientes([]);
+        setCurrentMensajeIndex(0);
+      }
+    } catch (err) {
+      console.error('Error al marcar mensaje como leído:', err);
+    }
+  };
+
+  // Función para enviar solicitud de cambio de tabla GYM
+  const handleEnviarSolicitudTabla = async () => {
+    if (!solicitudTablaTexto.trim()) {
+      alert('Por favor, escribe el motivo de tu solicitud');
+      return;
+    }
+
+    setEnviandoSolicitud(true);
+    try {
+      const nombreCompleto = userData?.nombre && userData?.apellidos 
+        ? `${userData.apellidos}, ${userData.nombre}`
+        : userData?.email || 'Usuario sin nombre';
+      
+      const mensajeContenido = `🏋️ SOLICITUD DE CAMBIO DE TABLA GYM\n\nUsuario: ${nombreCompleto}\n\nMotivo:\n${solicitudTablaTexto.trim()}`;
+
+      // Enviar mensaje a la colección mensajes_admin
+      await addDoc(collection(db, 'mensajes_admin'), {
+        contenido: mensajeContenido,
+        creadoEn: serverTimestamp(),
+        leido: false,
+        creadoPor: uid,
+        tipo: 'solicitud_tabla_gym',
+        usuarioNombre: nombreCompleto
+      });
+
+      alert('✓ Solicitud enviada correctamente al nutricionista');
+      setShowSolicitudTabla(false);
+      setSolicitudTablaTexto('');
+    } catch (err) {
+      console.error('Error al enviar solicitud:', err);
+      alert('Error al enviar la solicitud. Por favor, inténtalo de nuevo.');
+    } finally {
+      setEnviandoSolicitud(false);
+    }
+  };
 
   const addAppointment = async () => {
     if (!uid || !newAppointmentDate || !newAppointmentTime) {
@@ -2574,6 +2685,33 @@ Ruiz Nutrición
                     <path d="M3 12a9 9 0 0 1 15-6.7L21 8" strokeLinecap="round" strokeLinejoin="round"/>
                     <path d="M3 22v-6h6" strokeLinecap="round" strokeLinejoin="round"/>
                     <path d="M21 12a9 9 0 0 1-15 6.7L3 16" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+
+                <button 
+                  className="btn-icon-header" 
+                  onClick={() => {
+                    const msgIndex = tabs.findIndex(t => t.id === "mensajes");
+                    if (msgIndex !== -1) setTabIndex(msgIndex);
+                  }}
+                  title="Mensajes"
+                  style={{
+                    background: "rgba(147,51,234,0.9)",
+                    border: "none",
+                    borderRadius: "8px",
+                    width: "36px",
+                    height: "36px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    transition: "background 0.2s"
+                  }}
+                  onMouseEnter={(e) => e.target.style.background = "rgba(126,34,206,1)"}
+                  onMouseLeave={(e) => e.target.style.background = "rgba(147,51,234,0.9)"}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </button>
 
@@ -4914,7 +5052,30 @@ Ruiz Nutrición
             )}
             {tabs[tabIndex]?.id === "gym" && (
               <div className="card" style={{ padding: adminMode ? "16px 20px" : "8px", width: "100%", maxWidth: "none" }}>
-                <h3 style={{ fontSize: "18px", marginBottom: "12px" }}>🏋️ Mi Tabla GYM</h3>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
+                  <h3 style={{ fontSize: "18px", margin: 0 }}>🏋️ Mi Tabla GYM</h3>
+                  {!adminMode && (
+                    <button
+                      onClick={() => setShowSolicitudTabla(true)}
+                      style={{
+                        padding: "8px 16px",
+                        fontSize: "13px",
+                        fontWeight: "600",
+                        color: "white",
+                        backgroundColor: "#2196F3",
+                        border: "none",
+                        borderRadius: "8px",
+                        cursor: "pointer",
+                        transition: "background 0.2s",
+                        boxShadow: "0 2px 4px rgba(33,150,243,0.3)"
+                      }}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = "#1976d2"}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = "#2196F3"}
+                    >
+                      📝 Solicitar cambio de tabla
+                    </button>
+                  )}
+                </div>
                 {userData?.tablaGym && userData.tablaGym.length > 0 ? (
                   <div style={{ marginTop: "8px" }}>
                     <div style={{
@@ -5116,6 +5277,13 @@ Ruiz Nutrición
                 <AdminPagos 
                   userId={uid} 
                   userData={userData}
+                />
+              </div>
+            )}
+            {tabs[tabIndex]?.id === "mensajes" && (
+              <div className="card" style={{ padding: "0", width: "100%", maxWidth: "none" }}>
+                <MensajesUsuario 
+                  user={{ ...userData, id: uid }} 
                 />
               </div>
             )}
@@ -5657,6 +5825,260 @@ Ruiz Nutrición
           onDismissAll={handleDismissAllCitaReminders}
           onAddToCalendar={handleAddToCalendar}
         />
+      )}
+
+      {/* Modal de mensajes del admin */}
+      {showMensajeModal && mensajeActual && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '20px'
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '15px',
+              padding: isMobile ? '24px' : '40px',
+              maxWidth: '600px',
+              width: '100%',
+              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)',
+              animation: 'slideIn 0.3s ease-out',
+              position: 'relative'
+            }}
+          >
+            {/* Indicador de mensajes múltiples */}
+            {mensajesPendientes.length > 1 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '16px',
+                  right: '16px',
+                  backgroundColor: '#2196F3',
+                  color: 'white',
+                  padding: '6px 12px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: '600'
+                }}
+              >
+                {currentMensajeIndex + 1} de {mensajesPendientes.length}
+              </div>
+            )}
+
+            {/* Ícono */}
+            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+              <div style={{ fontSize: '60px', marginBottom: '10px' }}>💬</div>
+              <h2
+                style={{
+                  margin: '0 0 8px 0',
+                  color: '#2c3e50',
+                  fontSize: isMobile ? '22px' : '26px',
+                  fontWeight: '700'
+                }}
+              >
+                Mensaje del Nutricionista
+              </h2>
+              <p style={{ margin: 0, color: '#7f8c8d', fontSize: '14px' }}>
+                {new Date(mensajeActual.creadoEn?.toDate()).toLocaleDateString('es-ES', {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric'
+                })}
+              </p>
+            </div>
+
+            {/* Contenido del mensaje */}
+            <div
+              style={{
+                backgroundColor: '#f8f9fa',
+                padding: '20px',
+                borderRadius: '10px',
+                marginBottom: '24px',
+                minHeight: '100px',
+                fontSize: '16px',
+                lineHeight: '1.6',
+                color: '#2c3e50',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word'
+              }}
+            >
+              {mensajeActual.contenido}
+            </div>
+
+            {/* Botón de acción */}
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={handleCerrarMensaje}
+                style={{
+                  flex: 1,
+                  padding: '14px 20px',
+                  backgroundColor: '#2196F3',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseOver={(e) => e.target.style.backgroundColor = '#1976D2'}
+                onMouseOut={(e) => e.target.style.backgroundColor = '#2196F3'}
+              >
+                {mensajesPendientes.length > 1 && currentMensajeIndex < mensajesPendientes.length - 1
+                  ? '➡️ Siguiente mensaje'
+                  : '✓ Entendido'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de solicitud de cambio de tabla GYM */}
+      {showSolicitudTabla && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '20px'
+          }}
+          onClick={() => !enviandoSolicitud && setShowSolicitudTabla(false)}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '15px',
+              padding: isMobile ? '24px' : '32px',
+              maxWidth: '500px',
+              width: '100%',
+              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)',
+              animation: 'slideIn 0.3s ease-out'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+              <div style={{ fontSize: '48px', marginBottom: '10px' }}>🏋️</div>
+              <h2
+                style={{
+                  margin: '0 0 8px 0',
+                  color: '#2c3e50',
+                  fontSize: isMobile ? '20px' : '24px',
+                  fontWeight: '700'
+                }}
+              >
+                Solicitar Cambio de Tabla
+              </h2>
+              <p style={{ margin: 0, color: '#7f8c8d', fontSize: '14px' }}>
+                Explica por qué necesitas un cambio en tu tabla de ejercicios
+              </p>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: '#555'
+                }}
+              >
+                Motivo de la solicitud:
+              </label>
+              <textarea
+                value={solicitudTablaTexto}
+                onChange={(e) => setSolicitudTablaTexto(e.target.value)}
+                placeholder="Ej: Algunos ejercicios me resultan muy difíciles, o necesito ejercicios para casa, etc."
+                disabled={enviandoSolicitud}
+                style={{
+                  width: '100%',
+                  minHeight: '120px',
+                  padding: '12px',
+                  fontSize: '15px',
+                  border: '2px solid #e0e0e0',
+                  borderRadius: '8px',
+                  resize: 'vertical',
+                  fontFamily: 'inherit',
+                  outline: 'none',
+                  transition: 'border-color 0.2s',
+                  backgroundColor: enviandoSolicitud ? '#f5f5f5' : 'white'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#2196F3'}
+                onBlur={(e) => e.target.style.borderColor = '#e0e0e0'}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setShowSolicitudTabla(false)}
+                disabled={enviandoSolicitud}
+                style={{
+                  flex: 1,
+                  padding: '12px 20px',
+                  backgroundColor: '#f5f5f5',
+                  color: '#666',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  fontSize: '15px',
+                  fontWeight: '600',
+                  cursor: enviandoSolicitud ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                  opacity: enviandoSolicitud ? 0.5 : 1
+                }}
+                onMouseOver={(e) => !enviandoSolicitud && (e.target.style.backgroundColor = '#e5e5e5')}
+                onMouseOut={(e) => !enviandoSolicitud && (e.target.style.backgroundColor = '#f5f5f5')}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleEnviarSolicitudTabla}
+                disabled={enviandoSolicitud || !solicitudTablaTexto.trim()}
+                style={{
+                  flex: 1,
+                  padding: '12px 20px',
+                  backgroundColor: enviandoSolicitud || !solicitudTablaTexto.trim() ? '#ccc' : '#2196F3',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '15px',
+                  fontWeight: '600',
+                  cursor: enviandoSolicitud || !solicitudTablaTexto.trim() ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseOver={(e) => {
+                  if (!enviandoSolicitud && solicitudTablaTexto.trim()) {
+                    e.target.style.backgroundColor = '#1976D2';
+                  }
+                }}
+                onMouseOut={(e) => {
+                  if (!enviandoSolicitud && solicitudTablaTexto.trim()) {
+                    e.target.style.backgroundColor = '#2196F3';
+                  }
+                }}
+              >
+                {enviandoSolicitud ? '⏳ Enviando...' : '📤 Enviar solicitud'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

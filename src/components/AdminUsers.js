@@ -47,6 +47,7 @@ export default function AdminUsers() {
 
   // Estado para ocultar/mostrar el panel lateral (visible por defecto)
   const [panelVisible, setPanelVisible] = useState(true);
+  const [solicitudesPendientes, setSolicitudesPendientes] = useState(0);
 
   // Estados para modal de crear/editar usuario
   const [showModal, setShowModal] = useState(false);
@@ -157,6 +158,26 @@ export default function AdminUsers() {
     };
     loadUsers();
     return () => { mounted = false; };
+  }, [isAdmin]);
+
+  // Cargar contador de solicitudes pendientes
+  useEffect(() => {
+    if (!isAdmin) return;
+    
+    const loadSolicitudesPendientes = async () => {
+      try {
+        const solicitudesSnapshot = await getDocs(collection(db, 'mensajes_admin'));
+        const pendientes = solicitudesSnapshot.docs.filter(doc => !doc.data().leido).length;
+        setSolicitudesPendientes(pendientes);
+      } catch (err) {
+        console.error('Error al cargar solicitudes pendientes:', err);
+      }
+    };
+
+    loadSolicitudesPendientes();
+    // Actualizar cada 30 segundos
+    const interval = setInterval(loadSolicitudesPendientes, 30000);
+    return () => clearInterval(interval);
   }, [isAdmin]);
 
   // resize handlers
@@ -513,6 +534,35 @@ export default function AdminUsers() {
               <button className="btn primary" onClick={() => navigate("/admin/menus")} style={{ padding: "6px 10px", fontSize: "13px" }}>📋 Menús</button>
               <button className="btn primary" onClick={() => navigate("/admin/agenda")} style={{ padding: "6px 10px", fontSize: "13px" }}>📅 Agenda</button>
               <button className="btn primary" onClick={() => navigate("/admin/gym")} style={{ padding: "6px 10px", fontSize: "13px" }}>🏋️ GYM</button>
+              <button 
+                className="btn primary" 
+                onClick={() => navigate("/admin/mensajes")} 
+                style={{ 
+                  padding: "6px 10px", 
+                  fontSize: "13px",
+                  position: 'relative'
+                }}
+              >
+                💬 MSG
+                {solicitudesPendientes > 0 && (
+                  <span style={{
+                    position: 'absolute',
+                    top: '-6px',
+                    right: '-6px',
+                    backgroundColor: '#f44336',
+                    color: 'white',
+                    borderRadius: '10px',
+                    padding: '2px 6px',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    minWidth: '18px',
+                    textAlign: 'center',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                  }}>
+                    {solicitudesPendientes}
+                  </span>
+                )}
+              </button>
             </>
           )}
           {!isMobile && <button className="btn primary" onClick={handleNuevoCliente} style={{ fontWeight: "bold", padding: "6px 10px", fontSize: "13px" }}>➕ Nuevo cliente</button>}

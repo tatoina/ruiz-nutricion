@@ -8,6 +8,7 @@ import AdminTipoDieta from "./components/AdminTipoDieta";
 import AdminTarifas from "./components/AdminTarifas";
 import AdminPagosGlobal from "./components/AdminPagosGlobal";
 import AdminGymGestion from "./components/AdminGymGestion";
+import AdminMensajes from "./components/AdminMensajes";
 import AdminLayoutResponsive from "./components/Layouts/AdminLayoutResponsive";
 import FichaUsuario from "./components/FichaUsuario";
 import Login from "./components/Login";
@@ -173,6 +174,17 @@ export default function App() {
             <PrivateRoute>
               <AdminLayoutResponsive title="GYM">
                 <AdminGymGestion />
+              </AdminLayoutResponsive>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/admin/mensajes"
+          element={
+            <PrivateRoute>
+              <AdminLayoutResponsive title="Mensajes">
+                <AdminMensajes />
               </AdminLayoutResponsive>
             </PrivateRoute>
           }
