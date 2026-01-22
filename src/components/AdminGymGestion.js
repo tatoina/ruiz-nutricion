@@ -231,7 +231,7 @@ export default function AdminGymGestion() {
 
       // Subir video si hay archivo
       if (videoFile) {
-        const videoRef = ref(storage, `gym/videos/${Date.now()}_${videoFile.name}`);
+        const videoRef = ref(storage, `recursos/${Date.now()}_${videoFile.name}`);
         await uploadBytes(videoRef, videoFile);
         videoUrl = await getDownloadURL(videoRef);
       }

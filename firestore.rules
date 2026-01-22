@@ -62,6 +62,13 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
     
+    // Colección de emails - usuarios autenticados pueden crear (para envío de notificaciones)
+    match /mail/{mailId} {
+      allow read: if isAdmin();
+      allow create: if request.auth != null; // Usuarios autenticados pueden crear emails
+      allow update, delete: if isAdmin();
+    }
+    
     // Otras colecciones - solo admins
     match /{document=**} {
       allow read, write: if isAdmin();

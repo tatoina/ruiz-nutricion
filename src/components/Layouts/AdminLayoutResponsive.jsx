@@ -100,6 +100,16 @@ export default function AdminLayout({ children, title = "Panel Admin" }) {
             <div style={styles.bottomNavLabel}>MSG</div>
           </button>
           <button
+            onClick={() => navigate('/admin/recursos')}
+            style={{
+              ...styles.bottomNavItem,
+              ...(currentPath === '/admin/recursos' ? styles.bottomNavItemActive : {})
+            }}
+          >
+            <div style={styles.bottomNavIcon}>📁</div>
+            <div style={styles.bottomNavLabel}>Recursos</div>
+          </button>
+          <button
             onClick={handleSignOut}
             style={{
               ...styles.bottomNavItem,

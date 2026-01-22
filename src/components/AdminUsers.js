@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { auth, db, functions } from "../Firebase";
 import { onAuthStateChanged, signOut, getIdTokenResult } from "firebase/auth";
-import { collection, getDocs, query, orderBy, doc, deleteDoc, updateDoc } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, doc, deleteDoc, updateDoc, getDoc } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { useNavigate } from "react-router-dom";
 import FichaUsuario from "./FichaUsuario";
@@ -66,6 +66,19 @@ export default function AdminUsers() {
   });
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState("");
+  
+  // Estado para modal de perfil admin
+  const [showAdminProfile, setShowAdminProfile] = useState(false);
+  const [adminProfileData, setAdminProfileData] = useState({
+    nombre: "",
+    apellidos: "",
+    email: "",
+    telefono: "",
+    emailNotificaciones: "inaviciba@gmail.com"
+  });
+  const [adminProfileLoading, setAdminProfileLoading] = useState(false);
+  const [adminProfileError, setAdminProfileError] = useState("");
+  const [adminProfileSuccess, setAdminProfileSuccess] = useState("");
 
   // Debug log helper
   const logDebug = (...args) => {
@@ -376,6 +389,124 @@ export default function AdminUsers() {
     setShowModal(true);
   };
 
+  // Cargar datos del perfil admin
+  const loadAdminProfile = async () => {
+    if (!currentUser) return;
+    try {
+      const adminDocRef = doc(db, "users", currentUser.uid);
+      const adminDoc = await getDoc(adminDocRef);
+      
+      if (adminDoc.exists()) {
+        const data = adminDoc.data();
+        setAdminProfileData({
+          nombre: data.nombre || "",
+          apellidos: data.apellidos || "",
+          email: currentUser.email || "",
+          telefono: data.telefono || "",
+          emailNotificaciones: data.emailNotificaciones || "inaviciba@gmail.com"
+        });
+      } else {
+        setAdminProfileData({
+          nombre: "",
+          apellidos: "",
+          email: currentUser.email || "",
+          telefono: "",
+          emailNotificaciones: "inaviciba@gmail.com"
+        });
+      }
+    } catch (err) {
+      console.error("Error cargando perfil admin:", err);
+      setAdminProfileData({
+        nombre: "",
+        apellidos: "",
+        email: currentUser.email || "",
+        telefono: ""
+      });
+    }
+  };
+
+  // Guardar datos del perfil admin
+  const handleGuardarAdminProfile = async (e) => {
+    e.preventDefault();
+    setAdminProfileError("");
+    setAdminProfileSuccess("");
+    setAdminProfileLoading(true);
+
+    try {
+      const { nombre, apellidos, email, telefono } = adminProfileData;
+      const emailCambiado = email !== currentUser.email;
+
+      // Si cambia el email, advertir al usuario
+      if (emailCambiado) {
+        const confirmar = window.confirm(
+          `⚠️ Vas a cambiar el email de acceso de:\n\n${currentUser.email}\n\na:\n\n${email}\n\n` +
+          `Después del cambio, tendrás que iniciar sesión con el nuevo email.\n\n` +
+          `¿Deseas continuar?`
+        );
+        
+        if (!confirmar) {
+          setAdminProfileLoading(false);
+          return;
+        }
+      }
+
+      // Actualizar datos en Firestore primero
+      const userRef = doc(db, "users", currentUser.uid);
+      await updateDoc(userRef, {
+        nombre,
+        apellidos,
+        email,
+        telefono,
+        emailNotificaciones: adminProfileData.emailNotificaciones
+      });
+
+      // Actualizar email si cambió
+      if (emailCambiado) {
+        try {
+          const { updateEmail } = await import("firebase/auth");
+          await updateEmail(currentUser, email);
+          
+          // Mostrar mensaje y cerrar sesión
+          alert("✅ Email actualizado correctamente.\n\nAhora serás redirigido al login para que entres con tu nuevo email.");
+          await signOut(auth);
+          navigate("/login");
+          return;
+        } catch (emailError) {
+          // Si falla por autenticación reciente, pedir re-autenticación
+          if (emailError.code === "auth/requires-recent-login") {
+            setAdminProfileError(
+              "Para cambiar el email necesitas haber iniciado sesión recientemente. " +
+              "Por seguridad, cierra sesión y vuelve a entrar, luego intenta cambiar el email de nuevo."
+            );
+          } else if (emailError.code === "auth/email-already-in-use") {
+            setAdminProfileError("Este email ya está siendo usado por otra cuenta.");
+          } else {
+            setAdminProfileError(`Error al actualizar email: ${emailError.message}`);
+          }
+          setAdminProfileLoading(false);
+          return;
+        }
+      }
+
+      setAdminProfileSuccess("✓ Perfil actualizado correctamente");
+      setTimeout(() => {
+        setAdminProfileSuccess("");
+      }, 3000);
+    } catch (err) {
+      console.error("Error guardando perfil admin:", err);
+      setAdminProfileError(err.message || "Error al guardar el perfil");
+    } finally {
+      setAdminProfileLoading(false);
+    }
+  };
+
+  // Cargar perfil cuando se abre el modal
+  useEffect(() => {
+    if (showAdminProfile) {
+      loadAdminProfile();
+    }
+  }, [showAdminProfile]);
+
   // Abrir modal para editar cliente
   const handleEditarCliente = (usuario, e) => {
     e.stopPropagation();
@@ -503,7 +634,7 @@ export default function AdminUsers() {
 
   // admin allowed even on small screens for convenience
   return (
-    <div className="admin-fullscreen" ref={containerRef} style={{ width: '100%', maxWidth: '100vw', overflowX: 'hidden' }}>
+    <div className="admin-fullscreen" ref={containerRef} style={{ width: '100%', maxWidth: '100vw', overflowX: 'hidden', paddingBottom: isMobile ? '70px' : '0' }}>
       <div className="card header" style={{ 
         display: "flex", 
         justifyContent: "space-between", 
@@ -516,7 +647,9 @@ export default function AdminUsers() {
         overflowX: 'hidden'
       }}>
         <div style={{ width: isMobile ? "100%" : "auto", textAlign: isMobile ? "center" : "left" }}>
-          <div className="title" style={{ fontSize: isMobile ? "14px" : "16px", marginBottom: "2px" }}>Panel administrativo</div>
+          <div className="title" style={{ fontSize: isMobile ? "14px" : "16px", marginBottom: "2px" }}>
+            Panel administrativo <span style={{ color: '#666', fontWeight: '400', fontSize: isMobile ? '12px' : '14px' }}>({users.length} usuarios)</span>
+          </div>
           {!isMobile && <div className="subtitle" style={{ fontSize: "11px" }}>Navega por los usuarios y edita sus fichas</div>}
         </div>
         
@@ -563,9 +696,11 @@ export default function AdminUsers() {
                   </span>
                 )}
               </button>
+              <button className="btn primary" onClick={() => navigate("/admin/recursos")} style={{ padding: "6px 10px", fontSize: "13px" }}>📁 Recursos</button>
             </>
           )}
           {!isMobile && <button className="btn primary" onClick={handleNuevoCliente} style={{ fontWeight: "bold", padding: "6px 10px", fontSize: "13px" }}>➕ Nuevo cliente</button>}
+          {!isMobile && <button className="btn primary" onClick={() => { setShowAdminProfile(true); loadAdminProfile(); }} style={{ padding: "6px 10px", fontSize: "13px" }}>👤 Perfil</button>}
           {!isMobile && <button className="btn danger" onClick={handleSignOut} style={{ padding: "6px 10px", fontSize: "13px" }}>Cerrar sesión</button>}
           {isMobile && (
             <button 
@@ -845,6 +980,246 @@ export default function AdminUsers() {
         </div>
       </div>
 
+      {/* Modal para perfil de admin */}
+      {showAdminProfile && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0,0,0,0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000,
+          padding: isMobile ? "0" : "20px"
+        }}>
+          <div style={{
+            backgroundColor: "white",
+            padding: isMobile ? "20px" : "24px",
+            borderRadius: isMobile ? "0" : "8px",
+            width: isMobile ? "100%" : "500px",
+            minHeight: isMobile ? "100vh" : "auto",
+            maxHeight: isMobile ? "100vh" : "90vh",
+            overflowY: "auto",
+            boxSizing: "border-box"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h2 style={{ fontSize: isMobile ? "20px" : "18px", margin: "0", color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ 
+                  width: "32px", 
+                  height: "32px", 
+                  borderRadius: "50%", 
+                  backgroundColor: "#64748b", 
+                  color: "white",
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "center",
+                  fontSize: "18px"
+                }}>
+                  👤
+                </span>
+                Perfil de Administrador
+              </h2>
+              <button
+                onClick={() => {
+                  setShowAdminProfile(false);
+                  setAdminProfileError("");
+                  setAdminProfileSuccess("");
+                }}
+                style={{
+                  background: "#fee2e2",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: "32px",
+                  height: "32px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  fontSize: "18px",
+                  color: "#dc2626"
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {adminProfileError && (
+              <div style={{ color: "#dc2626", marginBottom: 12, padding: 12, backgroundColor: "#fee2e2", borderRadius: "8px", fontSize: "14px", border: "2px solid #dc2626" }}>
+                ⚠️ {adminProfileError}
+              </div>
+            )}
+
+            {adminProfileSuccess && (
+              <div style={{ color: "#16a34a", marginBottom: 12, padding: 12, backgroundColor: "#dcfce7", borderRadius: "8px", fontSize: "14px", border: "2px solid #16a34a" }}>
+                {adminProfileSuccess}
+              </div>
+            )}
+
+            <form onSubmit={handleGuardarAdminProfile}>
+              <div style={{ display: "flex", flexDirection: "column", gap: isMobile ? "16px" : "12px" }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: "6px", fontWeight: "600", fontSize: isMobile ? "14px" : "13px", color: "#0f172a" }}>
+                    Nombre
+                  </label>
+                  <input
+                    type="text"
+                    value={adminProfileData.nombre}
+                    onChange={(e) => setAdminProfileData({ ...adminProfileData, nombre: e.target.value })}
+                    style={{
+                      width: "100%",
+                      padding: isMobile ? "12px" : "10px",
+                      fontSize: isMobile ? "16px" : "14px",
+                      border: "2px solid #e5e7eb",
+                      borderRadius: "8px",
+                      boxSizing: "border-box"
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: "6px", fontWeight: "600", fontSize: isMobile ? "14px" : "13px", color: "#0f172a" }}>
+                    Apellidos
+                  </label>
+                  <input
+                    type="text"
+                    value={adminProfileData.apellidos}
+                    onChange={(e) => setAdminProfileData({ ...adminProfileData, apellidos: e.target.value })}
+                    style={{
+                      width: "100%",
+                      padding: isMobile ? "12px" : "10px",
+                      fontSize: isMobile ? "16px" : "14px",
+                      border: "2px solid #e5e7eb",
+                      borderRadius: "8px",
+                      boxSizing: "border-box"
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: "6px", fontWeight: "600", fontSize: isMobile ? "14px" : "13px", color: "#0f172a" }}>
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={adminProfileData.email}
+                    onChange={(e) => setAdminProfileData({ ...adminProfileData, email: e.target.value })}
+                    style={{
+                      width: "100%",
+                      padding: isMobile ? "12px" : "10px",
+                      fontSize: isMobile ? "16px" : "14px",
+                      border: "2px solid #e5e7eb",
+                      borderRadius: "8px",
+                      boxSizing: "border-box"
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: "6px", fontWeight: "600", fontSize: isMobile ? "14px" : "13px", color: "#0f172a" }}>
+                    Teléfono
+                  </label>
+                  <input
+                    type="tel"
+                    value={adminProfileData.telefono}
+                    onChange={(e) => setAdminProfileData({ ...adminProfileData, telefono: e.target.value })}
+                    style={{
+                      width: "100%",
+                      padding: isMobile ? "12px" : "10px",
+                      fontSize: isMobile ? "16px" : "14px",
+                      border: "2px solid #e5e7eb",
+                      borderRadius: "8px",
+                      boxSizing: "border-box"
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: "6px", fontWeight: "600", fontSize: isMobile ? "14px" : "13px", color: "#0f172a" }}>
+                    📧 Email para notificaciones
+                  </label>
+                  <input
+                    type="email"
+                    value={adminProfileData.emailNotificaciones}
+                    onChange={(e) => setAdminProfileData({ ...adminProfileData, emailNotificaciones: e.target.value })}
+                    placeholder="inaviciba@gmail.com"
+                    style={{
+                      width: "100%",
+                      padding: isMobile ? "12px" : "10px",
+                      fontSize: isMobile ? "16px" : "14px",
+                      border: "2px solid #e5e7eb",
+                      borderRadius: "8px",
+                      boxSizing: "border-box"
+                    }}
+                  />
+                  <small style={{ display: "block", marginTop: "4px", color: "#64748b", fontSize: "12px" }}>
+                    Email donde se recibirán las solicitudes de GYM y otras notificaciones
+                  </small>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: "6px", fontWeight: "600", fontSize: isMobile ? "14px" : "13px", color: "#0f172a" }}>
+                    Rol
+                  </label>
+                  <input
+                    type="text"
+                    value="Administrador"
+                    disabled
+                    style={{
+                      width: "100%",
+                      padding: isMobile ? "12px" : "10px",
+                      fontSize: isMobile ? "16px" : "14px",
+                      border: "2px solid #e5e7eb",
+                      borderRadius: "8px",
+                      boxSizing: "border-box",
+                      backgroundColor: "#f5f5f5",
+                      color: "#64748b"
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginTop: "24px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                <button
+                  type="submit"
+                  className="btn primary"
+                  disabled={adminProfileLoading}
+                  style={{
+                    width: "100%",
+                    padding: isMobile ? "14px" : "12px",
+                    fontSize: isMobile ? "16px" : "14px",
+                    fontWeight: "600"
+                  }}
+                >
+                  {adminProfileLoading ? "Guardando..." : "💾 Guardar Cambios"}
+                </button>
+
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    setShowAdminProfile(false);
+                    window.location.href = "#/cambiar-password";
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: isMobile ? "14px" : "12px",
+                    fontSize: isMobile ? "16px" : "14px",
+                    fontWeight: "600",
+                    backgroundColor: "#64748b",
+                    color: "white"
+                  }}
+                >
+                  🔒 Cambiar Contraseña
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Modal para crear/editar usuario */}
       {showModal && (
         <div style={{
@@ -1075,6 +1450,193 @@ export default function AdminUsers() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Barra de navegación inferior para móvil */}
+      {isMobile && (
+        <div style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          backgroundColor: 'white',
+          borderTop: '1px solid #e0e0e0',
+          boxShadow: '0 -2px 4px rgba(0,0,0,0.1)',
+          zIndex: 100,
+          display: 'flex'
+        }}>
+          <button
+            onClick={() => navigate('/admin')}
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '8px 4px',
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              color: '#2196F3',
+              fontSize: '12px',
+              fontWeight: '600'
+            }}
+          >
+            <div style={{ fontSize: '20px', marginBottom: '2px' }}>👥</div>
+            <div style={{ fontSize: '10px' }}>Users</div>
+          </button>
+          <button
+            onClick={() => navigate('/admin/agenda')}
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '8px 4px',
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              color: '#666',
+              fontSize: '12px'
+            }}
+          >
+            <div style={{ fontSize: '20px', marginBottom: '2px' }}>📅</div>
+            <div style={{ fontSize: '10px' }}>Agenda</div>
+          </button>
+          <button
+            onClick={() => navigate('/admin/menus')}
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '8px 4px',
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              color: '#666',
+              fontSize: '12px'
+            }}
+          >
+            <div style={{ fontSize: '20px', marginBottom: '2px' }}>🍽️</div>
+            <div style={{ fontSize: '10px' }}>Menús</div>
+          </button>
+          <button
+            onClick={() => navigate('/admin/gym')}
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '8px 4px',
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              color: '#666',
+              fontSize: '12px'
+            }}
+          >
+            <div style={{ fontSize: '20px', marginBottom: '2px' }}>🏋️</div>
+            <div style={{ fontSize: '10px' }}>GYM</div>
+          </button>
+          <button
+            onClick={() => navigate('/admin/mensajes')}
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '8px 4px',
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              color: '#666',
+              fontSize: '12px',
+              position: 'relative'
+            }}
+          >
+            <div style={{ fontSize: '20px', marginBottom: '2px' }}>💬</div>
+            <div style={{ fontSize: '10px' }}>MSG</div>
+            {solicitudesPendientes > 0 && (
+              <span style={{
+                position: 'absolute',
+                top: '2px',
+                right: '8px',
+                backgroundColor: '#f44336',
+                color: 'white',
+                borderRadius: '10px',
+                padding: '2px 5px',
+                fontSize: '9px',
+                fontWeight: 'bold',
+                minWidth: '16px',
+                textAlign: 'center'
+              }}>
+                {solicitudesPendientes}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => navigate('/admin/recursos')}
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '8px 4px',
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              color: '#666',
+              fontSize: '12px'
+            }}
+          >
+            <div style={{ fontSize: '20px', marginBottom: '2px' }}>📁</div>
+            <div style={{ fontSize: '10px' }}>Files</div>
+          </button>
+          <button
+            onClick={() => { setShowAdminProfile(true); loadAdminProfile(); }}
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '8px 4px',
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              color: '#666',
+              fontSize: '12px'
+            }}
+          >
+            <div style={{ fontSize: '20px', marginBottom: '2px' }}>👤</div>
+            <div style={{ fontSize: '10px' }}>Perfil</div>
+          </button>
+          <button
+            onClick={handleSignOut}
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '8px 4px',
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              color: '#f44336',
+              fontSize: '12px'
+            }}
+          >
+            <div style={{ fontSize: '20px', marginBottom: '2px' }}>🚪</div>
+            <div style={{ fontSize: '10px' }}>Salir</div>
+          </button>
         </div>
       )}
     </div>

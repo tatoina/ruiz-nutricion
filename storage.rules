@@ -33,11 +33,11 @@ service firebase.storage {
       allow write: if request.auth != null && isAdmin();
     }
     
-    // Reglas para videos de ejercicios del GYM
-    match /gym/videos/{fileName} {
-      // Todos los usuarios autenticados pueden ver los videos
+    // Reglas para todos los recursos (GYM, mensajes, etc.)
+    match /recursos/{fileName} {
+      // Todos los usuarios autenticados pueden leer los archivos
       allow read: if request.auth != null;
-      // Solo los admins pueden subir/modificar videos
+      // Solo los admins pueden subir/modificar/eliminar archivos
       allow write: if request.auth != null && isAdmin();
     }
     

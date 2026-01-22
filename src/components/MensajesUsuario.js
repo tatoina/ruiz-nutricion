@@ -415,6 +415,157 @@ export default function MensajesUsuario({ user }) {
               }}>
                 {mensaje.contenido}
               </div>
+
+              {/* Archivos adjuntos */}
+              {mensaje.archivos && mensaje.archivos.length > 0 && (
+                <div style={{
+                  marginTop: '16px',
+                  padding: '12px',
+                  backgroundColor: mensaje.leido ? '#fafafa' : '#f0f9ff',
+                  borderRadius: '8px',
+                  border: `1px solid ${mensaje.leido ? '#e0e0e0' : '#bfdbfe'}`
+                }}>
+                  <div style={{
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    color: '#555',
+                    marginBottom: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    📎 Archivos adjuntos ({mensaje.archivos.length})
+                  </div>
+                  
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(200px, 1fr))',
+                    gap: '10px'
+                  }}>
+                    {mensaje.archivos.map((archivo, index) => {
+                      const esImagen = archivo.tipo.startsWith('image/');
+                      const esVideo = archivo.tipo.startsWith('video/');
+                      const esPDF = archivo.tipo.includes('pdf');
+                      
+                      return (
+                        <div
+                          key={index}
+                          style={{
+                            backgroundColor: 'white',
+                            border: '1px solid #e0e0e0',
+                            borderRadius: '8px',
+                            overflow: 'hidden',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          {/* Vista previa para imágenes */}
+                          {esImagen && (
+                            <a
+                              href={archivo.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ display: 'block' }}
+                            >
+                              <img
+                                src={archivo.url}
+                                alt={archivo.nombre}
+                                style={{
+                                  width: '100%',
+                                  height: '150px',
+                                  objectFit: 'cover',
+                                  cursor: 'pointer'
+                                }}
+                                onMouseOver={(e) => e.target.style.opacity = '0.8'}
+                                onMouseOut={(e) => e.target.style.opacity = '1'}
+                              />
+                            </a>
+                          )}
+                          
+                          {/* Vista previa para videos */}
+                          {esVideo && (
+                            <video
+                              src={archivo.url}
+                              controls
+                              style={{
+                                width: '100%',
+                                maxHeight: '200px',
+                                backgroundColor: '#000'
+                              }}
+                            />
+                          )}
+                          
+                          {/* Icono para documentos */}
+                          {!esImagen && !esVideo && (
+                            <div style={{
+                              height: '100px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: '#f5f5f5',
+                              fontSize: '48px'
+                            }}>
+                              {esPDF ? '📄' : '📎'}
+                            </div>
+                          )}
+                          
+                          {/* Información del archivo */}
+                          <div style={{
+                            padding: '10px',
+                            borderTop: '1px solid #e0e0e0'
+                          }}>
+                            <div style={{
+                              fontSize: '12px',
+                              color: '#2c3e50',
+                              fontWeight: '500',
+                              marginBottom: '4px',
+                              wordBreak: 'break-word',
+                              lineHeight: '1.3'
+                            }}>
+                              {archivo.nombre}
+                            </div>
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}>
+                              <span style={{
+                                fontSize: '11px',
+                                color: '#999'
+                              }}>
+                                {archivo.tamaño ? `${(archivo.tamaño / 1024).toFixed(1)} KB` : ''}
+                              </span>
+                              <a
+                                href={archivo.url}
+                                download={archivo.nombre}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  fontSize: '11px',
+                                  color: '#2196F3',
+                                  textDecoration: 'none',
+                                  fontWeight: '600',
+                                  padding: '4px 8px',
+                                  backgroundColor: '#f0f9ff',
+                                  borderRadius: '4px',
+                                  transition: 'all 0.2s'
+                                }}
+                                onMouseOver={(e) => {
+                                  e.target.style.backgroundColor = '#e0f2fe';
+                                }}
+                                onMouseOut={(e) => {
+                                  e.target.style.backgroundColor = '#f0f9ff';
+                                }}
+                              >
+                                ⬇ Descargar
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

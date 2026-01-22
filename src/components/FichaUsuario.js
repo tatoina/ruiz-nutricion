@@ -127,6 +127,11 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     consejos: []
   });
   
+  // Estado para modo manual (editor tipo Word)
+  const [modoManual, setModoManual] = useState(false);
+  const [contenidoManual, setContenidoManual] = useState("");
+  const editorManualRef = useRef(null);
+  
   // Estados para opciones disponibles desde BD
   const [menuItemsDisponibles, setMenuItemsDisponibles] = useState({
     desayuno: [],
@@ -180,11 +185,18 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const [mensajesPendientes, setMensajesPendientes] = useState([]);
   const [mensajeActual, setMensajeActual] = useState(null);
   const [currentMensajeIndex, setCurrentMensajeIndex] = useState(0);
+  const [mensajesNoLeidos, setMensajesNoLeidos] = useState(0);
 
   // Estados para solicitud de cambio de tabla GYM
   const [showSolicitudTabla, setShowSolicitudTabla] = useState(false);
   const [solicitudTablaTexto, setSolicitudTablaTexto] = useState('');
   const [enviandoSolicitud, setEnviandoSolicitud] = useState(false);
+  
+  // Estados para solicitud de nueva tabla GYM
+  const [showSolicitudNuevaTabla, setShowSolicitudNuevaTabla] = useState(false);
+  
+  // Email de notificaciones configurado por el admin
+  const [emailNotificaciones, setEmailNotificaciones] = useState('inaviciba@gmail.com');
 
   // Calcular campos automáticamente cuando cambian peso, altura o porcentajes
   useEffect(() => {
@@ -385,6 +397,10 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
             consejos: []
           });
           
+          // Cargar modo manual
+          setModoManual(data.modoManual || false);
+          setContenidoManual(data.contenidoManual || "");
+          
           // Cargar orden de campos si existe
           if (data.fieldsOrder && Array.isArray(data.fieldsOrder)) {
             // Asegurar que el nuevo campo pliegueCintura esté incluido
@@ -447,6 +463,47 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       }
     };
     load();
+    
+    // Listener en tiempo real para cambios en la dieta
+    if (uid) {
+      const unsubscribe = onSnapshot(doc(db, "users", uid), (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          
+          // Actualizar modo manual y contenido si cambian
+          if (data.modoManual !== undefined) {
+            setModoManual(data.modoManual);
+          }
+          if (data.contenidoManual !== undefined) {
+            setContenidoManual(data.contenidoManual);
+          }
+          
+          // Actualizar tipo de menú
+          if (data.tipoMenu !== undefined) {
+            setTipoMenu(data.tipoMenu);
+          }
+          
+          // Actualizar menú vertical
+          if (data.menuVertical !== undefined) {
+            setMenuVertical(data.menuVertical);
+          }
+          
+          // Actualizar menú normal
+          if (data.menu !== undefined) {
+            setEditable((prev) => ({
+              ...prev,
+              menu: normalizeMenu(data.menu)
+            }));
+          }
+        }
+      });
+      
+      return () => {
+        mounted = false;
+        unsubscribe();
+      };
+    }
+    
     return () => { mounted = false; };
   }, [uid, normalizeMenu, emptyDayMenu, todayIndex]);
 
@@ -629,7 +686,58 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const saveVersionMenu = async () => {
     if (!uid) { setError("Usuario objetivo no disponible."); return; }
     try {
-      const menuToSave = Array.isArray(editable.menu) ? editable.menu : Array.from({ length: 7 }, () => ({ ...emptyDayMenu() }));
+      let menuToSave;
+      let contenidoManualToSave = contenidoManual;
+      
+      // Si estamos en modo manual, capturar el contenido del editor
+      if (modoManual && editorManualRef.current) {
+        contenidoManualToSave = editorManualRef.current.innerHTML;
+        
+        // Extraer contenido de la tabla para poblar el menú normal
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(contenidoManualToSave, 'text/html');
+        const table = doc.querySelector('table');
+        
+        if (table) {
+          const rows = table.querySelectorAll('tbody tr');
+          const menuData = Array.from({ length: 7 }, () => ({ ...emptyDayMenu() }));
+          
+          rows.forEach((row, rowIndex) => {
+            const cells = row.querySelectorAll('td');
+            const mealTypes = ['desayuno', 'almuerzo', 'comida', 'merienda', 'cena', 'consejos'];
+            const mealType = mealTypes[rowIndex];
+            
+            if (mealType) {
+              // Procesar cada día de la semana (columnas 1-7, la 0 es el nombre de la comida)
+              for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+                const cell = cells[dayIndex + 1]; // +1 porque la primera celda es el nombre de la comida
+                if (cell) {
+                  const text = cell.textContent.trim();
+                  if (mealType === 'consejos') {
+                    // Para consejos (TIPS), solo guardar en el primer día
+                    if (dayIndex === 0 && text) {
+                      for (let i = 0; i < 7; i++) {
+                        menuData[i][mealType] = text;
+                      }
+                    }
+                  } else {
+                    menuData[dayIndex][mealType] = text;
+                  }
+                }
+              }
+            }
+          });
+          
+          menuToSave = menuData;
+        } else {
+          // Si no hay tabla, usar menú vacío
+          menuToSave = Array.from({ length: 7 }, () => ({ ...emptyDayMenu() }));
+        }
+      } else {
+        // Modo normal (tabla o vertical)
+        menuToSave = Array.isArray(editable.menu) ? editable.menu : Array.from({ length: 7 }, () => ({ ...emptyDayMenu() }));
+      }
+      
       const timestamp = new Date().toISOString();
       const now = new Date();
       
@@ -651,17 +759,32 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       const newVersion = {
         numero: versionNumber,
         fechaDesde: timestamp,
-        fechaHasta: null, // Will be set when next version is created
+        fechaHasta: null,
         menu: menuToSave,
+        modoManual: modoManual,
+        contenidoManual: modoManual ? contenidoManualToSave : null,
+        tipoMenu: tipoMenu,
         createdAt: timestamp
       };
       
-      // Save to dietasHistorico (new field) and also to menuHistorico (backwards compatibility)
-      await updateDoc(doc(db, "users", uid), { 
+      // Preparar datos para actualizar
+      const updateData = {
+        menu: menuToSave,
         dietasHistorico: [...dietasHistorico, newVersion],
-        menuHistorico: arrayUnion({ createdAt: timestamp, menu: menuToSave }), 
-        updatedAt: serverTimestamp() 
-      });
+        menuHistorico: arrayUnion({ createdAt: timestamp, menu: menuToSave }),
+        modoManual: modoManual,
+        tipoMenu: tipoMenu,
+        updatedAt: serverTimestamp()
+      };
+      
+      // Si es modo manual, también guardar el contenido HTML
+      if (modoManual) {
+        updateData.contenidoManual = contenidoManualToSave;
+        setContenidoManual(contenidoManualToSave);
+      }
+      
+      // Save to Firestore
+      await updateDoc(doc(db, "users", uid), updateData);
       
       const newSnap = await getDoc(doc(db, "users", uid));
       if (newSnap.exists()) setUserData(newSnap.data());
@@ -858,7 +981,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
         if (change.type === "added") {
-          const notification = change.data();
+          const notification = change.doc.data();
           
           // Mostrar notificación del navegador
           if ("Notification" in window && Notification.permission === "granted") {
@@ -914,6 +1037,9 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
 
         console.log('Mensajes encontrados:', mensajes.length, mensajes);
 
+        // Actualizar contador de mensajes no leídos
+        setMensajesNoLeidos(mensajes.length);
+
         if (mensajes.length > 0) {
           setMensajesPendientes(mensajes);
           setMensajeActual(mensajes[0]);
@@ -941,6 +1067,9 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         leido: true,
         leidoEn: serverTimestamp()
       });
+
+      // Decrementar contador de mensajes no leídos
+      setMensajesNoLeidos(prev => Math.max(0, prev - 1));
 
       // Pasar al siguiente mensaje o cerrar modal
       const nextIndex = currentMensajeIndex + 1;
@@ -983,9 +1112,109 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         usuarioNombre: nombreCompleto
       });
 
+      // Enviar email a asesoramiento.ruiz@gmail.com
+      await addDoc(collection(db, 'mail'), {
+        to: emailNotificaciones,
+        message: {
+          subject: `🏋️ Solicitud de cambio de tabla GYM - ${nombreCompleto}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #2196F3; border-bottom: 3px solid #2196F3; padding-bottom: 10px;">
+                🏋️ Solicitud de Cambio de Tabla GYM
+              </h2>
+              
+              <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <p style="margin: 5px 0;"><strong>Usuario:</strong> ${nombreCompleto}</p>
+                <p style="margin: 5px 0;"><strong>Email:</strong> ${userData?.email || 'No disponible'}</p>
+              </div>
+              
+              <div style="margin: 20px 0;">
+                <h3 style="color: #333;">Motivo de la solicitud:</h3>
+                <div style="background-color: #fff; border-left: 4px solid #2196F3; padding: 15px; margin-top: 10px;">
+                  <p style="white-space: pre-wrap; line-height: 1.6; color: #555;">${solicitudTablaTexto.trim()}</p>
+                </div>
+              </div>
+              
+              <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #888; font-size: 12px;">
+                <p>Este email fue generado automáticamente por el sistema de gestión nutricional.</p>
+              </div>
+            </div>
+          `,
+          text: `SOLICITUD DE CAMBIO DE TABLA GYM\n\nUsuario: ${nombreCompleto}\nEmail: ${userData?.email || 'No disponible'}\n\nMotivo:\n${solicitudTablaTexto.trim()}`
+        }
+      });
+
       alert('✓ Solicitud enviada correctamente al nutricionista');
       setShowSolicitudTabla(false);
       setSolicitudTablaTexto('');
+    } catch (err) {
+      console.error('Error al enviar solicitud:', err);
+      alert('Error al enviar la solicitud. Por favor, inténtalo de nuevo.');
+    } finally {
+      setEnviandoSolicitud(false);
+    }
+  };
+
+  // Función para enviar solicitud de nueva tabla GYM
+  const handleEnviarSolicitudNuevaTabla = async () => {
+    setEnviandoSolicitud(true);
+    try {
+      const nombreCompleto = userData?.nombre && userData?.apellidos 
+        ? `${userData.apellidos}, ${userData.nombre}`
+        : userData?.email || 'Usuario sin nombre';
+      
+      const mensajeContenido = `🏋️ SOLICITUD DE NUEVA TABLA GYM\n\nUsuario: ${nombreCompleto}\n\nEl usuario ha solicitado que se le asigne una nueva tabla de ejercicios.`;
+
+      // Enviar mensaje a la colección mensajes_admin
+      await addDoc(collection(db, 'mensajes_admin'), {
+        contenido: mensajeContenido,
+        creadoEn: serverTimestamp(),
+        leido: false,
+        creadoPor: uid,
+        tipo: 'solicitud_nueva_tabla_gym',
+        usuarioNombre: nombreCompleto
+      });
+
+      // Enviar email a asesoramiento.ruiz@gmail.com
+      await addDoc(collection(db, 'mail'), {
+        to: emailNotificaciones,
+        message: {
+          subject: `🏋️ Solicitud de NUEVA tabla GYM - ${nombreCompleto}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #4CAF50; border-bottom: 3px solid #4CAF50; padding-bottom: 10px;">
+                🏋️ Solicitud de Nueva Tabla GYM
+              </h2>
+              
+              <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <p style="margin: 5px 0;"><strong>Usuario:</strong> ${nombreCompleto}</p>
+                <p style="margin: 5px 0;"><strong>Email:</strong> ${userData?.email || 'No disponible'}</p>
+                ${userData?.telefono ? `<p style="margin: 5px 0;"><strong>Teléfono:</strong> ${userData.telefono}</p>` : ''}
+              </div>
+              
+              <div style="background-color: #e8f5e9; border-left: 4px solid #4CAF50; padding: 15px; margin: 20px 0;">
+                <p style="margin: 0; color: #2e7d32; font-size: 15px;">
+                  <strong>ℹ️ El usuario ha solicitado que se le asigne una nueva tabla de ejercicios.</strong>
+                </p>
+              </div>
+              
+              <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
+                <p style="margin: 0; color: #856404; font-size: 14px;">
+                  💰 <strong>Próximos pasos:</strong> Contacta con el usuario para informarle sobre la tarifa y condiciones del servicio GYM.
+                </p>
+              </div>
+              
+              <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #888; font-size: 12px;">
+                <p>Este email fue generado automáticamente por el sistema de gestión nutricional.</p>
+              </div>
+            </div>
+          `,
+          text: `SOLICITUD DE NUEVA TABLA GYM\n\nUsuario: ${nombreCompleto}\nEmail: ${userData?.email || 'No disponible'}${userData?.telefono ? `\nTeléfono: ${userData.telefono}` : ''}\n\nEl usuario ha solicitado que se le asigne una nueva tabla de ejercicios.\n\nPróximos pasos: Contacta con el usuario para informarle sobre la tarifa y condiciones del servicio GYM.`
+        }
+      });
+
+      alert('✓ Solicitud enviada correctamente.\n\nEl nutricionista recibirá tu solicitud y se pondrá en contacto contigo para informarte sobre la tarifa y los siguientes pasos.');
+      setShowSolicitudNuevaTabla(false);
     } catch (err) {
       console.error('Error al enviar solicitud:', err);
       alert('Error al enviar la solicitud. Por favor, inténtalo de nuevo.');
@@ -2968,7 +3197,8 @@ Ruiz Nutrición
                   flexDirection: "column",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: "2px"
+                  gap: "2px",
+                  position: "relative"
                 }}
               >
                 {isMobile && adminMode ? (
@@ -2977,9 +3207,49 @@ Ruiz Nutrición
                     <span style={{ fontSize: "9px", lineHeight: "1.1" }}>
                       {t.label.replace(/^[^\s]+\s/, '')}
                     </span>
+                    {/* Badge de mensajes no leídos */}
+                    {t.id === 'mensajes' && mensajesNoLeidos > 0 && (
+                      <span style={{
+                        position: 'absolute',
+                        top: '2px',
+                        right: '2px',
+                        backgroundColor: '#f44336',
+                        color: 'white',
+                        borderRadius: '10px',
+                        padding: '2px 5px',
+                        fontSize: '9px',
+                        fontWeight: 'bold',
+                        minWidth: '16px',
+                        textAlign: 'center',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                      }}>
+                        {mensajesNoLeidos}
+                      </span>
+                    )}
                   </>
                 ) : (
-                  t.label
+                  <>
+                    {t.label}
+                    {/* Badge de mensajes no leídos */}
+                    {t.id === 'mensajes' && mensajesNoLeidos > 0 && (
+                      <span style={{
+                        position: 'absolute',
+                        top: '-6px',
+                        right: '-6px',
+                        backgroundColor: '#f44336',
+                        color: 'white',
+                        borderRadius: '10px',
+                        padding: '2px 6px',
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        minWidth: '18px',
+                        textAlign: 'center',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                      }}>
+                        {mensajesNoLeidos}
+                      </span>
+                    )}
+                  </>
                 )}
               </button>
             ))}
@@ -3777,39 +4047,387 @@ Ruiz Nutrición
           {tabs[tabIndex]?.id === "semana" && (
             <div className="card" style={{ width: "100%", maxWidth: "none", margin: "0", padding: "0", borderRadius: "0" }}>
               <div className="panel-section" style={{ padding: "16px 20px", maxWidth: "none" }}>
-                <h3 style={{ margin: "0 0 16px 0", fontSize: "16px", fontWeight: "600", color: "#15803d" }}>
-                  🍽️ Dieta semanal
-                </h3>
-
-                {/* Selector de tipo de menú (solo admin) */}
-                {adminMode && (
-                  <div style={{ marginBottom: "20px", padding: "12px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer", fontSize: "14px", fontWeight: "500" }}>
-                      <input
-                        type="checkbox"
-                        checked={tipoMenu === "vertical"}
-                        onChange={async (e) => {
-                          const nuevoTipo = e.target.checked ? "vertical" : "tabla";
-                          setTipoMenu(nuevoTipo);
-                          // Guardar en BD
+                {/* Título y selectores en una sola línea */}
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px", flexWrap: "wrap" }}>
+                  <h3 style={{ margin: "0", fontSize: "16px", fontWeight: "600", color: "#15803d" }}>
+                    🍽️ Dieta semanal
+                  </h3>
+                  
+                  {adminMode && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <button 
+                        onClick={async () => {
+                          setTipoMenu("tabla");
+                          setModoManual(false);
                           try {
                             await updateDoc(doc(db, "users", uid), {
-                              tipoMenu: nuevoTipo,
+                              tipoMenu: "tabla",
+                              modoManual: false,
                               updatedAt: serverTimestamp()
                             });
                           } catch (err) {
                             console.error("Error guardando tipo de menú:", err);
                           }
                         }}
-                        style={{ width: "18px", height: "18px", cursor: "pointer" }}
-                      />
-                      <span>Usar formato de opciones múltiples (el cliente puede elegir entre varias opciones por comida)</span>
-                    </label>
-                  </div>
-                )}
+                        title="Modo desplegable"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          padding: "0",
+                          margin: "0",
+                          backgroundColor: tipoMenu === "tabla" && !modoManual ? "#dcfce7" : "#f0fdf4",
+                          borderRadius: "6px",
+                          border: `2px solid ${tipoMenu === "tabla" && !modoManual ? "#16a34a" : "#bbf7d0"}`,
+                          fontSize: "20px",
+                          width: "40px",
+                          height: "40px",
+                          boxSizing: "border-box",
+                          flexShrink: 0,
+                          outline: "none"
+                        }}
+                      >
+                        📋
+                      </button>
+                      
+                      <button 
+                        onClick={async () => {
+                          setTipoMenu("vertical");
+                          setModoManual(false);
+                          try {
+                            await updateDoc(doc(db, "users", uid), {
+                              tipoMenu: "vertical",
+                              modoManual: false,
+                              updatedAt: serverTimestamp()
+                            });
+                          } catch (err) {
+                            console.error("Error guardando tipo de menú:", err);
+                          }
+                        }}
+                        title="Opciones múltiples"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          padding: "0",
+                          margin: "0",
+                          backgroundColor: tipoMenu === "vertical" ? "#dcfce7" : "#f0fdf4",
+                          borderRadius: "6px",
+                          border: `2px solid ${tipoMenu === "vertical" ? "#16a34a" : "#bbf7d0"}`,
+                          fontSize: "20px",
+                          width: "40px",
+                          height: "40px",
+                          boxSizing: "border-box",
+                          flexShrink: 0,
+                          outline: "none"
+                        }}
+                      >
+                        📖
+                      </button>
+                      
+                      <button 
+                        onClick={async () => {
+                          setModoManual(true);
+                          setTipoMenu("tabla");
+                          try {
+                            await updateDoc(doc(db, "users", uid), {
+                              modoManual: true,
+                              tipoMenu: "tabla",
+                              updatedAt: serverTimestamp()
+                            });
+                          } catch (err) {
+                            console.error("Error guardando modo manual:", err);
+                          }
+                        }}
+                        title="Modo manual"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          padding: "0",
+                          margin: "0",
+                          backgroundColor: modoManual ? "#dcfce7" : "#f0fdf4",
+                          borderRadius: "6px",
+                          border: `2px solid ${modoManual ? "#16a34a" : "#bbf7d0"}`,
+                          fontSize: "20px",
+                          width: "40px",
+                          height: "40px",
+                          boxSizing: "border-box",
+                          flexShrink: 0,
+                          outline: "none"
+                        }}
+                      >
+                        ✍️
+                      </button>
+                      
+                      <button 
+                        onClick={saveVersionMenu}
+                        title="Guardar Dieta"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          padding: "0",
+                          margin: "0",
+                          backgroundColor: "#16a34a",
+                          borderRadius: "6px",
+                          border: "2px solid #16a34a",
+                          color: "white",
+                          fontSize: "20px",
+                          width: "40px",
+                          height: "40px",
+                          boxSizing: "border-box",
+                          flexShrink: 0,
+                          outline: "none"
+                        }}
+                      >
+                        💾
+                      </button>
+                      
+                      {saveLabel && (
+                        <div style={{
+                          backgroundColor: saveLabel.includes("✅") || saveLabel.includes("Guardado") ? "#48bb78" : "#718096",
+                          color: "white",
+                          padding: "6px 14px",
+                          borderRadius: "6px",
+                          fontSize: "13px",
+                          fontWeight: "500",
+                          boxShadow: "0 2px 6px rgba(0,0,0,0.1)"
+                        }}>
+                          {saveLabel}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
 
-                {/* Vista ADMIN: Tabla horizontal de toda la semana */}
-                {adminMode && tipoMenu === "tabla" ? (
+                {/* Editor Modo Manual */}
+                {adminMode && modoManual ? (
+                  <div style={{ marginTop: "20px" }}>
+                    {/* Barra de herramientas de formato */}
+                    <div style={{
+                      display: "flex",
+                      gap: "6px",
+                      padding: "8px",
+                      backgroundColor: "#f8fafc",
+                      borderRadius: "6px 6px 0 0",
+                      border: "1px solid #e5e7eb",
+                      borderBottom: "1px solid #e5e7eb",
+                      alignItems: "center"
+                    }}>
+                      <button
+                        onClick={() => document.execCommand('bold', false, null)}
+                        style={{
+                          padding: "6px 10px",
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "4px",
+                          backgroundColor: "white",
+                          cursor: "pointer",
+                          fontWeight: "bold",
+                          fontSize: "13px"
+                        }}
+                        title="Negrita"
+                      >
+                        <strong>N</strong>
+                      </button>
+                      <button
+                        onClick={() => document.execCommand('italic', false, null)}
+                        style={{
+                          padding: "6px 10px",
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "4px",
+                          backgroundColor: "white",
+                          cursor: "pointer",
+                          fontStyle: "italic",
+                          fontSize: "13px"
+                        }}
+                        title="Cursiva"
+                      >
+                        <em>C</em>
+                      </button>
+                      <button
+                        onClick={() => document.execCommand('underline', false, null)}
+                        style={{
+                          padding: "6px 10px",
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "4px",
+                          backgroundColor: "white",
+                          cursor: "pointer",
+                          textDecoration: "underline",
+                          fontSize: "13px"
+                        }}
+                        title="Subrayado"
+                      >
+                        S
+                      </button>
+                      <div style={{ width: "1px", backgroundColor: "#cbd5e1", height: "24px", margin: "0 2px" }}></div>
+                      <input
+                        type="color"
+                        onChange={(e) => document.execCommand('foreColor', false, e.target.value)}
+                        style={{
+                          width: "32px",
+                          height: "28px",
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "4px",
+                          cursor: "pointer"
+                        }}
+                        title="Color de texto"
+                      />
+                      <input
+                        type="color"
+                        onChange={(e) => document.execCommand('backColor', false, e.target.value)}
+                        style={{
+                          width: "32px",
+                          height: "28px",
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "4px",
+                          cursor: "pointer"
+                        }}
+                        title="Color de fondo"
+                      />
+                    </div>
+                    
+                    <div 
+                      ref={editorManualRef}
+                      contentEditable
+                      suppressContentEditableWarning
+                      style={{
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "8px",
+                        padding: "16px",
+                        minHeight: "400px",
+                        backgroundColor: "white",
+                        overflowX: "auto"
+                      }}
+                      dangerouslySetInnerHTML={{ __html: contenidoManual || `
+                        <style>
+                          table { 
+                            width: 100%; 
+                            border-collapse: collapse; 
+                            font-family: Arial, sans-serif; 
+                            font-size: 13px; 
+                            table-layout: fixed; 
+                          }
+                          th, td { 
+                            border: 1px solid #ddd; 
+                            padding: 8px; 
+                            vertical-align: top; 
+                            word-break: break-word;
+                          }
+                          th { 
+                            background-color: #15803d; 
+                            color: white; 
+                            text-align: center; 
+                            font-weight: 600;
+                          }
+                          td:first-child { 
+                            font-weight: 600; 
+                            background-color: #f0fdf4; 
+                            text-align: center;
+                            width: 100px; 
+                          }
+                          td:not(:first-child) { 
+                            min-height: 80px;
+                            height: auto;
+                          }
+                        </style>
+                        <table>
+                          <thead>
+                            <tr>
+                              <th style="width: 120px;">COMIDA</th>
+                              <th>LUNES</th>
+                              <th>MARTES</th>
+                              <th>MIÉRCOLES</th>
+                              <th>JUEVES</th>
+                              <th>VIERNES</th>
+                              <th>SÁBADO</th>
+                              <th>DOMINGO</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td>DESAYUNO</td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                            </tr>
+                            <tr>
+                              <td>ALMUERZO</td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                            </tr>
+                            <tr>
+                              <td>COMIDA</td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                            </tr>
+                            <tr>
+                              <td>MERIENDA</td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                            </tr>
+                            <tr>
+                              <td>CENA</td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                            </tr>
+                            <tr>
+                              <td style="background-color: #fff7ed;">TIPS</td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                              <td><br></td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      ` }}
+                      style={{
+                        border: "1px solid #e5e7eb",
+                        borderRadius: "0 0 6px 6px",
+                        padding: "16px",
+                        minHeight: "500px",
+                        backgroundColor: "white",
+                        outline: "none",
+                        overflowX: "auto"
+                      }}
+                    />
+                    
+                    <div style={{ marginTop: "12px", fontSize: "13px", color: "#64748b", padding: "12px", backgroundColor: "#f8fafc", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+                      💡 <strong>Instrucciones:</strong> Haz clic en cualquier celda para editar el contenido. Puedes escribir, dar formato, añadir listas, etc. El contenido se guardará tal como lo veas.
+                    </div>
+                  </div>
+                ) : adminMode && tipoMenu === "tabla" ? (
                   <div style={{ overflowX: "auto", width: "100%" }}>
                     <table style={{
                       width: "100%",
@@ -4639,70 +5257,8 @@ Ruiz Nutrición
                   </>
                 )}
 
-                  {/* Botones flotantes para Dieta Semanal (solo admin) */}
-                  {adminMode && (
-                    <div style={{
-                      position: "fixed",
-                      bottom: "30px",
-                      right: "30px",
-                      zIndex: 1000,
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "flex-end",
-                      gap: "10px"
-                    }}>
-                      {saveLabel && (
-                        <div style={{
-                          backgroundColor: saveLabel.includes("✅") || saveLabel.includes("Guardado") ? "#48bb78" : "#718096",
-                          color: "white",
-                          padding: "8px 16px",
-                          borderRadius: "6px",
-                          fontSize: "14px",
-                          fontWeight: "500",
-                          boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
-                        }}>
-                          {saveLabel}
-                        </div>
-                      )}
-                      <button 
-                        className="btn primary" 
-                        onClick={saveVersionMenu}
-                        style={{
-                          backgroundColor: "#4299e1",
-                          color: "white",
-                          padding: "14px 28px",
-                          borderRadius: "8px",
-                          border: "none",
-                          cursor: "pointer",
-                          fontWeight: "600",
-                          fontSize: "16px",
-                          boxShadow: "0 4px 12px rgba(66, 153, 225, 0.4)",
-                          transition: "all 0.3s ease",
-                        }}
-                      >
-                        💾 Guardar versión
-                      </button>
-                      <button 
-                        className="btn ghost" 
-                        onClick={saveSemana}
-                        style={{
-                          backgroundColor: "#48bb78",
-                          color: "white",
-                          padding: "12px 24px",
-                          borderRadius: "6px",
-                          border: "none",
-                          cursor: "pointer",
-                          fontWeight: "500",
-                          fontSize: "14px",
-                          boxShadow: "0 2px 8px rgba(72, 187, 120, 0.3)",
-                        }}
-                      >
-                        📝 Guardar menú
-                      </button>
-                    </div>
-                  )}
-
                   <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center" }}>
+
                     <div style={{ display: "flex", gap: 8 }}>
                       <button className="btn ghost" onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.max(0, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) - 1) }))}>Día anterior</button>
                       <button className="btn ghost" onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.min(6, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) + 1) }))}>Siguiente día</button>
@@ -5244,6 +5800,36 @@ Ruiz Nutrición
                         ? "Ve a la sección GYM del panel de admin para asignar ejercicios"
                         : "Consulta con tu nutricionista"}
                     </p>
+                    {!adminMode && (
+                      <button
+                        onClick={() => setShowSolicitudNuevaTabla(true)}
+                        style={{
+                          marginTop: "24px",
+                          padding: "12px 24px",
+                          fontSize: "15px",
+                          fontWeight: "600",
+                          color: "white",
+                          backgroundColor: "#4CAF50",
+                          border: "none",
+                          borderRadius: "8px",
+                          cursor: "pointer",
+                          transition: "all 0.2s",
+                          boxShadow: "0 2px 8px rgba(76,175,80,0.3)"
+                        }}
+                        onMouseEnter={(e) => {
+                          e.target.style.backgroundColor = "#45a049";
+                          e.target.style.transform = "translateY(-2px)";
+                          e.target.style.boxShadow = "0 4px 12px rgba(76,175,80,0.4)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.backgroundColor = "#4CAF50";
+                          e.target.style.transform = "translateY(0)";
+                          e.target.style.boxShadow = "0 2px 8px rgba(76,175,80,0.3)";
+                        }}
+                      >
+                        ✨ Solicitar nueva tabla GYM
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -6075,6 +6661,127 @@ Ruiz Nutrición
                 }}
               >
                 {enviandoSolicitud ? '⏳ Enviando...' : '📤 Enviar solicitud'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de solicitud de NUEVA tabla GYM */}
+      {showSolicitudNuevaTabla && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '20px'
+          }}
+          onClick={() => !enviandoSolicitud && setShowSolicitudNuevaTabla(false)}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '15px',
+              padding: isMobile ? '24px' : '32px',
+              maxWidth: '500px',
+              width: '100%',
+              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)',
+              animation: 'slideIn 0.3s ease-out'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <div style={{ fontSize: '64px', marginBottom: '12px' }}>🏋️</div>
+              <h2
+                style={{
+                  margin: '0 0 8px 0',
+                  color: '#2c3e50',
+                  fontSize: isMobile ? '20px' : '24px',
+                  fontWeight: '700'
+                }}
+              >
+                Solicitar Nueva Tabla GYM
+              </h2>
+              <p style={{ margin: 0, color: '#7f8c8d', fontSize: '14px', lineHeight: '1.5' }}>
+                ¿Estás interesado en comenzar con entrenamientos personalizados?
+              </p>
+            </div>
+
+            <div
+              style={{
+                backgroundColor: '#e8f5e9',
+                borderLeft: '4px solid #4CAF50',
+                padding: '16px',
+                borderRadius: '8px',
+                marginBottom: '24px'
+              }}
+            >
+              <p style={{ margin: '0 0 10px 0', color: '#2e7d32', fontSize: '14px', fontWeight: '600' }}>
+                ℹ️ Información importante:
+              </p>
+              <ul style={{ margin: 0, paddingLeft: '20px', color: '#555', fontSize: '13px', lineHeight: '1.6' }}>
+                <li>Tu solicitud será enviada al nutricionista</li>
+                <li>Recibirás información sobre tarifas y condiciones</li>
+                <li>El nutricionista te contactará para confirmar el servicio</li>
+              </ul>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setShowSolicitudNuevaTabla(false)}
+                disabled={enviandoSolicitud}
+                style={{
+                  flex: 1,
+                  padding: '14px 20px',
+                  backgroundColor: '#f5f5f5',
+                  color: '#666',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  fontSize: '15px',
+                  fontWeight: '600',
+                  cursor: enviandoSolicitud ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                  opacity: enviandoSolicitud ? 0.5 : 1
+                }}
+                onMouseOver={(e) => !enviandoSolicitud && (e.target.style.backgroundColor = '#e5e5e5')}
+                onMouseOut={(e) => !enviandoSolicitud && (e.target.style.backgroundColor = '#f5f5f5')}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleEnviarSolicitudNuevaTabla}
+                disabled={enviandoSolicitud}
+                style={{
+                  flex: 1,
+                  padding: '14px 20px',
+                  backgroundColor: enviandoSolicitud ? '#ccc' : '#4CAF50',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '15px',
+                  fontWeight: '600',
+                  cursor: enviandoSolicitud ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseOver={(e) => {
+                  if (!enviandoSolicitud) {
+                    e.target.style.backgroundColor = '#45a049';
+                  }
+                }}
+                onMouseOut={(e) => {
+                  if (!enviandoSolicitud) {
+                    e.target.style.backgroundColor = '#4CAF50';
+                  }
+                }}
+              >
+                {enviandoSolicitud ? '⏳ Enviando...' : '✨ Solicitar tabla'}
               </button>
             </div>
           </div>

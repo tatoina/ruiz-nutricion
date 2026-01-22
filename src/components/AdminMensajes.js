@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, query, orderBy } from 'firebase/firestore';
-import { db } from '../Firebase';
+import { db, storage } from '../Firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useDevice } from '../hooks/useDevice';
 import { useNavigate } from 'react-router-dom';
 
@@ -23,6 +24,8 @@ export default function AdminMensajes() {
   const [loadingSolicitudes, setLoadingSolicitudes] = useState(false);
   const [mensajesAdmin, setMensajesAdmin] = useState([]);
   const [filterMensajes, setFilterMensajes] = useState('todos'); // 'todos', 'leidos', 'no_leidos'
+  const [archivosAdjuntos, setArchivosAdjuntos] = useState([]);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Cargar usuarios y solicitudes
   useEffect(() => {
@@ -133,9 +136,89 @@ export default function AdminMensajes() {
     }
   };
 
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    
+    // Validar tipos de archivo
+    const allowedTypes = [
+      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+      'video/mp4', 'video/webm', 'video/quicktime',
+      'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    ];
+
+    const validFiles = files.filter(file => {
+      if (!allowedTypes.includes(file.type)) {
+        setError(`Tipo de archivo no permitido: ${file.name}`);
+        return false;
+      }
+      
+      // Límites de tamaño según tipo de archivo
+      let maxSize;
+      let maxSizeLabel;
+      
+      if (file.type.startsWith('video/')) {
+        maxSize = 10 * 1024 * 1024; // 10MB para videos (recetas/ejercicios)
+        maxSizeLabel = '10MB';
+      } else if (file.type.startsWith('image/')) {
+        maxSize = 5 * 1024 * 1024; // 5MB para imágenes
+        maxSizeLabel = '5MB';
+      } else {
+        maxSize = 10 * 1024 * 1024; // 10MB para documentos
+        maxSizeLabel = '10MB';
+      }
+      
+      if (file.size > maxSize) {
+        setError(`${file.name} es muy grande (máx ${maxSizeLabel} para este tipo de archivo)`);
+        return false;
+      }
+      
+      return true;
+    });
+
+    setArchivosAdjuntos([...archivosAdjuntos, ...validFiles]);
+  };
+
+  const removeFile = (index) => {
+    setArchivosAdjuntos(archivosAdjuntos.filter((_, i) => i !== index));
+  };
+
+  const uploadFiles = async () => {
+    if (archivosAdjuntos.length === 0) return [];
+
+    const uploadedFiles = [];
+    const totalFiles = archivosAdjuntos.length;
+
+    for (let i = 0; i < archivosAdjuntos.length; i++) {
+      const file = archivosAdjuntos[i];
+      const timestamp = Date.now();
+      const fileName = `recursos/${timestamp}_${file.name}`;
+      const storageRef = ref(storage, fileName);
+
+      try {
+        await uploadBytes(storageRef, file);
+        const url = await getDownloadURL(storageRef);
+        
+        uploadedFiles.push({
+          nombre: file.name,
+          url: url,
+          tipo: file.type,
+          tamaño: file.size
+        });
+
+        setUploadProgress(Math.round(((i + 1) / totalFiles) * 100));
+      } catch (err) {
+        console.error('Error al subir archivo:', file.name, err);
+        throw new Error(`Error al subir ${file.name}`);
+      }
+    }
+
+    return uploadedFiles;
+  };
+
   const handleEnviarMensaje = async (tipo) => {
-    if (!mensaje.trim()) {
-      setError('Por favor escribe un mensaje');
+    if (!mensaje.trim() && archivosAdjuntos.length === 0) {
+      setError('Por favor escribe un mensaje o adjunta un archivo');
       return;
     }
 
@@ -147,14 +230,26 @@ export default function AdminMensajes() {
     setLoading(true);
     setError('');
     setSuccess('');
+    setUploadProgress(0);
 
     try {
+      // Subir archivos si hay
+      let archivosSubidos = [];
+      if (archivosAdjuntos.length > 0) {
+        archivosSubidos = await uploadFiles();
+      }
+
       const mensajeData = {
         contenido: mensaje.trim(),
         creadoEn: serverTimestamp(),
         leido: false,
         creadoPor: 'admin'
       };
+
+      // Agregar archivos adjuntos si hay
+      if (archivosSubidos.length > 0) {
+        mensajeData.archivos = archivosSubidos;
+      }
 
       if (tipo === 'seleccionados') {
         // Enviar a usuarios seleccionados
@@ -179,12 +274,14 @@ export default function AdminMensajes() {
       // Limpiar formulario
       setMensaje('');
       setSelectedUserIds([]);
+      setArchivosAdjuntos([]);
+      setUploadProgress(0);
 
       // Ocultar mensaje de éxito después de 3 segundos
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error('Error al enviar mensaje:', err);
-      setError('Error al enviar el mensaje');
+      setError(err.message || 'Error al enviar el mensaje');
     } finally {
       setLoading(false);
     }
@@ -293,6 +390,175 @@ export default function AdminMensajes() {
             onFocus={(e) => e.target.style.borderColor = '#2196F3'}
             onBlur={(e) => e.target.style.borderColor = '#e0e0e0'}
           />
+        </div>
+
+        {/* Sección para adjuntar archivos */}
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{
+            display: 'block',
+            marginBottom: '8px',
+            fontSize: '14px',
+            fontWeight: '600',
+            color: '#555'
+          }}>
+            Adjuntar archivos (opcional):
+          </label>
+          
+          <input
+            type="file"
+            multiple
+            accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx"
+            onChange={handleFileSelect}
+            style={{ display: 'none' }}
+            id="file-upload"
+          />
+          
+          <label
+            htmlFor="file-upload"
+            style={{
+              display: 'inline-block',
+              padding: '10px 16px',
+              fontSize: '14px',
+              fontWeight: '600',
+              color: '#2196F3',
+              backgroundColor: '#f0f9ff',
+              border: '2px dashed #2196F3',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+            onMouseOver={(e) => {
+              e.target.style.backgroundColor = '#e0f2fe';
+              e.target.style.borderColor = '#1976D2';
+            }}
+            onMouseOut={(e) => {
+              e.target.style.backgroundColor = '#f0f9ff';
+              e.target.style.borderColor = '#2196F3';
+            }}
+          >
+            📎 Seleccionar archivos
+          </label>
+          
+          <div style={{
+            fontSize: '12px',
+            color: '#666',
+            marginTop: '8px'
+          }}>
+            📷 Imágenes: máx 5MB | 🎥 Videos: máx 10MB | 📄 Documentos: máx 10MB
+          </div>
+
+          {/* Lista de archivos seleccionados */}
+          {archivosAdjuntos.length > 0 && (
+            <div style={{
+              marginTop: '12px',
+              padding: '12px',
+              backgroundColor: '#f9f9f9',
+              borderRadius: '8px',
+              border: '1px solid #e0e0e0'
+            }}>
+              <div style={{
+                fontSize: '13px',
+                fontWeight: '600',
+                color: '#555',
+                marginBottom: '8px'
+              }}>
+                Archivos adjuntos ({archivosAdjuntos.length}):
+              </div>
+              {archivosAdjuntos.map((file, index) => (
+                <div
+                  key={index}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '8px',
+                    backgroundColor: 'white',
+                    borderRadius: '6px',
+                    marginBottom: '6px',
+                    border: '1px solid #e0e0e0'
+                  }}
+                >
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    flex: 1
+                  }}>
+                    <span style={{ fontSize: '16px' }}>
+                      {file.type.startsWith('image/') ? '🖼️' :
+                       file.type.startsWith('video/') ? '🎥' :
+                       file.type.includes('pdf') ? '📄' : '📎'}
+                    </span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{
+                        fontSize: '13px',
+                        color: '#2c3e50',
+                        wordBreak: 'break-word'
+                      }}>
+                        {file.name}
+                      </div>
+                      <div style={{
+                        fontSize: '11px',
+                        color: '#999'
+                      }}>
+                        {(file.size / 1024).toFixed(1)} KB
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => removeFile(index)}
+                    style={{
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      color: '#f44336',
+                      backgroundColor: 'transparent',
+                      border: '1px solid #f44336',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseOver={(e) => {
+                      e.target.style.backgroundColor = '#f44336';
+                      e.target.style.color = 'white';
+                    }}
+                    onMouseOut={(e) => {
+                      e.target.style.backgroundColor = 'transparent';
+                      e.target.style.color = '#f44336';
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Barra de progreso de subida */}
+          {loading && uploadProgress > 0 && uploadProgress < 100 && (
+            <div style={{ marginTop: '12px' }}>
+              <div style={{
+                fontSize: '12px',
+                color: '#666',
+                marginBottom: '4px'
+              }}>
+                Subiendo archivos... {uploadProgress}%
+              </div>
+              <div style={{
+                width: '100%',
+                height: '6px',
+                backgroundColor: '#e0e0e0',
+                borderRadius: '3px',
+                overflow: 'hidden'
+              }}>
+                <div style={{
+                  width: `${uploadProgress}%`,
+                  height: '100%',
+                  backgroundColor: '#2196F3',
+                  transition: 'width 0.3s'
+                }} />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Selector de usuarios con checkboxes */}
