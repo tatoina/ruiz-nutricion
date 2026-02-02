@@ -15,7 +15,7 @@ const tabs = [
   { name: "Ejercicios", comp: EjerciciosForm },
   { name: "Recetas", comp: RecetasForm },
   { name: "Dieta actual", comp: DietaActualForm },
-  { name: "MSG", comp: MensajesUsuario },
+  // { name: "MSG", comp: MensajesUsuario }, // Eliminado para dejar solo el acceso desde el botón junto a salir
   { name: "Anamnesis", comp: AnamnesisForm, adminOnly: true }
 ];
 

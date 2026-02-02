@@ -1,3 +1,12 @@
+import { Line } from 'react-chartjs-2';
+import MenuSelector from "./MenuSelector";
+import ListaCompra from "./ListaCompra";
+import FileManager from "./FileManager";
+import AnamnesisForm from "./AnamnesisForm";
+import AdminPagos from "./AdminPagos";
+import MensajesUsuario from "./MensajesUsuario";
+import CitaReminder from "./CitaReminder";
+import HelpForm from "./HelpForm";
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import "./estilos.css";
 import { auth, db } from "../Firebase";
@@ -17,44 +26,26 @@ import {
   onSnapshot,
   addDoc,
 } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 import { useNavigate } from "react-router-dom";
 import { useDevice } from "../hooks/useDevice";
 import logger from "../utils/logger";
 
 import {
-  Chart as ChartJS,
-  LineElement,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  Title,
-  Tooltip,
-  Legend,
+	Chart as ChartJS,
+	LineElement,
+	CategoryScale,
+	LinearScale,
+	PointElement
 } from "chart.js";
-import { Line } from "react-chartjs-2";
-import DriveFolderViewer from "./DriveFolderViewer";
-import AnamnesisForm from "./AnamnesisForm";
-import AdminPagos from "./AdminPagos";
-import FileManager from "./FileManager";
-import MenuSelector from "./MenuSelector";
-import ListaCompra from "./ListaCompra";
-import CitaReminder from "./CitaReminder";
-import MensajesUsuario from "./MensajesUsuario";
-ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement, Title, Tooltip, Legend);
 
-/**
- * src/components/FichaUsuario.js
- *
- * Basado en la versión 79 que proporcionaste, con:
- * - botón "Nuevo cliente" en cabecera (solo visible para admin@admin.es)
- * - uso de useNavigate para navegar a /register
- * - ajuste del contenedor del gráfico (clase .chart-container)
- *
- * Esta es la versión completa listada línea a línea (sin omisiones).
- */
+// Registro obligatorio de elementos para Chart.js v3+
+ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement);
 
-export default function FichaUsuario({ targetUid = null, adminMode = false }) {
+export default function FichaUsuario(props) {
+  const { targetUid = null, adminMode = false } = props;
+  const [showHelpModal, setShowHelpModal] = useState(false);
   const navigate = useNavigate();
   const { isMobile } = useDevice();
 
@@ -124,7 +115,12 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     comida: [],
     merienda: [],
     cena: [],
-    consejos: []
+    consejos: "",
+    desayuno_notas: "",
+    almuerzo_notas: "",
+    comida_notas: "",
+    merienda_notas: "",
+    cena_notas: ""
   });
   
   // Estado para modo manual (editor tipo Word)
@@ -192,11 +188,33 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
   const [solicitudTablaTexto, setSolicitudTablaTexto] = useState('');
   const [enviandoSolicitud, setEnviandoSolicitud] = useState(false);
   
+  // Estados para solicitud de cambio de dieta
+  const [showSolicitudDieta, setShowSolicitudDieta] = useState(false);
+  const [solicitudDietaTexto, setSolicitudDietaTexto] = useState('');
+  
   // Estados para solicitud de nueva tabla GYM
   const [showSolicitudNuevaTabla, setShowSolicitudNuevaTabla] = useState(false);
   
-  // Email de notificaciones configurado por el admin
-  const [emailNotificaciones, setEmailNotificaciones] = useState('inaviciba@gmail.com');
+  // Email de notificaciones global, leído del perfil del admin
+  const [emailNotificaciones, setEmailNotificaciones] = useState('asesoramiento.ruiz@gmail.com');
+
+  // Al cargar el componente, buscar el email de notificaciones del perfil admin
+  useEffect(() => {
+    const fetchAdminEmail = async () => {
+      try {
+        const adminDoc = await getDoc(doc(db, 'users', 'admin@admin.es'));
+        if (adminDoc.exists()) {
+          const data = adminDoc.data();
+          if (data.emailNotificaciones && typeof data.emailNotificaciones === 'string') {
+            setEmailNotificaciones(data.emailNotificaciones);
+          }
+        }
+      } catch (err) {
+        // Si falla, se mantiene el valor por defecto
+      }
+    };
+    fetchAdminEmail();
+  }, []);
 
   // Calcular campos automáticamente cuando cambian peso, altura o porcentajes
   useEffect(() => {
@@ -388,14 +406,23 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           
           // Cargar tipo de menú y menú vertical
           setTipoMenu(data.tipoMenu || "tabla");
-          setMenuVertical(data.menuVertical || {
-            desayuno: [],
-            almuerzo: [],
-            comida: [],
-            merienda: [],
-            cena: [],
-            consejos: []
-          });
+          
+          // Normalizar menuVertical para asegurar que todas las propiedades sean arrays
+          const menuVerticalData = data.menuVertical || {};
+          const normalizedMenuVertical = {
+            desayuno: Array.isArray(menuVerticalData.desayuno) ? menuVerticalData.desayuno : [],
+            almuerzo: Array.isArray(menuVerticalData.almuerzo) ? menuVerticalData.almuerzo : [],
+            comida: Array.isArray(menuVerticalData.comida) ? menuVerticalData.comida : [],
+            merienda: Array.isArray(menuVerticalData.merienda) ? menuVerticalData.merienda : [],
+            cena: Array.isArray(menuVerticalData.cena) ? menuVerticalData.cena : [],
+            consejos: typeof menuVerticalData.consejos === 'string' ? menuVerticalData.consejos : (menuVerticalData.consejos || ""),
+            desayuno_notas: menuVerticalData.desayuno_notas || "",
+            almuerzo_notas: menuVerticalData.almuerzo_notas || "",
+            comida_notas: menuVerticalData.comida_notas || "",
+            merienda_notas: menuVerticalData.merienda_notas || "",
+            cena_notas: menuVerticalData.cena_notas || ""
+          };
+          setMenuVertical(normalizedMenuVertical);
           
           // Cargar modo manual
           setModoManual(data.modoManual || false);
@@ -483,9 +510,24 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
             setTipoMenu(data.tipoMenu);
           }
           
-          // Actualizar menú vertical
-          if (data.menuVertical !== undefined) {
-            setMenuVertical(data.menuVertical);
+          // Actualizar menú vertical solo si no estamos en modo admin editando
+          // Para evitar que se sobrescriba mientras el admin está seleccionando opciones
+          if (data.menuVertical !== undefined && !adminMode) {
+            const menuVerticalData = data.menuVertical || {};
+            const normalizedMenuVertical = {
+              desayuno: Array.isArray(menuVerticalData.desayuno) ? menuVerticalData.desayuno : [],
+              almuerzo: Array.isArray(menuVerticalData.almuerzo) ? menuVerticalData.almuerzo : [],
+              comida: Array.isArray(menuVerticalData.comida) ? menuVerticalData.comida : [],
+              merienda: Array.isArray(menuVerticalData.merienda) ? menuVerticalData.merienda : [],
+              cena: Array.isArray(menuVerticalData.cena) ? menuVerticalData.cena : [],
+              consejos: typeof menuVerticalData.consejos === 'string' ? menuVerticalData.consejos : (menuVerticalData.consejos || ""),
+              desayuno_notas: menuVerticalData.desayuno_notas || "",
+              almuerzo_notas: menuVerticalData.almuerzo_notas || "",
+              comida_notas: menuVerticalData.comida_notas || "",
+              merienda_notas: menuVerticalData.merienda_notas || "",
+              cena_notas: menuVerticalData.cena_notas || ""
+            };
+            setMenuVertical(normalizedMenuVertical);
           }
           
           // Actualizar menú normal
@@ -568,7 +610,8 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     }, 1200);
 
     return () => { if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; } };
-  }, [editable.menu, uid, emptyDayMenu]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editable.menu, uid]);
 
   const saveSemana = useCallback(async () => {
     if (!uid) { setError("Usuario objetivo no disponible."); return; }
@@ -592,7 +635,8 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
       logger.error("[FichaUsuario] saveSemana error:", err);
       setSaveStatus("error"); setError(err?.message || "No se pudo guardar el menú semanal.");
     }
-  }, [uid, emptyDayMenu, editable.menu]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uid, editable.menu]);
 
   // Función para enviar email de notificación de dieta actualizada
   const sendDietUpdateEmail = async (userEmail, userName) => {
@@ -1019,9 +1063,9 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     return () => clearInterval(interval);
   }, [notificationsEnabled, checkUpcomingAppointments]);
 
-  // Cargar mensajes pendientes al abrir la app
+  // Cargar mensajes pendientes al abrir la app (solo si NO es admin)
   useEffect(() => {
-    if (!uid) return;
+    if (!uid || adminMode) return;
 
     const loadMensajes = async () => {
       try {
@@ -1054,7 +1098,7 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
     };
 
     loadMensajes();
-  }, [uid]);
+  }, [uid, adminMode]);
 
   // Función para marcar mensaje como leído y pasar al siguiente
   const handleCerrarMensaje = async () => {
@@ -1144,9 +1188,109 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
         }
       });
 
+      // Enviar notificación push al admin
+      try {
+        console.log('📱 Intentando enviar push al admin...');
+        const functions = getFunctions();
+        const sendPushToAdmin = httpsCallable(functions, 'sendPushToAdmin');
+        const result = await sendPushToAdmin({
+          title: '🏋️ SOLICITUD DE CAMBIO DE TABLA GYM',
+          body: `${nombreCompleto} ha solicitado un cambio en su tabla de ejercicios`
+        });
+        console.log('✅ Push al admin enviado:', result);
+      } catch (pushError) {
+        console.error('❌ Error enviando push al admin:', pushError);
+        console.error('Detalles del error:', pushError.message, pushError.code);
+        // No interrumpir el flujo si falla el push
+      }
+
       alert('✓ Solicitud enviada correctamente al nutricionista');
       setShowSolicitudTabla(false);
       setSolicitudTablaTexto('');
+    } catch (err) {
+      console.error('Error al enviar solicitud:', err);
+      alert('Error al enviar la solicitud. Por favor, inténtalo de nuevo.');
+    } finally {
+      setEnviandoSolicitud(false);
+    }
+  };
+
+  // Función para enviar solicitud de cambio de dieta
+  const handleEnviarSolicitudDieta = async () => {
+    if (!solicitudDietaTexto.trim()) {
+      alert('Por favor, escribe el motivo de tu solicitud');
+      return;
+    }
+
+    setEnviandoSolicitud(true);
+    try {
+      const nombreCompleto = userData?.nombre && userData?.apellidos 
+        ? `${userData.apellidos}, ${userData.nombre}`
+        : userData?.email || 'Usuario sin nombre';
+      
+      const mensajeContenido = `🍽️ SOLICITUD DE CAMBIO DE DIETA\n\nUsuario: ${nombreCompleto}\n\nMotivo:\n${solicitudDietaTexto.trim()}`;
+
+      // Enviar mensaje a la colección mensajes_admin
+      await addDoc(collection(db, 'mensajes_admin'), {
+        contenido: mensajeContenido,
+        creadoEn: serverTimestamp(),
+        leido: false,
+        creadoPor: uid,
+        tipo: 'solicitud_cambio_dieta',
+        usuarioNombre: nombreCompleto
+      });
+
+      // Enviar email al nutricionista
+      await addDoc(collection(db, 'mail'), {
+        to: emailNotificaciones,
+        message: {
+          subject: `🍽️ Solicitud de cambio de dieta - ${nombreCompleto}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #16a34a; border-bottom: 3px solid #16a34a; padding-bottom: 10px;">
+                🍽️ Solicitud de Cambio de Dieta
+              </h2>
+              
+              <div style="background-color: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <p style="margin: 5px 0;"><strong>Usuario:</strong> ${nombreCompleto}</p>
+                <p style="margin: 5px 0;"><strong>Email:</strong> ${userData?.email || 'No disponible'}</p>
+              </div>
+              
+              <div style="margin: 20px 0;">
+                <h3 style="color: #333;">Motivo de la solicitud:</h3>
+                <div style="background-color: #fff; border-left: 4px solid #16a34a; padding: 15px; margin-top: 10px;">
+                  <p style="white-space: pre-wrap; line-height: 1.6; color: #555;">${solicitudDietaTexto.trim()}</p>
+                </div>
+              </div>
+              
+              <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #888; font-size: 12px;">
+                <p>Este email fue generado automáticamente por el sistema de gestión nutricional.</p>
+              </div>
+            </div>
+          `,
+          text: `SOLICITUD DE CAMBIO DE DIETA\n\nUsuario: ${nombreCompleto}\nEmail: ${userData?.email || 'No disponible'}\n\nMotivo:\n${solicitudDietaTexto.trim()}`
+        }
+      });
+
+      // Enviar notificación push al admin
+      try {
+        console.log('📱 Intentando enviar push al admin...');
+        const functions = getFunctions();
+        const sendPushToAdmin = httpsCallable(functions, 'sendPushToAdmin');
+        const result = await sendPushToAdmin({
+          title: '🍽️ SOLICITUD DE CAMBIO DE DIETA',
+          body: `${nombreCompleto} ha solicitado un cambio en su dieta`
+        });
+        console.log('✅ Push al admin enviado:', result);
+      } catch (pushError) {
+        console.error('❌ Error enviando push al admin:', pushError);
+        console.error('Detalles del error:', pushError.message, pushError.code);
+        // No interrumpir el flujo si falla el push
+      }
+
+      alert('✓ Solicitud enviada correctamente al nutricionista');
+      setShowSolicitudDieta(false);
+      setSolicitudDietaTexto('');
     } catch (err) {
       console.error('Error al enviar solicitud:', err);
       alert('Error al enviar la solicitud. Por favor, inténtalo de nuevo.');
@@ -1212,6 +1356,22 @@ export default function FichaUsuario({ targetUid = null, adminMode = false }) {
           text: `SOLICITUD DE NUEVA TABLA GYM\n\nUsuario: ${nombreCompleto}\nEmail: ${userData?.email || 'No disponible'}${userData?.telefono ? `\nTeléfono: ${userData.telefono}` : ''}\n\nEl usuario ha solicitado que se le asigne una nueva tabla de ejercicios.\n\nPróximos pasos: Contacta con el usuario para informarle sobre la tarifa y condiciones del servicio GYM.`
         }
       });
+
+      // Enviar notificación push al admin
+      try {
+        console.log('📱 Intentando enviar push al admin...');
+        const functions = getFunctions();
+        const sendPushToAdmin = httpsCallable(functions, 'sendPushToAdmin');
+        const result = await sendPushToAdmin({
+          title: 'SOLICITUD DE NUEVA TABLA GYM',
+          body: `${nombreCompleto} ha solicitado una nueva tabla de ejercicios`
+        });
+        console.log('✅ Push al admin enviado:', result);
+      } catch (pushError) {
+        console.error('❌ Error enviando push al admin:', pushError);
+        console.error('Detalles del error:', pushError.message, pushError.code);
+        // No interrumpir el flujo si falla el push
+      }
 
       alert('✓ Solicitud enviada correctamente.\n\nEl nutricionista recibirá tu solicitud y se pondrá en contacto contigo para informarte sobre la tarifa y los siguientes pasos.');
       setShowSolicitudNuevaTabla(false);
@@ -2762,20 +2922,28 @@ Ruiz Nutrición
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           {/* User info */}
           <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0 }}>
-            <div style={{
-              width: "48px",
-              height: "48px",
-              borderRadius: "50%",
-              background: "rgba(255,255,255,0.95)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "20px",
-              fontWeight: "700",
-              color: "#16a34a",
-              flexShrink: 0,
-              boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
-            }}>
+            <div 
+              onClick={() => !(adminMode && isMobile) && setShowProfile((s) => !s)}
+              style={{
+                width: "48px",
+                height: "48px",
+                borderRadius: "50%",
+                background: "rgba(255,255,255,0.95)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "20px",
+                fontWeight: "700",
+                color: "#16a34a",
+                flexShrink: 0,
+                boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                cursor: !(adminMode && isMobile) ? "pointer" : "default",
+                transition: "transform 0.2s, box-shadow 0.2s"
+              }}
+              onMouseEnter={(e) => !(adminMode && isMobile) && (e.currentTarget.style.transform = "scale(1.05)", e.currentTarget.style.boxShadow = "0 4px 8px rgba(0,0,0,0.2)")}
+              onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)", e.currentTarget.style.boxShadow = "0 2px 4px rgba(0,0,0,0.1)")}
+              title={!(adminMode && isMobile) ? "Click para ver perfil" : ""}
+            >
               {(userData.nombre?.[0] || userData.email?.[0] || "U").toUpperCase()}
             </div>
             <div style={{ minWidth: 0, flex: 1 }}>
@@ -2835,33 +3003,6 @@ Ruiz Nutrición
 
           {/* Actions - iconos */}
           <div style={{ display: "flex", gap: "6px", flexShrink: 0, marginLeft: "12px" }}>
-            {!(adminMode && isMobile) && (
-              <button 
-                className="btn-icon-header" 
-                onClick={() => setShowProfile((s) => !s)} 
-                title="Perfil"
-              style={{
-                background: "rgba(255,255,255,0.2)",
-                border: "none",
-                borderRadius: "8px",
-                width: "36px",
-                height: "36px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                transition: "background 0.2s"
-              }}
-              onMouseEnter={(e) => e.target.style.background = "rgba(255,255,255,0.3)"}
-              onMouseLeave={(e) => e.target.style.background = "rgba(255,255,255,0.2)"}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" strokeLinecap="round" strokeLinejoin="round"/>
-                <circle cx="12" cy="7" r="4" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
-            )}
-
             <button 
               className="btn-icon-header" 
               onClick={() => setShowPrintDialog(true)} 
@@ -2892,33 +3033,6 @@ Ruiz Nutrición
               <>
                 <button 
                   className="btn-icon-header" 
-                  onClick={() => window.location.reload(true)} 
-                  title="Refrescar"
-                  style={{
-                    background: "rgba(255,255,255,0.2)",
-                    border: "none",
-                    borderRadius: "8px",
-                    width: "36px",
-                    height: "36px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    cursor: "pointer",
-                    transition: "background 0.2s"
-                  }}
-                  onMouseEnter={(e) => e.target.style.background = "rgba(255,255,255,0.3)"}
-                  onMouseLeave={(e) => e.target.style.background = "rgba(255,255,255,0.2)"}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                    <path d="M21 2v6h-6" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M3 12a9 9 0 0 1 15-6.7L21 8" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M3 22v-6h6" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M21 12a9 9 0 0 1-15 6.7L3 16" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </button>
-
-                <button 
-                  className="btn-icon-header" 
                   onClick={() => {
                     const msgIndex = tabs.findIndex(t => t.id === "mensajes");
                     if (msgIndex !== -1) setTabIndex(msgIndex);
@@ -2946,6 +3060,32 @@ Ruiz Nutrición
 
                 <button 
                   className="btn-icon-header" 
+                  onClick={() => setShowHelpModal(true)}
+                  title="Ayuda"
+                  style={{
+                    background: "rgba(33,150,243,0.9)",
+                    border: "none",
+                    borderRadius: "8px",
+                    width: "36px",
+                    height: "36px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    marginRight: 8,
+                    transition: "background 0.2s"
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = "rgba(25,118,210,1)"}
+                  onMouseLeave={e => e.currentTarget.style.background = "rgba(33,150,243,0.9)"}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M12 16v-2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M12 8a2 2 0 1 1 0 4" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+                <button 
+                  className="btn-icon-header" 
                   onClick={handleSignOut} 
                   title="Cerrar sesión"
                   style={{
@@ -2960,8 +3100,8 @@ Ruiz Nutrición
                     cursor: "pointer",
                     transition: "background 0.2s"
                   }}
-                  onMouseEnter={(e) => e.target.style.background = "rgba(220,38,38,1)"}
-                  onMouseLeave={(e) => e.target.style.background = "rgba(239,68,68,0.9)"}
+                  onMouseEnter={e => e.currentTarget.style.background = "rgba(220,38,38,1)"}
+                  onMouseLeave={e => e.currentTarget.style.background = "rgba(239,68,68,0.9)"}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
                   <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round"/>
@@ -2969,6 +3109,26 @@ Ruiz Nutrición
                   <line x1="21" y1="12" x2="9" y2="12" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </button>
+  {/* Modal de ayuda */}
+  {showHelpModal && (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 20
+    }}
+      onClick={() => setShowHelpModal(false)}
+    >
+      <div style={{ background: 'white', borderRadius: 12, maxWidth: 400, width: '100%', padding: 24, position: 'relative' }} onClick={e => e.stopPropagation()}>
+        <div style={{ position: 'absolute', top: 10, right: 16, cursor: 'pointer', fontSize: 22 }} onClick={() => setShowHelpModal(false)}>✖️</div>
+        <div style={{ textAlign: 'center', marginBottom: 16 }}>
+          <div style={{ fontSize: 48, marginBottom: 8 }}>❓</div>
+          <h2 style={{ margin: 0, fontSize: 22, color: '#2196F3' }}>Ayuda y Sugerencias</h2>
+          <p style={{ color: '#555', fontSize: 15, margin: '8px 0 0 0' }}>¿Tienes dudas o sugerencias sobre la app?<br/>Envíanos tu consulta y te responderemos.</p>
+        </div>
+        <HelpForm onClose={() => setShowHelpModal(false)} />
+      </div>
+    </div>
+  )}
               </>
             )}
           </div>
@@ -2982,65 +3142,57 @@ Ruiz Nutrición
               <h3 style={{ margin: 0, fontSize: "20px", color: "#064e3b", fontWeight: "600" }}>📄 Generar PDF</h3>
               <button 
                 onClick={() => setShowPrintDialog(false)}
-                style={{ 
-                  background: "transparent", 
-                  border: "none", 
-                  cursor: "pointer", 
-                  padding: "4px",
-                  color: "#64748b",
+                className="btn-icon-header"
+                title="Cerrar"
+                style={{
+                  background: "rgba(239,68,68,0.9)",
+                  border: "none",
+                  borderRadius: "8px",
+                  width: "36px",
+                  height: "36px",
                   display: "flex",
-                  alignItems: "center"
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  transition: "background 0.2s"
                 }}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(220,38,38,1)"}
+                onMouseLeave={e => e.currentTarget.style.background = "rgba(239,68,68,0.9)"}
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" strokeLinecap="round" strokeLinejoin="round"/>
+                  <line x1="6" y1="6" x2="18" y2="18" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </button>
-            </div>
-            
-            <p style={{ marginBottom: "20px", color: "#64748b", fontSize: "14px" }}>Selecciona qué contenido deseas incluir en el documento PDF:</p>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <label 
-                style={{ 
-                  display: "flex", 
-                  alignItems: "center", 
-                  gap: "12px",
-                  padding: "14px 16px",
-                  background: printOptions.dietaMensual ? "rgba(22,163,74,0.08)" : "#f8fafc",
-                  border: `2px solid ${printOptions.dietaMensual ? "#16a34a" : "#e2e8f0"}`,
-                  borderRadius: "10px",
-                  cursor: "pointer",
-                  transition: "all 0.2s"
-                }}
-                onMouseEnter={(e) => {
-                  if (!printOptions.dietaMensual) {
-                    e.currentTarget.style.borderColor = "#cbd5e1";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!printOptions.dietaMensual) {
-                    e.currentTarget.style.borderColor = "#e2e8f0";
-                  }
-                }}
-              >
-                <input 
-                  type="checkbox" 
-                  checked={printOptions.dietaMensual} 
-                  onChange={(e) => setPrintOptions((s) => ({ ...s, dietaMensual: e.target.checked }))}
-                  style={{ 
-                    width: "20px", 
-                    height: "20px", 
-                    cursor: "pointer",
-                    accentColor: "#16a34a"
-                  }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: "600", color: "#0f172a", fontSize: "15px", marginBottom: "2px" }}>📋 Dieta Semanal</div>
-                  <div style={{ fontSize: "13px", color: "#64748b" }}>Incluye el menú semanal completo con todas las comidas</div>
-                </div>
-              </label>
+                {/* Botón de ayuda para admin en header (desktop y móvil) */}
+                {adminMode && (
+                  <button 
+                    className="btn-icon-header" 
+                    onClick={() => setShowHelpModal(true)}
+                    title="Ayuda"
+                    style={{
+                      background: "rgba(33,150,243,0.9)",
+                      border: "none",
+                      borderRadius: "8px",
+                      width: "36px",
+                      height: "36px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      marginLeft: 8,
+                      transition: "background 0.2s"
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = "rgba(25,118,210,1)"}
+                    onMouseLeave={e => e.currentTarget.style.background = "rgba(33,150,243,0.9)"}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M12 16v-2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M12 8a2 2 0 1 1 0 4" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </button>
+			  )}
 
               <label 
                 style={{ 
@@ -3110,45 +3262,88 @@ Ruiz Nutrición
 
       {showProfile && !(adminMode && isMobile) && (
         <div className="card" style={{ padding: 12, margin: "0 12px 12px 12px" }}>
-          <h3>Perfil</h3>
+          <h3>Mi Perfil</h3>
           <div className="panel-section">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {/* Datos Personales Editables */}
+            <h4 style={{ marginBottom: 12, fontSize: "15px", color: "#374151" }}>📝 Datos Personales</h4>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
               <div className="field"><label>Nombre</label><input className="input" value={editable.nombre || ""} onChange={(e) => setEditable((s) => ({ ...s, nombre: e.target.value }))} /></div>
               <div className="field"><label>Apellidos</label><input className="input" value={editable.apellidos || ""} onChange={(e) => setEditable((s) => ({ ...s, apellidos: e.target.value }))} /></div>
               <div className="field"><label>Fecha de nacimiento</label><input className="input" type="date" value={editable.nacimiento || ""} onChange={(e) => setEditable((s) => ({ ...s, nacimiento: e.target.value }))} /></div>
               <div className="field"><label>Teléfono</label><input className="input" type="tel" inputMode="tel" value={editable.telefono || ""} onChange={(e) => setEditable((s) => ({ ...s, telefono: e.target.value }))} /></div>
             </div>
 
-            <hr style={{ margin: "12px 0" }} />
-
-            <h4>Datos de dieta</h4>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div className="field">
-                <label>Tipo de dieta</label>
-                <select className="input" value={editable.dietaactual || ""} onChange={(e) => setEditable((s) => ({ ...s, dietaactual: e.target.value }))}>
-                  <option value="">-- Selecciona --</option>
-                  <option value="perdida_grasa">Pérdida de grasa</option>
-                  <option value="antiinflamatoria">Antiinflamatoria</option>
-                  <option value="ganancia_muscular">Ganancia muscular</option>
-                  <option value="aprendiendo_a_comer">Aprendiendo a comer</option>
-                  <option value="otros">Otros</option>
-                </select>
-                {editable.dietaactual === "otros" && <input className="input" placeholder="Describe la dieta" value={editable.dietaOtros || ""} onChange={(e) => setEditable((s) => ({ ...s, dietaOtros: e.target.value }))} />}
-              </div>
-
-              <div className="field"><label>Restricciones / Alergias</label><input className="input" value={editable.restricciones || ""} onChange={(e) => setEditable((s) => ({ ...s, restricciones: e.target.value }))} /></div>
-
-              <div className="field" style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                <label style={{ minWidth: 160 }}>¿Ejercicios asignados?</label>
-                <select value={editable.ejercicios ? "si" : "no"} onChange={(e) => setEditable((s) => ({ ...s, ejercicios: e.target.value === "si" }))}><option value="si">Sí</option><option value="no">No</option></select>
-              </div>
-
-              <div className="field" style={{ gridColumn: "1 / -1" }}><label>Descripción ejercicios</label><textarea className="input" rows={3} value={editable.ejerciciosDescripcion || ""} onChange={(e) => setEditable((s) => ({ ...s, ejerciciosDescripcion: e.target.value }))} /></div>
-            </div>
+            {/* Plan y Tipo de Dieta Asignados (Solo Visible) */}
+            {(userData?.anamnesis?.eligePlan || userData?.anamnesis?.tipoDieta) && (
+              <>
+                <hr style={{ margin: "16px 0" }} />
+                <h4 style={{ marginBottom: 12, fontSize: "15px", color: "#374151" }}>🍽️ Plan Asignado por tu Nutricionista</h4>
+                
+                {/* Plan de suscripción */}
+                {userData?.anamnesis?.eligePlan && (
+                  <div style={{
+                    padding: "16px",
+                    backgroundColor: "#16a34a",
+                    borderRadius: "12px",
+                    textAlign: "center",
+                    marginBottom: userData?.anamnesis?.tipoDieta ? "12px" : "20px"
+                  }}>
+                    <div style={{
+                      fontSize: "18px",
+                      fontWeight: "700",
+                      color: "white",
+                      textTransform: "uppercase",
+                      letterSpacing: "1px"
+                    }}>
+                      {userData.anamnesis.eligePlan === "Otros" && userData.anamnesis.eligePlanOtros 
+                        ? userData.anamnesis.eligePlanOtros 
+                        : userData.anamnesis.eligePlan}
+                    </div>
+                    <div style={{
+                      fontSize: "12px",
+                      color: "rgba(255,255,255,0.8)",
+                      marginTop: "6px"
+                    }}>
+                      Plan de suscripción
+                    </div>
+                  </div>
+                )}
+                
+                {/* Tipo de dieta */}
+                {userData?.anamnesis?.tipoDieta && (
+                  <div style={{
+                    padding: "16px",
+                    backgroundColor: "#3b82f6",
+                    borderRadius: "12px",
+                    textAlign: "center",
+                    marginBottom: 20
+                  }}>
+                    <div style={{
+                      fontSize: "18px",
+                      fontWeight: "700",
+                      color: "white",
+                      textTransform: "uppercase",
+                      letterSpacing: "1px"
+                    }}>
+                      {userData.anamnesis.tipoDieta === "Otros" && userData.anamnesis.tipoDietaOtros 
+                        ? userData.anamnesis.tipoDietaOtros 
+                        : userData.anamnesis.tipoDieta}
+                    </div>
+                    <div style={{
+                      fontSize: "12px",
+                      color: "rgba(255,255,255,0.8)",
+                      marginTop: "6px"
+                    }}>
+                      Objetivo nutricional
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
 
             <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-              <button className="btn primary" onClick={saveProfile}>Guardar perfil y dieta</button>
-              <button className="btn ghost" onClick={() => { setEditable((prev) => ({ ...prev, nombre: userData.nombre || "", apellidos: userData.apellidos || "", nacimiento: userData.nacimiento || "", telefono: userData.telefono || "", dietaactual: userData.dietaactual || "", dietaOtros: userData.dietaOtros || "", restricciones: userData.restricciones || "", ejercicios: !!userData.ejercicios, ejerciciosDescripcion: userData.ejerciciosDescripcion || "" })); setShowProfile(false); }}>Cancelar</button>
+              <button className="btn primary" onClick={saveProfile}>Guardar cambios</button>
+              <button className="btn ghost" onClick={() => { setEditable((prev) => ({ ...prev, nombre: userData.nombre || "", apellidos: userData.apellidos || "", nacimiento: userData.nacimiento || "", telefono: userData.telefono || "" })); setShowProfile(false); }}>Cancelar</button>
             </div>
           </div>
         </div>
@@ -4187,20 +4382,6 @@ Ruiz Nutrición
                       >
                         💾
                       </button>
-                      
-                      {saveLabel && (
-                        <div style={{
-                          backgroundColor: saveLabel.includes("✅") || saveLabel.includes("Guardado") ? "#48bb78" : "#718096",
-                          color: "white",
-                          padding: "6px 14px",
-                          borderRadius: "6px",
-                          fontSize: "13px",
-                          fontWeight: "500",
-                          boxShadow: "0 2px 6px rgba(0,0,0,0.1)"
-                        }}>
-                          {saveLabel}
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
@@ -4289,6 +4470,77 @@ Ruiz Nutrición
                         }}
                         title="Color de fondo"
                       />
+                      <div style={{ width: "1px", backgroundColor: "#cbd5e1", height: "24px", margin: "0 2px" }}></div>
+                      <button
+                        onClick={() => {
+                          const selection = window.getSelection();
+                          if (!selection.rangeCount) {
+                            alert('Por favor, selecciona las celdas que deseas combinar');
+                            return;
+                          }
+                          
+                          // Obtener todas las celdas seleccionadas
+                          const range = selection.getRangeAt(0);
+                          const container = range.commonAncestorContainer;
+                          const table = container.nodeType === 1 ? container.closest('table') : container.parentElement?.closest('table');
+                          
+                          if (!table) {
+                            alert('Por favor, selecciona celdas dentro de una tabla');
+                            return;
+                          }
+                          
+                          // Obtener las celdas seleccionadas
+                          const selectedCells = [];
+                          const tempDiv = document.createElement('div');
+                          tempDiv.appendChild(range.cloneContents());
+                          const cells = tempDiv.querySelectorAll('td, th');
+                          
+                          if (cells.length < 2) {
+                            alert('Selecciona al menos 2 celdas para combinar');
+                            return;
+                          }
+                          
+                          // Combinar el contenido de todas las celdas
+                          let combinedContent = '';
+                          cells.forEach(cell => {
+                            if (cell.textContent.trim()) {
+                              combinedContent += cell.textContent.trim() + ' ';
+                            }
+                          });
+                          
+                          // Aplicar colspan/rowspan a la primera celda
+                          if (range.startContainer.nodeType === 3) {
+                            const firstCell = range.startContainer.parentElement?.closest('td, th');
+                            if (firstCell) {
+                              const colspan = cells.length;
+                              firstCell.setAttribute('colspan', colspan.toString());
+                              firstCell.innerHTML = combinedContent.trim();
+                              
+                              // Eliminar las celdas siguientes en la misma fila
+                              let nextCell = firstCell.nextElementSibling;
+                              for (let i = 1; i < colspan; i++) {
+                                if (nextCell) {
+                                  const toRemove = nextCell;
+                                  nextCell = nextCell.nextElementSibling;
+                                  toRemove.remove();
+                                }
+                              }
+                            }
+                          }
+                        }}
+                        style={{
+                          padding: "6px 10px",
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "4px",
+                          backgroundColor: "white",
+                          cursor: "pointer",
+                          fontSize: "12px",
+                          whiteSpace: "nowrap"
+                        }}
+                        title="Combinar celdas seleccionadas"
+                      >
+                        🔗 Combinar
+                      </button>
                     </div>
                     
                     <div 
@@ -4412,15 +4664,6 @@ Ruiz Nutrición
                           </tbody>
                         </table>
                       ` }}
-                      style={{
-                        border: "1px solid #e5e7eb",
-                        borderRadius: "0 0 6px 6px",
-                        padding: "16px",
-                        minHeight: "500px",
-                        backgroundColor: "white",
-                        outline: "none",
-                        overflowX: "auto"
-                      }}
                     />
                     
                     <div style={{ marginTop: "12px", fontSize: "13px", color: "#64748b", padding: "12px", backgroundColor: "#f8fafc", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
@@ -4599,7 +4842,9 @@ Ruiz Nutrición
                           };
                           
                           const itemsDisponibles = menuItemsDisponibles[seccion] || [];
-                          const itemsSeleccionados = menuVertical[seccion] || [];
+                          // Asegurar que itemsSeleccionados siempre sea un array
+                          const rawSeleccionados = menuVertical[seccion] || [];
+                          const itemsSeleccionados = Array.isArray(rawSeleccionados) ? rawSeleccionados : [];
                           
                           const isCollapsed = seccionesColapsadas[seccion];
                           
@@ -4612,13 +4857,37 @@ Ruiz Nutrición
                                   alignItems: "center", 
                                   justifyContent: "space-between",
                                   cursor: "pointer",
-                                  marginBottom: isCollapsed ? "0" : "12px"
+                                  marginBottom: isCollapsed ? "0" : "12px",
+                                  gap: "12px"
                                 }}
                               >
-                                <h4 style={{ margin: "0", fontSize: "15px", fontWeight: "600", color: "#0f172a" }}>
+                                <h4 style={{ margin: "0", fontSize: "15px", fontWeight: "600", color: "#0f172a", flex: "0 0 auto" }}>
                                   {labels[seccion]}
                                 </h4>
-                                <span style={{ fontSize: "18px", color: "#6b7280", transition: "transform 0.2s", transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>
+                                {seccion !== "consejos" && (
+                                  <textarea
+                                    value={menuVertical[`${seccion}_notas`] || ''}
+                                    onChange={(e) => {
+                                      e.stopPropagation();
+                                      setMenuVertical(prev => ({ ...prev, [`${seccion}_notas`]: e.target.value }));
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    placeholder={`Notas para ${labels[seccion].replace(/[🌅☕🍽️🥤🌙💡]\s/, '')}...`}
+                                    rows={1}
+                                    style={{
+                                      flex: 1,
+                                      padding: "8px 12px",
+                                      border: "1px solid #d1d5db",
+                                      borderRadius: "6px",
+                                      fontSize: "14px",
+                                      fontFamily: "inherit",
+                                      resize: "vertical",
+                                      minHeight: "38px",
+                                      backgroundColor: "#fff"
+                                    }}
+                                  />
+                                )}
+                                <span style={{ fontSize: "18px", color: "#6b7280", transition: "transform 0.2s", transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)", flex: "0 0 auto" }}>
                                   ▼
                                 </span>
                               </div>
@@ -4647,42 +4916,55 @@ Ruiz Nutrición
                                   No hay opciones disponibles. Añade items en la sección de Menús.
                                 </div>
                               ) : (
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "8px" }}>
-                                  {itemsDisponibles.map((item) => {
-                                    const isSelected = itemsSeleccionados.includes(item.id);
-                                    
-                                    return (
-                                      <label
-                                        key={item.id}
-                                        style={{
-                                          display: "flex",
-                                          alignItems: "center",
-                                          gap: "8px",
-                                          padding: "10px 12px",
-                                          backgroundColor: isSelected ? "#dbeafe" : "#fff",
-                                          border: isSelected ? "2px solid #3b82f6" : "1px solid #d1d5db",
-                                          borderRadius: "6px",
-                                          cursor: "pointer",
-                                          fontSize: "14px",
-                                          transition: "all 0.2s"
-                                        }}
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          checked={isSelected}
-                                          onChange={(e) => {
-                                            const nuevosSeleccionados = e.target.checked
-                                              ? [...itemsSeleccionados, item.id]
-                                              : itemsSeleccionados.filter(id => id !== item.id);
-                                            setMenuVertical(prev => ({ ...prev, [seccion]: nuevosSeleccionados }));
+                                <>
+                                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "8px", marginBottom: "12px" }}>
+                                    {itemsDisponibles.map((item) => {
+                                      const isSelected = itemsSeleccionados.includes(item.id);
+                                      
+                                      return (
+                                        <div
+                                          key={item.id}
+                                          onClick={() => {
+                                            const nuevosSeleccionados = isSelected
+                                              ? itemsSeleccionados.filter(id => id !== item.id)
+                                              : [...itemsSeleccionados, item.id];
+                                            
+                                            console.log(`Div clicked - Sección: ${seccion}, Item: ${item.nombre}, Nueva selección:`, nuevosSeleccionados);
+                                            setMenuVertical(prev => {
+                                              const updated = { ...prev, [seccion]: nuevosSeleccionados };
+                                              console.log(`Estado menuVertical actualizado:`, updated);
+                                              return updated;
+                                            });
                                           }}
-                                          style={{ width: "16px", height: "16px", cursor: "pointer" }}
-                                        />
-                                        <span style={{ flex: 1, color: "#374151" }}>{item.nombre}</span>
-                                      </label>
-                                    );
-                                  })}
-                                </div>
+                                          style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "8px",
+                                            padding: "10px 12px",
+                                            backgroundColor: isSelected ? "#dbeafe" : "#fff",
+                                            border: isSelected ? "2px solid #3b82f6" : "1px solid #d1d5db",
+                                            borderRadius: "6px",
+                                            cursor: "pointer",
+                                            fontSize: "14px",
+                                            transition: "all 0.2s"
+                                          }}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            onChange={(e) => {
+                                              e.stopPropagation();
+                                            }}
+                                            onClick={(e) => e.stopPropagation()}
+                                            readOnly
+                                            style={{ width: "16px", height: "16px", cursor: "pointer", pointerEvents: "none" }}
+                                          />
+                                          <span style={{ flex: 1, color: "#374151" }}>{item.nombre}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </>
                               )}
                                 </>
                               )}
@@ -4694,10 +4976,12 @@ Ruiz Nutrición
                         <button
                           onClick={async () => {
                             try {
+                              console.log("Guardando menú vertical:", menuVertical);
                               await updateDoc(doc(db, "users", uid), {
                                 menuVertical: menuVertical,
                                 updatedAt: serverTimestamp()
                               });
+                              console.log("Menú guardado exitosamente");
                               alert("✅ Menú guardado correctamente");
                             } catch (err) {
                               console.error("Error guardando menú vertical:", err);
@@ -5037,13 +5321,30 @@ Ruiz Nutrición
                                 </span>
                               </div>
                               {!isCollapsed && (
-                                <ul style={{ margin: "0", paddingLeft: "20px", listStyle: "disc" }}>
-                                {itemsSeleccionados.map((item) => (
-                                  <li key={item.id} style={{ marginBottom: "6px", fontSize: "14px", color: "#374151" }}>
-                                    {item.nombre}
-                                  </li>
-                                ))}
-                                </ul>
+                                <>
+                                  <ul style={{ margin: "0 0 12px 0", paddingLeft: "20px", listStyle: "disc" }}>
+                                    {itemsSeleccionados.map((item) => (
+                                      <li key={item.id} style={{ marginBottom: "6px", fontSize: "14px", color: "#374151" }}>
+                                        {item.nombre}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                  {userData?.menuVertical?.[`${seccion}_notas`] && (
+                                    <div style={{ 
+                                      padding: "12px", 
+                                      backgroundColor: "#fff", 
+                                      borderRadius: "6px", 
+                                      border: "1px solid #bbf7d0",
+                                      fontSize: "14px",
+                                      color: "#374151",
+                                      lineHeight: "1.6",
+                                      whiteSpace: "pre-wrap"
+                                    }}>
+                                      <strong style={{ color: "#15803d" }}>Notas:</strong><br />
+                                      {userData.menuVertical[`${seccion}_notas`]}
+                                    </div>
+                                  )}
+                                </>
                               )}
                             </div>
                           );
@@ -5163,12 +5464,14 @@ Ruiz Nutrición
                       flexWrap: "wrap",
                       gap: "8px"
                     }}>
+                      {/* Grupo izquierdo: Navegación de días */}
                       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                         <button 
                           className="btn ghost" 
                           onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.max(0, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) - 1) }))}
-                          style={{ padding: "6px 12px", minHeight: "32px" }}
+                          style={{ padding: "6px 12px", minHeight: "32px", fontSize: "18px" }}
                         >←</button>
+                        
                         <div style={{ 
                           fontWeight: "700", 
                           color: "#16a34a",
@@ -5176,47 +5479,85 @@ Ruiz Nutrición
                           minWidth: "90px",
                           textAlign: "center"
                         }}>{dayName}</div>
+                        
                         <button 
                           className="btn ghost" 
                           onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.min(6, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) + 1) }))}
-                          style={{ padding: "6px 12px", minHeight: "32px" }}
+                          style={{ padding: "6px 12px", minHeight: "32px", fontSize: "18px" }}
                         >→</button>
                       </div>
                       
-                      {/* Botón de Snacks al lado del día de la semana */}
-                      <button
-                        onClick={() => {
-                          setShowSnacksModal(true);
-                          loadSnacks();
-                        }}
-                        style={{
-                          padding: "8px 16px",
-                          borderRadius: "20px",
-                          backgroundColor: "#fb923c",
-                          color: "white",
-                          border: "none",
-                          cursor: "pointer",
-                          fontSize: "14px",
-                          fontWeight: "600",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          boxShadow: "0 2px 8px rgba(251, 146, 60, 0.3)",
-                          transition: "all 0.2s ease"
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = "scale(1.05)";
-                          e.currentTarget.style.backgroundColor = "#f97316";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = "scale(1)";
-                          e.currentTarget.style.backgroundColor = "#fb923c";
-                        }}
-                        title="Ver SNACK's disponibles"
-                      >
-                        <span style={{ fontSize: "18px" }}>🍎</span>
-                        <span>SNACK's</span>
-                      </button>
+                      {/* Grupo derecho: Botones de acción */}
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                        <button
+                          onClick={() => {
+                            setShowSnacksModal(true);
+                            loadSnacks();
+                          }}
+                          style={{
+                            padding: "6px 12px",
+                            borderRadius: "16px",
+                            backgroundColor: "#fb923c",
+                            color: "white",
+                            border: "none",
+                            cursor: "pointer",
+                            fontSize: "13px",
+                            fontWeight: "600",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            boxShadow: "0 2px 8px rgba(251, 146, 60, 0.3)",
+                            transition: "all 0.2s ease",
+                            whiteSpace: "nowrap"
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = "scale(1.05)";
+                            e.currentTarget.style.backgroundColor = "#f97316";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = "scale(1)";
+                            e.currentTarget.style.backgroundColor = "#fb923c";
+                          }}
+                          title="Ver SNACK's disponibles"
+                        >
+                          <span style={{ fontSize: "16px" }}>🍎</span>
+                          <span>SNACK's</span>
+                        </button>
+                        
+                        {!adminMode && (
+                          <button
+                            onClick={() => setShowSolicitudDieta(true)}
+                            style={{
+                              padding: "6px 12px",
+                              borderRadius: "16px",
+                              backgroundColor: "#16a34a",
+                              color: "white",
+                              border: "none",
+                              cursor: "pointer",
+                              fontSize: "13px",
+                              fontWeight: "600",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              boxShadow: "0 2px 8px rgba(22, 163, 74, 0.3)",
+                              transition: "all 0.2s ease",
+                              whiteSpace: "nowrap"
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = "scale(1.05)";
+                              e.currentTarget.style.backgroundColor = "#15803d";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = "scale(1)";
+                              e.currentTarget.style.backgroundColor = "#16a34a";
+                            }}
+                            title="Solicitar cambios en tu dieta"
+                          >
+                            <span style={{ fontSize: "16px" }}>💬</span>
+                            <span>Cambio de dieta</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div>
                       <div className="weekly-menu-grid">
@@ -6159,70 +6500,34 @@ Ruiz Nutrición
       )}
 
       {/* Modal de Snacks */}
-      {showSnacksModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 2000,
-            padding: "20px"
-          }}
-          onClick={() => setShowSnacksModal(false)}
-        >
-          <div
-            style={{
-              backgroundColor: "white",
-              borderRadius: "16px",
-              maxWidth: "600px",
-              width: "100%",
-              maxHeight: "80vh",
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "column",
-              boxShadow: "0 20px 50px rgba(0, 0, 0, 0.3)"
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header del modal */}
-            <div style={{
-              padding: "24px",
-              borderBottom: "2px solid #fed7aa",
-              background: "linear-gradient(135deg, #fed7aa 0%, #fdba74 100%)",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center"
-            }}>
-              <h2 style={{ margin: 0, fontSize: "24px", color: "#92400e", fontWeight: "700" }}>
-                🍎 SNACK's Disponibles
-              </h2>
-              <button
-                onClick={() => setShowSnacksModal(false)}
+      {showPrintDialog && (
+        <div className="print-modal-backdrop" role="dialog" aria-modal="true" onClick={() => setShowPrintDialog(false)}>
+          <div className="print-modal" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h3 style={{ margin: 0, fontSize: "20px", color: "#064e3b", fontWeight: "600" }}>📄 Generar PDF</h3>
+              <button 
+                onClick={() => setShowPrintDialog(false)}
+                className="btn-icon-header"
+                title="Cerrar"
                 style={{
-                  background: "transparent",
+                  background: "rgba(239,68,68,0.9)",
                   border: "none",
-                  fontSize: "28px",
-                  cursor: "pointer",
-                  color: "#92400e",
-                  padding: "0",
-                  width: "32px",
-                  height: "32px",
+                  borderRadius: "8px",
+                  width: "36px",
+                  height: "36px",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  borderRadius: "50%",
+                  cursor: "pointer",
                   transition: "background 0.2s"
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = "rgba(146, 64, 14, 0.1)"}
-                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(220,38,38,1)"}
+                onMouseLeave={e => e.currentTarget.style.background = "rgba(239,68,68,0.9)"}
               >
-                ×
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" strokeLinecap="round" strokeLinejoin="round"/>
+                  <line x1="6" y1="6" x2="18" y2="18" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </button>
             </div>
 
@@ -6657,6 +6962,143 @@ Ruiz Nutrición
                 onMouseOut={(e) => {
                   if (!enviandoSolicitud && solicitudTablaTexto.trim()) {
                     e.target.style.backgroundColor = '#2196F3';
+                  }
+                }}
+              >
+                {enviandoSolicitud ? '⏳ Enviando...' : '📤 Enviar solicitud'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de solicitud de cambio de DIETA */}
+      {showSolicitudDieta && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '20px'
+          }}
+          onClick={() => !enviandoSolicitud && setShowSolicitudDieta(false)}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '15px',
+              padding: isMobile ? '24px' : '32px',
+              maxWidth: '500px',
+              width: '100%',
+              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)',
+              animation: 'slideIn 0.3s ease-out'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+              <div style={{ fontSize: '48px', marginBottom: '10px' }}>🍽️</div>
+              <h2
+                style={{
+                  margin: '0 0 8px 0',
+                  color: '#2c3e50',
+                  fontSize: isMobile ? '20px' : '24px',
+                  fontWeight: '700'
+                }}
+              >
+                Solicitar Cambio de Dieta
+              </h2>
+              <p style={{ margin: 0, color: '#7f8c8d', fontSize: '14px' }}>
+                Explica qué cambios necesitas en tu dieta o alimentación
+              </p>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: '#555'
+                }}
+              >
+                Motivo de la solicitud:
+              </label>
+              <textarea
+                value={solicitudDietaTexto}
+                onChange={(e) => setSolicitudDietaTexto(e.target.value)}
+                placeholder="Ej: Necesito más variedad, tengo alergias a ciertos alimentos, quiero ajustar las porciones, etc."
+                disabled={enviandoSolicitud}
+                style={{
+                  width: '100%',
+                  minHeight: '120px',
+                  padding: '12px',
+                  fontSize: '15px',
+                  border: '2px solid #e0e0e0',
+                  borderRadius: '8px',
+                  resize: 'vertical',
+                  fontFamily: 'inherit',
+                  outline: 'none',
+                  transition: 'border-color 0.2s',
+                  backgroundColor: enviandoSolicitud ? '#f5f5f5' : 'white'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#16a34a'}
+                onBlur={(e) => e.target.style.borderColor = '#e0e0e0'}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setShowSolicitudDieta(false)}
+                disabled={enviandoSolicitud}
+                style={{
+                  flex: 1,
+                  padding: '12px 20px',
+                  backgroundColor: '#f5f5f5',
+                  color: '#666',
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  fontSize: '15px',
+                  fontWeight: '600',
+                  cursor: enviandoSolicitud ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                  opacity: enviandoSolicitud ? 0.5 : 1
+                }}
+                onMouseOver={(e) => !enviandoSolicitud && (e.target.style.backgroundColor = '#e5e5e5')}
+                onMouseOut={(e) => !enviandoSolicitud && (e.target.style.backgroundColor = '#f5f5f5')}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleEnviarSolicitudDieta}
+                disabled={enviandoSolicitud || !solicitudDietaTexto.trim()}
+                style={{
+                  flex: 1,
+                  padding: '12px 20px',
+                  backgroundColor: enviandoSolicitud || !solicitudDietaTexto.trim() ? '#ccc' : '#16a34a',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '15px',
+                  fontWeight: '600',
+                  cursor: enviandoSolicitud || !solicitudDietaTexto.trim() ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseOver={(e) => {
+                  if (!enviandoSolicitud && solicitudDietaTexto.trim()) {
+                    e.target.style.backgroundColor = '#15803d';
+                  }
+                }}
+                onMouseOut={(e) => {
+                  if (!enviandoSolicitud && solicitudDietaTexto.trim()) {
+                    e.target.style.backgroundColor = '#16a34a';
                   }
                 }}
               >

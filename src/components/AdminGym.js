@@ -46,8 +46,9 @@ export default function AdminGym() {
     try {
       setLoading(true);
       
-      // Cargar usuarios
-      const usersSnapshot = await getDocs(collection(db, "usuarios"));
+      // Cargar usuarios (CAMBIO: 'usuarios' -> 'users' para contar bien los usuarios)
+      // Si necesitas volver atrás, cambia 'users' por 'usuarios' en esta línea
+      const usersSnapshot = await getDocs(collection(db, "users"));
       const usersList = usersSnapshot.docs
         .map((doc) => ({
           id: doc.id,
@@ -164,7 +165,9 @@ export default function AdminGym() {
 
     try {
       setSaving(true);
-      const userRef = doc(db, "usuarios", selectedUser);
+      // CAMBIO: 'usuarios' -> 'users' para referencia de usuario
+      // Si necesitas volver atrás, cambia 'users' por 'usuarios' en esta línea
+      const userRef = doc(db, "users", selectedUser);
       await updateDoc(userRef, {
         ejerciciosAsignados: userEjercicios,
         updatedAt: new Date().toISOString(),

@@ -3,7 +3,7 @@
  * Actualiza este archivo cuando hagas cambios importantes
  */
 
-export const APP_VERSION = "2.0.2";
+export const APP_VERSION = "2.6";
 
 export const VERSION_HISTORY = [
   {

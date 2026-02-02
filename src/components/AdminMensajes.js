@@ -4,6 +4,7 @@ import { db, storage } from '../Firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useDevice } from '../hooks/useDevice';
 import { useNavigate } from 'react-router-dom';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 /**
  * AdminMensajes - Componente para enviar mensajes a usuarios y ver solicitudes recibidas
@@ -257,6 +258,19 @@ export default function AdminMensajes() {
           addDoc(collection(db, 'users', userId, 'mensajes'), mensajeData)
         );
         await Promise.all(promises);
+        
+        // Enviar notificación push a cada usuario seleccionado
+        const functions = getFunctions();
+        const sendPush = httpsCallable(functions, 'sendPushToUser');
+        const pushPromises = selectedUserIds.map(userId => 
+          sendPush({ 
+            userId, 
+            title: 'TIENE UN MENSAJE DE SU NUTRICIONISTA', 
+            body: mensaje.trim().substring(0, 150) + (mensaje.trim().length > 150 ? '...' : '')
+          }).catch(err => console.error('Error enviando push a', userId, err))
+        );
+        await Promise.all(pushPromises);
+        
         setSuccess(`Mensaje enviado a ${selectedUserIds.length} usuarios seleccionados`);
       } else if (tipo === 'admin') {
         // Enviar solo para el admin
@@ -268,6 +282,19 @@ export default function AdminMensajes() {
           addDoc(collection(db, 'users', user.id, 'mensajes'), mensajeData)
         );
         await Promise.all(promises);
+        
+        // Enviar notificación push a todos los usuarios
+        const functions = getFunctions();
+        const sendPush = httpsCallable(functions, 'sendPushToUser');
+        const pushPromises = usuarios.map(user => 
+          sendPush({ 
+            userId: user.id, 
+            title: 'TIENE UN MENSAJE DE SU NUTRICIONISTA', 
+            body: mensaje.trim().substring(0, 150) + (mensaje.trim().length > 150 ? '...' : '')
+          }).catch(err => console.error('Error enviando push a', user.id, err))
+        );
+        await Promise.all(pushPromises);
+        
         setSuccess(`Mensaje enviado a ${usuarios.length} usuarios`);
       }
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
+import HelpForm from "./HelpForm";
 import { auth, db, functions } from "../Firebase";
 import { onAuthStateChanged, signOut, getIdTokenResult } from "firebase/auth";
 import { collection, getDocs, query, orderBy, doc, deleteDoc, updateDoc, getDoc } from "firebase/firestore";
@@ -17,6 +18,7 @@ import logger from "../utils/logger";
  */
 
 export default function AdminUsers() {
+    const [showHelpModal, setShowHelpModal] = useState(false);
   const ADMIN_EMAILS = ["admin@admin.es"]; // ajusta si hace falta
   const DESKTOP_MIN_WIDTH = 900;
 
@@ -132,7 +134,18 @@ export default function AdminUsers() {
           .map((d) => ({ id: d.id, ...d.data() }))
           .filter((u) => !ADMIN_EMAILS.includes((u.email || "").toLowerCase()));
         setUsers(list);
-        setSelectedIndex(list.length ? 0 : -1);
+        // Restaurar usuario seleccionado por ID
+        const savedUserId = localStorage.getItem("adminSelectedUserId");
+        if (savedUserId) {
+          const userIndex = list.findIndex(u => u.id === savedUserId);
+          if (userIndex >= 0) {
+            setSelectedIndex(userIndex);
+          } else {
+            setSelectedIndex(list.length ? 0 : -1);
+          }
+        } else {
+          setSelectedIndex(list.length ? 0 : -1);
+        }
       } catch (err) {
         console.error("Error fetching users with composite index:", err);
         const msg = err?.message || String(err);
@@ -153,7 +166,18 @@ export default function AdminUsers() {
               return A.localeCompare(B);
             });
             setUsers(list);
-            setSelectedIndex(list.length ? 0 : -1);
+            // Restaurar usuario seleccionado por ID
+            const savedUserId = localStorage.getItem("adminSelectedUserId");
+            if (savedUserId) {
+              const userIndex = list.findIndex(u => u.id === savedUserId);
+              if (userIndex >= 0) {
+                setSelectedIndex(userIndex);
+              } else {
+                setSelectedIndex(list.length ? 0 : -1);
+              }
+            } else {
+              setSelectedIndex(list.length ? 0 : -1);
+            }
           } catch (err2) {
             console.error("Fallback fetch users error:", err2);
             const msg2 = err2?.code ? `${err2.code}: ${err2.message}` : (err2?.message || String(err2));
@@ -701,16 +725,38 @@ export default function AdminUsers() {
           )}
           {!isMobile && <button className="btn primary" onClick={handleNuevoCliente} style={{ fontWeight: "bold", padding: "6px 10px", fontSize: "13px" }}>➕ Nuevo cliente</button>}
           {!isMobile && <button className="btn primary" onClick={() => { setShowAdminProfile(true); loadAdminProfile(); }} style={{ padding: "6px 10px", fontSize: "13px" }}>👤 Perfil</button>}
-          {!isMobile && <button className="btn danger" onClick={handleSignOut} style={{ padding: "6px 10px", fontSize: "13px" }}>Cerrar sesión</button>}
-          {isMobile && (
-            <button 
-              className="btn" 
-              onClick={() => setPanelVisible(!panelVisible)} 
-              style={{ padding: "8px 12px", fontSize: "14px", backgroundColor: panelVisible ? "#666" : "#2196F3", color: "white" }}
+          {!isMobile && <>
+            <button className="btn danger" onClick={handleSignOut} style={{ padding: "6px 10px", fontSize: "13px" }}>Cerrar sesión</button>
+            <button
+              className="btn primary"
+              onClick={() => setShowHelpModal(true)}
+              style={{ padding: "6px 10px", fontSize: "13px", background: "linear-gradient(90deg,#a7f3d0,#6ee7b7)", color: "#065f46", fontWeight: 600, border: "none", marginLeft: 4 }}
+              title="Ayuda"
             >
-              {panelVisible ? "✕ Ocultar lista" : "👥 Ver lista"}
+              <span style={{ fontWeight: 700, fontSize: 16, marginRight: 4 }}>?</span> Ayuda
             </button>
+          </>}
+          {/* Modal de ayuda */}
+          {showHelpModal && (
+            <div style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 20
+            }}
+              onClick={() => setShowHelpModal(false)}
+            >
+              <div style={{ background: 'white', borderRadius: 12, maxWidth: 400, width: '100%', padding: 24, position: 'relative' }} onClick={e => e.stopPropagation()}>
+                <div style={{ position: 'absolute', top: 10, right: 16, cursor: 'pointer', fontSize: 22 }} onClick={() => setShowHelpModal(false)}>✖️</div>
+                <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                  <div style={{ fontSize: 48, marginBottom: 8 }}>❓</div>
+                  <h2 style={{ margin: 0, fontSize: 22, color: '#2196F3' }}>Ayuda y Sugerencias</h2>
+                </div>
+                <HelpForm onClose={() => setShowHelpModal(false)} />
+              </div>
+            </div>
           )}
+
+
         </div>
       </div>
 
@@ -728,61 +774,69 @@ export default function AdminUsers() {
                   <div style={{ padding: isMobile ? 16 : 8, textAlign: "center", color: "#64748b" }}>Cargando usuarios...</div>
                 ) : error ? (
                   <div style={{ color: "var(--danger, #b91c1c)", padding: isMobile ? 16 : 8, background: "#fee2e2", borderRadius: "8px" }}>{error}</div>
-                ) : filtered.length === 0 ? (
-                  <div style={{ padding: isMobile ? 16 : 8, textAlign: "center", color: "#64748b" }}>No se encontraron usuarios.</div>
                 ) : isMobile ? (
-                  // Vista móvil - Lista simple
-                  <div style={{ display: "flex", flexDirection: "column", gap: "1px", padding: "0" }}>
-                    {filtered.map((u, i) => (
-                      <div
-                        key={u.id}
-                        data-user-index={i}
-                        style={{
-                          padding: "12px 10px",
-                          background: i === selectedIndex ? "#dcfce7" : "white",
-                          borderLeft: `3px solid ${i === selectedIndex ? '#16a34a' : 'transparent'}`,
-                          cursor: "pointer",
-                          transition: "all 0.15s",
-                          borderBottom: "1px solid #f1f5f9"
-                        }}
-                        onClick={() => setSelectedIndex(i)}
-                      >
-                        <div style={{ fontSize: "15px", fontWeight: "600", color: "#0f172a", marginBottom: "3px" }}>
-                          {`${(u.apellidos || "").trim()} ${(u.nombre || "").trim()}`.trim() || u.email}
+                  filter.length < 2 ? (
+                    <div style={{ padding: 20, textAlign: "center", color: "#64748b", fontSize: 15 }}>
+                      Busca un usuario por nombre, apellidos o email.
+                    </div>
+                  ) : filtered.length === 0 ? (
+                    <div style={{ padding: 20, textAlign: "center", color: "#64748b", fontSize: 15 }}>No se encontraron usuarios.</div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1px", padding: "0" }}>
+                      {filtered.map((u, i) => (
+                        <div
+                          key={u.id}
+                          data-user-index={i}
+                          style={{
+                            padding: "12px 10px",
+                            background: i === selectedIndex ? "#dcfce7" : "white",
+                            borderLeft: `3px solid ${i === selectedIndex ? '#16a34a' : 'transparent'}`,
+                            cursor: "pointer",
+                            transition: "all 0.15s",
+                            borderBottom: "1px solid #f1f5f9"
+                          }}
+                          onClick={() => {
+                            setSelectedIndex(i);
+                            localStorage.setItem("adminSelectedUserId", u.id);
+                          }}
+                        >
+                          <div style={{ fontSize: "15px", fontWeight: "600", color: "#0f172a", marginBottom: "3px" }}>
+                            {`${(u.apellidos || "").trim()} ${(u.nombre || "").trim()}`.trim() || u.email}
+                          </div>
+                          <div style={{ fontSize: "12px", color: "#64748b", display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span>{u.email}</span>
+                            {u.pesoActual && (
+                              <>
+                                <span>•</span>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', position: 'relative' }}>
+                                  {u.pesoActual} kg
+                                  {(() => {
+                                    const trend = getPesoTrend(u);
+                                    if (!trend) return null;
+                                    const tooltipText = `${trend.direccion === 'down' ? 'Bajó' : 'Subió'} ${trend.diferencia}kg`;
+                                    return (
+                                      <span 
+                                        style={{ 
+                                          fontSize: '14px',
+                                          color: trend.direccion === 'down' ? '#16a34a' : '#dc2626',
+                                          fontWeight: 'bold',
+                                          cursor: 'help'
+                                        }} 
+                                        title={tooltipText}
+                                        aria-label={tooltipText}
+                                      >
+                                        {trend.direccion === 'down' ? '↓' : '↑'}
+                                      </span>
+                                    );
+                                  })()}
+                                </span>
+                              </>
+                            )}
+                          </div>
                         </div>
-                        <div style={{ fontSize: "12px", color: "#64748b", display: "flex", alignItems: "center", gap: "8px" }}>
-                          <span>{u.email}</span>
-                          {u.pesoActual && (
-                            <>
-                              <span>•</span>
-                              <span style={{ display: 'flex', alignItems: 'center', gap: '4px', position: 'relative' }}>
-                                {u.pesoActual} kg
-                                {(() => {
-                                  const trend = getPesoTrend(u);
-                                  if (!trend) return null;
-                                  const tooltipText = `${trend.direccion === 'down' ? 'Bajó' : 'Subió'} ${trend.diferencia}kg`;
-                                  return (
-                                    <span 
-                                      style={{ 
-                                        fontSize: '14px',
-                                        color: trend.direccion === 'down' ? '#16a34a' : '#dc2626',
-                                        fontWeight: 'bold',
-                                        cursor: 'help'
-                                      }} 
-                                      title={tooltipText}
-                                      aria-label={tooltipText}
-                                    >
-                                      {trend.direccion === 'down' ? '↓' : '↑'}
-                                    </span>
-                                  );
-                                })()}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )
                 ) : (
                   // Vista desktop - Lista compacta
                   <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -799,7 +853,10 @@ export default function AdminUsers() {
                           background: i === selectedIndex ? "rgba(22,163,74,0.06)" : undefined,
                           cursor: "pointer",
                         }}
-                        onClick={() => setSelectedIndex(i)}
+                        onClick={() => {
+                          setSelectedIndex(i);
+                          localStorage.setItem("adminSelectedUserId", u.id);
+                        }}
                       >
                         <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
                           <strong style={{ fontSize: 13 }}>{`${(u.apellidos || "").trim()} ${(u.nombre || "").trim()}`.trim() || u.email}</strong>
@@ -1453,192 +1510,7 @@ export default function AdminUsers() {
         </div>
       )}
 
-      {/* Barra de navegación inferior para móvil */}
-      {isMobile && (
-        <div style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          backgroundColor: 'white',
-          borderTop: '1px solid #e0e0e0',
-          boxShadow: '0 -2px 4px rgba(0,0,0,0.1)',
-          zIndex: 100,
-          display: 'flex'
-        }}>
-          <button
-            onClick={() => navigate('/admin')}
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '8px 4px',
-              border: 'none',
-              background: 'none',
-              cursor: 'pointer',
-              color: '#2196F3',
-              fontSize: '12px',
-              fontWeight: '600'
-            }}
-          >
-            <div style={{ fontSize: '20px', marginBottom: '2px' }}>👥</div>
-            <div style={{ fontSize: '10px' }}>Users</div>
-          </button>
-          <button
-            onClick={() => navigate('/admin/agenda')}
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '8px 4px',
-              border: 'none',
-              background: 'none',
-              cursor: 'pointer',
-              color: '#666',
-              fontSize: '12px'
-            }}
-          >
-            <div style={{ fontSize: '20px', marginBottom: '2px' }}>📅</div>
-            <div style={{ fontSize: '10px' }}>Agenda</div>
-          </button>
-          <button
-            onClick={() => navigate('/admin/menus')}
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '8px 4px',
-              border: 'none',
-              background: 'none',
-              cursor: 'pointer',
-              color: '#666',
-              fontSize: '12px'
-            }}
-          >
-            <div style={{ fontSize: '20px', marginBottom: '2px' }}>🍽️</div>
-            <div style={{ fontSize: '10px' }}>Menús</div>
-          </button>
-          <button
-            onClick={() => navigate('/admin/gym')}
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '8px 4px',
-              border: 'none',
-              background: 'none',
-              cursor: 'pointer',
-              color: '#666',
-              fontSize: '12px'
-            }}
-          >
-            <div style={{ fontSize: '20px', marginBottom: '2px' }}>🏋️</div>
-            <div style={{ fontSize: '10px' }}>GYM</div>
-          </button>
-          <button
-            onClick={() => navigate('/admin/mensajes')}
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '8px 4px',
-              border: 'none',
-              background: 'none',
-              cursor: 'pointer',
-              color: '#666',
-              fontSize: '12px',
-              position: 'relative'
-            }}
-          >
-            <div style={{ fontSize: '20px', marginBottom: '2px' }}>💬</div>
-            <div style={{ fontSize: '10px' }}>MSG</div>
-            {solicitudesPendientes > 0 && (
-              <span style={{
-                position: 'absolute',
-                top: '2px',
-                right: '8px',
-                backgroundColor: '#f44336',
-                color: 'white',
-                borderRadius: '10px',
-                padding: '2px 5px',
-                fontSize: '9px',
-                fontWeight: 'bold',
-                minWidth: '16px',
-                textAlign: 'center'
-              }}>
-                {solicitudesPendientes}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => navigate('/admin/recursos')}
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '8px 4px',
-              border: 'none',
-              background: 'none',
-              cursor: 'pointer',
-              color: '#666',
-              fontSize: '12px'
-            }}
-          >
-            <div style={{ fontSize: '20px', marginBottom: '2px' }}>📁</div>
-            <div style={{ fontSize: '10px' }}>Files</div>
-          </button>
-          <button
-            onClick={() => { setShowAdminProfile(true); loadAdminProfile(); }}
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '8px 4px',
-              border: 'none',
-              background: 'none',
-              cursor: 'pointer',
-              color: '#666',
-              fontSize: '12px'
-            }}
-          >
-            <div style={{ fontSize: '20px', marginBottom: '2px' }}>👤</div>
-            <div style={{ fontSize: '10px' }}>Perfil</div>
-          </button>
-          <button
-            onClick={handleSignOut}
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '8px 4px',
-              border: 'none',
-              background: 'none',
-              cursor: 'pointer',
-              color: '#f44336',
-              fontSize: '12px'
-            }}
-          >
-            <div style={{ fontSize: '20px', marginBottom: '2px' }}>🚪</div>
-            <div style={{ fontSize: '10px' }}>Salir</div>
-          </button>
-        </div>
-      )}
+      {/* Barra de navegación inferior para móvil eliminada (ahora la gestiona el layout) */}
     </div>
   );
 }

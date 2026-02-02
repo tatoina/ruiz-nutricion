@@ -16,7 +16,7 @@ import Login from "./components/Login";
 import Register from "./components/Register";
 import ChangePassword from "./components/ChangePassword";
 import PrivateRoute from "./components/PrivateRoute";
-import FloatingInstallButton from "./components/FloatingInstallButton";
+// import FloatingInstallButton from "./components/FloatingInstallButton";
 import { auth } from "./Firebase";
 import { onAuthStateChanged } from "firebase/auth";
 
@@ -88,7 +88,7 @@ function RegisterWrapper() {
 export default function App() {
   return (
     <BrowserRouter>
-      <FloatingInstallButton />
+      {/* <FloatingInstallButton /> */}
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginWrapper />} />

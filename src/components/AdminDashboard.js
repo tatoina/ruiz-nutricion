@@ -10,7 +10,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const fetchUsers = async () => {
-      const querySnapshot = await getDocs(collection(db, "usuarios"));
+      const querySnapshot = await getDocs(collection(db, "users"));
       const userList = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setUsuarios(userList);
     };

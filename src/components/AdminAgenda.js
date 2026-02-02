@@ -1775,77 +1775,7 @@ export default function AdminAgenda() {
         </div>
       )}
 
-      {/* Navegación inferior para móvil */}
-      {isMobile && (
-        <div style={{
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          backgroundColor: "white",
-          borderTop: "1px solid #e0e0e0",
-          boxShadow: "0 -2px 4px rgba(0,0,0,0.1)",
-          zIndex: 100,
-          display: "flex",
-          justifyContent: "space-around",
-          padding: "8px 4px"
-        }}>
-          <button
-            onClick={() => navigate("/admin")}
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              padding: "6px",
-              border: "none",
-              background: "none",
-              color: "#666",
-              fontSize: "11px",
-              cursor: "pointer"
-            }}
-          >
-            <span style={{ fontSize: "20px" }}>👥</span>
-            <span>Usuarios</span>
-          </button>
-          <button
-            onClick={() => navigate("/admin/agenda")}
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              padding: "6px",
-              border: "none",
-              background: "none",
-              color: "#2196F3",
-              fontSize: "11px",
-              cursor: "pointer"
-            }}
-          >
-            <span style={{ fontSize: "20px" }}>📅</span>
-            <span>Agenda</span>
-          </button>
-          <button
-            onClick={() => navigate("/admin/menus")}
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              padding: "6px",
-              border: "none",
-              background: "none",
-              color: "#666",
-              fontSize: "11px",
-              cursor: "pointer"
-            }}
-          >
-            <span style={{ fontSize: "20px" }}>📋</span>
-            <span>Menús</span>
-          </button>
-        </div>
-      )}
+      {/* Navegación inferior para móvil eliminada (ahora la gestiona el layout) */}
     </div>
   );
 }

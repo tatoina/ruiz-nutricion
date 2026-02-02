@@ -103,7 +103,8 @@ export default function AdminGymGestion() {
         setEjercicios(ejList.sort((a, b) => a.nombre.localeCompare(b.nombre)));
       }
       
-      // Cargar todos los usuarios (socios)
+      // Cargar todos los usuarios (socios) (CAMBIO: 'usuarios' -> 'users' para contar bien los usuarios)
+      // Si necesitas volver atrás, cambia 'users' por 'usuarios' en esta línea
       const usersSnapshot = await getDocs(collection(db, "users"));
       const usersList = usersSnapshot.docs
         .map(doc => ({

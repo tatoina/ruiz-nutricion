@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { requestNotificationPermissionAndSaveToken } from "../fcm-setup";
 import "./estilos.css";
 import { signInWithEmailAndPassword, updatePassword } from "firebase/auth";
 import logger from "../utils/logger";
@@ -14,9 +15,67 @@ export default function Login({ onLogin /* onShowRegister no usado ahora */ }) {
   const [pass, setPass] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [isInstalled, setIsInstalled] = useState(false);
   const { isMobile } = useDevice();
 
   const navigate = useNavigate();
+
+  // Detectar si la PWA está instalada y capturar el prompt de instalación
+  useEffect(() => {
+    // Verificar si ya está instalada
+    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+      setIsInstalled(true);
+    }
+
+    // Capturar el evento beforeinstallprompt
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    // Detectar cuando se instala
+    window.addEventListener('appinstalled', () => {
+      setIsInstalled(true);
+      setDeferredPrompt(null);
+    });
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallOrRefresh = async () => {
+    // Si hay prompt de instalación disponible y no está instalada, instalar
+    if (deferredPrompt && !isInstalled) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+        setIsInstalled(true);
+      }
+    } else {
+      // Si no hay instalación disponible o ya está instalada, hacer refresh
+      // Intenta desregistrar el service worker si existe
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for (const reg of regs) {
+          await reg.unregister();
+        }
+      }
+      // Limpia la caché de la app
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        for (const name of cacheNames) {
+          await caches.delete(name);
+        }
+      }
+      // Recarga la página
+      window.location.reload(true);
+    }
+  };
 
   const today = new Date();
   const dateStr = today
@@ -48,6 +107,13 @@ export default function Login({ onLogin /* onShowRegister no usado ahora */ }) {
           navigate("/cambiar-password", { state: { firstLogin: true } });
           return;
         }
+      }
+
+      // Solicitar y guardar token FCM tras login exitoso
+      try {
+        await requestNotificationPermissionAndSaveToken(user.uid);
+      } catch (fcmErr) {
+        logger.error("[LOGIN] Error FCM:", fcmErr);
       }
 
       if (onLogin && typeof onLogin === "function") {
@@ -85,17 +151,15 @@ export default function Login({ onLogin /* onShowRegister no usado ahora */ }) {
 
   return (
     <div className="login-page">
-      <div className="login-header" aria-hidden="true">
-        <div className="login-date">{dateStr}</div>
-        <div className="app-version" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '16px' }}>{deviceIcon}</span>
-          <span>{deviceLabel}</span>
-          <span style={{ marginLeft: '4px', opacity: 0.7 }}>v{APP_VERSION}</span>
-        </div>
-      </div>
-
       <div className="login-card card">
-        <img src={logo} alt="App logo" className="login-logo" />
+        <img
+          src={logo}
+          alt="App logo"
+          className="login-logo"
+          style={{ cursor: 'pointer' }}
+          title="Refrescar aplicación"
+          onClick={handleInstallOrRefresh}
+        />
 
         <form onSubmit={handleSubmit} className="login-form" autoComplete="on" aria-label="Formulario de acceso">
           <label htmlFor="email" className="sr-only">Correo</label>
@@ -138,6 +202,37 @@ export default function Login({ onLogin /* onShowRegister no usado ahora */ }) {
             >
               {loading ? "Entrando..." : "Entrar"}
             </button>
+          </div>
+          {/* Botón para recuperar contraseña */}
+          <div style={{ marginTop: 10, textAlign: 'center' }}>
+            <button
+              type="button"
+              className="btn ghost"
+              style={{ fontSize: 14, color: '#2563eb', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+              onClick={async () => {
+                if (!email) {
+                  setError('Introduce tu correo para recuperar la contraseña.');
+                  return;
+                }
+                try {
+                  await auth.sendPasswordResetEmail(email.trim());
+                  setError('Se ha enviado un email para restablecer tu contraseña.');
+                } catch (err) {
+                  setError('No se pudo enviar el email de recuperación.');
+                }
+              }}
+            >
+              ¿Has olvidado tu contraseña?
+            </button>
+          </div>
+          {/* Fecha y versión debajo del botón Entrar */}
+          <div style={{ marginTop: 18, textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+            <div className="login-date">{dateStr}</div>
+            <div className="app-version" style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+              <span style={{ fontSize: '16px' }}>{deviceIcon}</span>
+              <span>{deviceLabel}</span>
+              <span style={{ marginLeft: '4px', opacity: 0.7 }}>v{APP_VERSION}</span>
+            </div>
           </div>
         </form>
       </div>

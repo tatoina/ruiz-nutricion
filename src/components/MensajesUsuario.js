@@ -19,7 +19,9 @@ export default function MensajesUsuario({ user }) {
   useEffect(() => {
     if (!user?.id) return;
     loadMensajes();
-  }, [user]);
+    // Solo recargar si cambia el id, no el objeto completo
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const loadMensajes = async () => {
     try {

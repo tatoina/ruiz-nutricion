@@ -27,7 +27,9 @@ export default function PanelAdmin({ onLogout }) {
   const fetchUsuarios = async () => {
     setLoading(true);
     try {
-      const querySnapshot = await getDocs(collection(db, "usuarios"));
+      // CAMBIO: 'usuarios' -> 'users' para contar bien los usuarios
+      // Si necesitas volver atrás, cambia 'users' por 'usuarios' en esta línea
+      const querySnapshot = await getDocs(collection(db, "users"));
       const users = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -88,7 +90,9 @@ export default function PanelAdmin({ onLogout }) {
     if (!confirmar) return;
 
     try {
-      await deleteDoc(doc(db, "usuarios", usuario.id));
+      // CAMBIO: 'usuarios' -> 'users' para eliminar usuario
+      // Si necesitas volver atrás, cambia 'users' por 'usuarios' en esta línea
+      await deleteDoc(doc(db, "users", usuario.id));
       alert("Cliente eliminado correctamente");
       fetchUsuarios(); // Recargar lista
     } catch (err) {
@@ -120,7 +124,9 @@ export default function PanelAdmin({ onLogout }) {
         alert("Cliente creado correctamente");
       } else {
         // Editar usuario existente
-        const userRef = doc(db, "usuarios", selectedUser.id);
+        // CAMBIO: 'usuarios' -> 'users' para referencia de usuario
+        // Si necesitas volver atrás, cambia 'users' por 'usuarios' en esta línea
+        const userRef = doc(db, "users", selectedUser.id);
         const updateData = {
           nombre: formData.nombre,
           apellidos: formData.apellidos,

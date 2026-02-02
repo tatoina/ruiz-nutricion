@@ -7,6 +7,49 @@ const {getAuth} = require("firebase-admin/auth");
 
 initializeApp();
 
+// Exportar función para enviar notificaciones push
+exports.sendPushToUser = require("./sendPushToUser").sendPushToUser;
+exports.sendPushToAdmin = require("./sendPushToAdmin").sendPushToAdmin;
+
+// Exportar función para guardar token FCM
+exports.saveFcmToken = require("./saveFcmToken").saveFcmToken;
+
+// Exportar función para LEER tokens (debug)
+exports.readAdminTokens = require("./readAdminTokens").readAdminTokens;
+
+/**
+ * Cloud Function callable para enviar mensajes de ayuda a inaviciba@gmail.com
+ * Recibe { mensaje } y lo envía por email usando la colección 'mail'.
+ */
+exports.sendHelpEmail = onCall(async (request) => {
+  const { mensaje } = request.data;
+  if (!mensaje || typeof mensaje !== 'string' || mensaje.trim().length < 5) {
+    throw new Error('El mensaje es obligatorio y debe ser más largo.');
+  }
+
+  // Puedes obtener el email del usuario autenticado si lo deseas:
+  const userEmail = request.auth?.token?.email || 'no-reply@nutriapp.com';
+
+  const emailData = {
+    to: 'inaviciba@gmail.com',
+    message: {
+      subject: 'Consulta desde el panel de administración',
+      html: `
+        <h2>Consulta recibida desde el panel de administración</h2>
+        <p><strong>De:</strong> ${userEmail}</p>
+        <p><strong>Mensaje:</strong></p>
+        <div style="white-space:pre-line; border:1px solid #eee; background:#f8fafc; padding:16px; border-radius:8px;">${mensaje.replace(/</g, '&lt;')}</div>
+        <p style="color:#888; font-size:13px; margin-top:24px;">NutriApp - ${new Date().toLocaleString('es-ES')}</p>
+      `,
+      text: `Consulta recibida desde el panel de administración\nDe: ${userEmail}\nMensaje: ${mensaje}`
+    }
+  };
+
+  const db = getFirestore();
+  await db.collection('mail').add({ ...emailData, createdAt: new Date() });
+  return { ok: true };
+});
+
 /**
  * Cloud Function que se dispara cuando se crea un nuevo documento en users/
  * Envía un email de bienvenida con las credenciales y link a la app

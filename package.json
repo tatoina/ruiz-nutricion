@@ -1,6 +1,6 @@
 {
   "name": "nutri-app",
-  "version": "2.0.2",
+  "version": "2.6.0",
   "private": true,
   "dependencies": {
     "@sendgrid/mail": "^8.1.6",
@@ -13,7 +13,7 @@
     "express": "^5.1.0",
     "firebase": "^12.4.0",
     "react": "^18.2.0",
-    "react-chartjs-2": "^5.3.0",
+    "react-chartjs-2": "^5.3.1",
     "react-dom": "^18.2.0",
     "react-router-dom": "^7.9.4",
     "react-scripts": "^5.0.1",
@@ -43,5 +43,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "baseline-browser-mapping": "^2.9.19"
   }
 }
