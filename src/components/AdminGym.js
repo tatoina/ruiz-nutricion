@@ -1,15 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { db } from "../Firebase";
+import { db, storage } from "../Firebase";
 import { 
   collection, 
   getDocs, 
   doc, 
   updateDoc,
   addDoc,
+  deleteDoc,
   query,
   orderBy 
 } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 /**
  * AdminGym - Asignación de ejercicios a usuarios por días
@@ -38,6 +40,26 @@ export default function AdminGym() {
   });
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
+
+  // Estados para gestión de categorías
+  const [showCategoriaModal, setShowCategoriaModal] = useState(false);
+  const [nuevaCategoria, setNuevaCategoria] = useState("");
+  const [editingCategoria, setEditingCategoria] = useState(null);
+  const [modoCategoria, setModoCategoria] = useState("crear");
+
+  // Estados para gestión de ejercicios
+  const [showEjercicioModal, setShowEjercicioModal] = useState(false);
+  const [formEjercicio, setFormEjercicio] = useState({
+    nombre: "",
+    categoria: "",
+    descripcion: ""
+  });
+  const [editingEjercicio, setEditingEjercicio] = useState(null);
+  const [videoFile, setVideoFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  // Vista activa: "asignacion" o "gestion"
+  const [vistaActiva, setVistaActiva] = useState("asignacion");
 
   // Días de la semana
   const diasSemana = ["Día 1", "Día 2", "Día 3", "Día 4", "Día 5", "Día 6", "Día 7"];
@@ -74,7 +96,8 @@ export default function AdminGym() {
         })).sort((a, b) => (a.orden || 0) - (b.orden || 0));
         
         if (catList.length > 0) {
-          setCategorias(catList.map(c => c.nombre));
+          // Guardar objetos completos de categorías
+          setCategorias(catList);
         } else {
           // Si no hay categorías en BD, usar las por defecto
           setCategorias(categoriasDefault);
@@ -139,6 +162,175 @@ export default function AdminGym() {
       alert("Error al cargar datos: " + err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ========== GESTIÓN DE CATEGORÍAS ==========
+  
+  const handleNuevaCategoria = () => {
+    setModoCategoria("crear");
+    setEditingCategoria(null);
+    setNuevaCategoria("");
+    setShowCategoriaModal(true);
+  };
+
+  const handleEditarCategoria = (cat) => {
+    setModoCategoria("editar");
+    setEditingCategoria(cat);
+    setNuevaCategoria(cat.nombre);
+    setShowCategoriaModal(true);
+  };
+
+  const handleGuardarCategoria = async () => {
+    if (!nuevaCategoria.trim()) {
+      alert("Escribe un nombre para la categoría");
+      return;
+    }
+    
+    try {
+      if (modoCategoria === "crear") {
+        await addDoc(collection(db, "gym_categorias"), {
+          nombre: nuevaCategoria.trim(),
+          orden: categorias.length,
+          createdAt: new Date().toISOString()
+        });
+      } else {
+        await updateDoc(doc(db, "gym_categorias", editingCategoria.id), {
+          nombre: nuevaCategoria.trim(),
+          updatedAt: new Date().toISOString()
+        });
+      }
+      setNuevaCategoria("");
+      setShowCategoriaModal(false);
+      setEditingCategoria(null);
+      await loadData();
+    } catch (err) {
+      console.error("Error al guardar categoría:", err);
+      alert("Error al guardar categoría: " + err.message);
+    }
+  };
+
+  const handleEliminarCategoria = async (catId, nombre) => {
+    if (!window.confirm(`¿Eliminar categoría "${nombre}"?`)) return;
+    
+    try {
+      await deleteDoc(doc(db, "gym_categorias", catId));
+      await loadData();
+    } catch (err) {
+      console.error("Error al eliminar categoría:", err);
+      alert("Error: " + err.message);
+    }
+  };
+
+  const handleRestaurarCategoriasDefault = async () => {
+    if (!window.confirm("¿Restaurar las 10 categorías por defecto? Esto NO eliminará las categorías existentes.")) return;
+    
+    try {
+      const categoriasDefault = [
+        { nombre: "Jaula", orden: 1 },
+        { nombre: "Peso Muerto", orden: 2 },
+        { nombre: "Press Banca", orden: 3 },
+        { nombre: "Cardio", orden: 4 },
+        { nombre: "Piernas", orden: 5 },
+        { nombre: "Brazos", orden: 6 },
+        { nombre: "Espalda", orden: 7 },
+        { nombre: "Abdomen", orden: 8 },
+        { nombre: "Flexibilidad", orden: 9 },
+        { nombre: "Funcional", orden: 10 }
+      ];
+      
+      for (const cat of categoriasDefault) {
+        await addDoc(collection(db, "gym_categorias"), {
+          nombre: cat.nombre,
+          orden: cat.orden,
+          createdAt: new Date().toISOString()
+        });
+      }
+      
+      alert("✅ Categorías restauradas exitosamente");
+      await loadData();
+    } catch (err) {
+      console.error("Error al restaurar categorías:", err);
+      alert("Error al restaurar categorías: " + err.message);
+    }
+  };
+
+  // ========== GESTIÓN DE EJERCICIOS ==========
+  
+  const handleNuevoEjercicio = () => {
+    setEditingEjercicio(null);
+    setFormEjercicio({
+      nombre: "",
+      categoria: "",
+      descripcion: ""
+    });
+    setVideoFile(null);
+    setShowEjercicioModal(true);
+  };
+
+  const handleEditarEjercicio = (ej) => {
+    setEditingEjercicio(ej);
+    setFormEjercicio({
+      nombre: ej.nombre || "",
+      categoria: ej.categoria || "",
+      descripcion: ej.descripcion || ""
+    });
+    setVideoFile(null);
+    setShowEjercicioModal(true);
+  };
+
+  const handleGuardarEjercicio = async () => {
+    if (!formEjercicio.nombre.trim() || !formEjercicio.categoria) {
+      alert("Nombre y categoría son obligatorios");
+      return;
+    }
+    
+    try {
+      setUploading(true);
+      let videoUrl = "";
+
+      // Subir video si hay archivo
+      if (videoFile) {
+        const videoRef = ref(storage, `recursos/${Date.now()}_${videoFile.name}`);
+        await uploadBytes(videoRef, videoFile);
+        videoUrl = await getDownloadURL(videoRef);
+      }
+
+      const data = {
+        nombre: formEjercicio.nombre.trim(),
+        categoria: formEjercicio.categoria,
+        descripcion: formEjercicio.descripcion.trim(),
+        videoUrl: videoUrl || editingEjercicio?.videoUrl || "",
+        updatedAt: new Date().toISOString()
+      };
+      
+      if (editingEjercicio) {
+        await updateDoc(doc(db, "gym_ejercicios", editingEjercicio.id), data);
+      } else {
+        data.createdAt = new Date().toISOString();
+        await addDoc(collection(db, "gym_ejercicios"), data);
+      }
+      
+      setShowEjercicioModal(false);
+      setVideoFile(null);
+      await loadData();
+    } catch (err) {
+      console.error("Error al guardar ejercicio:", err);
+      alert("Error: " + err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleEliminarEjercicio = async (ejId, nombre) => {
+    if (!window.confirm(`¿Eliminar ejercicio "${nombre}"?`)) return;
+    
+    try {
+      await deleteDoc(doc(db, "gym_ejercicios", ejId));
+      await loadData();
+    } catch (err) {
+      console.error("Error al eliminar ejercicio:", err);
+      alert("Error: " + err.message);
     }
   };
 
@@ -221,7 +413,7 @@ export default function AdminGym() {
   };
 
   // Eliminar ejercicio de la lista del día actual
-  const handleEliminarEjercicio = (ejercicioId) => {
+  const handleEliminarDeLista = (ejercicioId) => {
     const ejerciciosDelDia = userEjerciciosPorDia[diaActivo] || [];
     const nuevaLista = ejerciciosDelDia
       .filter((ej) => ej.id !== ejercicioId)
@@ -498,18 +690,34 @@ export default function AdminGym() {
         >
           ← Volver
         </button>
-        <h2 style={styles.title}>🏋️ GYM - Asignar Ejercicios por Días</h2>
-        <button
-          onClick={() => navigate("/admin/gym/gestion")}
-          style={styles.btnGestion}
-          title="Gestionar Ejercicios y Categorías"
-        >
-          ⚙️ Gestionar Ejercicios
-        </button>
+        <h2 style={styles.title}>🏋️ GYM</h2>
+        <div style={styles.viewTabs}>
+          <button
+            onClick={() => setVistaActiva("asignacion")}
+            style={{
+              ...styles.tabButton,
+              ...(vistaActiva === "asignacion" ? styles.tabButtonActive : {})
+            }}
+          >
+            📋 Asignar Tablas
+          </button>
+          <button
+            onClick={() => setVistaActiva("gestion")}
+            style={{
+              ...styles.tabButton,
+              ...(vistaActiva === "gestion" ? styles.tabButtonActive : {})
+            }}
+          >
+            ⚙️ Gestión
+          </button>
+        </div>
       </div>
 
-      {/* Selector de usuario */}
-      <div style={styles.section}>
+      {/* VISTA ASIGNACIÓN */}
+      {vistaActiva === "asignacion" && (
+        <>
+          {/* Selector de usuario */}
+          <div style={styles.section}>
         <label style={styles.labelBig}>Asignar a:</label>
         <div style={styles.userSelectRow}>
           <select
@@ -597,9 +805,10 @@ export default function AdminGym() {
                 style={styles.select}
               >
                 <option value="">Todas</option>
-                {categorias.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
+                {categorias.map((cat) => {
+                  const catNombre = typeof cat === 'string' ? cat : cat.nombre;
+                  return <option key={catNombre} value={catNombre}>{catNombre}</option>;
+                })}
               </select>
             </div>
 
@@ -718,7 +927,7 @@ export default function AdminGym() {
                       ⬇️
                     </button>
                     <button
-                      onClick={() => handleEliminarEjercicio(ej.id)}
+                      onClick={() => handleEliminarDeLista(ej.id)}
                       style={styles.btnRemove}
                       title="Eliminar"
                     >
@@ -731,8 +940,107 @@ export default function AdminGym() {
           )}
         </div>
       </div>
+        </>
+      )}
 
-      {/* Modal de parámetros */}
+      {/* VISTA GESTIÓN */}
+      {vistaActiva === "gestion" && (
+        <>
+          {/* Sección de Categorías */}
+          <div style={styles.section}>
+            <div style={styles.sectionHeader}>
+              <h3 style={styles.subtitle}>📁 Categorías</h3>
+              <div style={{ display: "flex", gap: "10px" }}>
+                {categorias.length === 0 && (
+                  <button 
+                    onClick={handleRestaurarCategoriasDefault} 
+                    style={{ ...styles.btnPrimary, backgroundColor: "#ff9800" }}
+                    title="Restaurar las 10 categorías por defecto"
+                  >
+                    🔄 Restaurar Categorías
+                  </button>
+                )}
+                <button onClick={handleNuevaCategoria} style={styles.btnPrimary}>
+                  ➕ Nueva Categoría
+                </button>
+              </div>
+            </div>
+            <div style={styles.categoriasList}>
+              {categorias.length === 0 ? (
+                <p style={styles.noData}>No hay categorías. Crea una nueva o restaura las por defecto.</p>
+              ) : (
+                categorias.map(cat => (
+                  <div key={cat.id} style={styles.categoriaChip}>
+                    <span>{cat.nombre}</span>
+                    <div style={{ display: "flex", gap: "4px" }}>
+                      <button 
+                        onClick={() => handleEditarCategoria(cat)}
+                        style={styles.btnChipEdit}
+                        title="Editar"
+                      >
+                        ✏️
+                      </button>
+                      <button 
+                        onClick={() => handleEliminarCategoria(cat.id, cat.nombre)}
+                        style={styles.btnChipDelete}
+                        title="Eliminar"
+                      >
+                        ❌
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Sección de Ejercicios */}
+          <div style={styles.section}>
+            <div style={styles.sectionHeader}>
+              <h3 style={styles.subtitle}>🏋️ Ejercicios</h3>
+              <button onClick={handleNuevoEjercicio} style={styles.btnPrimary}>
+                ➕ Nuevo Ejercicio
+              </button>
+            </div>
+            <div style={styles.ejerciciosTable}>
+              {ejercicios.length === 0 ? (
+                <p style={styles.noData}>No hay ejercicios. Crea uno nuevo.</p>
+              ) : (
+                ejercicios.map(ej => (
+                  <div key={ej.id} style={styles.ejercicioRow}>
+                    <div style={styles.ejercicioRowInfo}>
+                      <div style={styles.ejercicioRowNombre}>{ej.nombre}</div>
+                      <div style={styles.ejercicioRowCategoria}>
+                        📁 {ej.categoria}
+                      </div>
+                      {ej.videoUrl && (
+                        <div style={styles.ejercicioRowVideo}>🎥 Video disponible</div>
+                      )}
+                    </div>
+                    <div style={styles.ejercicioRowActions}>
+                      <button 
+                        onClick={() => handleEditarEjercicio(ej)}
+                        style={styles.btnEdit}
+                      >
+                        ✏️ Editar
+                      </button>
+                      <button 
+                        onClick={() => handleEliminarEjercicio(ej.id, ej.nombre)}
+                        style={styles.btnDelete}
+                      >
+                        🗑️ Eliminar
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* MODALES */}
+      {/* Modal de parámetros del ejercicio (asignación) */}
       {showParamsModal && (
         <div style={styles.modalBackdrop} onClick={() => setShowParamsModal(false)}>
           <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -797,6 +1105,103 @@ export default function AdminGym() {
               </button>
               <button onClick={handleGuardarParams} style={styles.btnConfirm}>
                 Agregar a {diaActivo}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Categoría */}
+      {showCategoriaModal && (
+        <div style={styles.modalBackdrop} onClick={() => setShowCategoriaModal(false)}>
+          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <h3 style={styles.modalTitle}>
+              {modoCategoria === "crear" ? "📁 Nueva Categoría" : "✏️ Editar Categoría"}
+            </h3>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Nombre</label>
+              <input
+                type="text"
+                value={nuevaCategoria}
+                onChange={(e) => setNuevaCategoria(e.target.value)}
+                style={styles.input}
+                placeholder="Ej: Cardio"
+                autoFocus
+              />
+            </div>
+            <div style={styles.modalActions}>
+              <button onClick={() => setShowCategoriaModal(false)} style={styles.btnCancel}>
+                Cancelar
+              </button>
+              <button onClick={handleGuardarCategoria} style={styles.btnConfirm}>
+                {modoCategoria === "crear" ? "Crear" : "Guardar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Ejercicio */}
+      {showEjercicioModal && (
+        <div style={styles.modalBackdrop} onClick={() => setShowEjercicioModal(false)}>
+          <div style={{...styles.modal, maxWidth: "600px"}} onClick={(e) => e.stopPropagation()}>
+            <h3 style={styles.modalTitle}>
+              {editingEjercicio ? "✏️ Editar Ejercicio" : "🏋️ Nuevo Ejercicio"}
+            </h3>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Nombre *</label>
+              <input
+                type="text"
+                value={formEjercicio.nombre}
+                onChange={(e) => setFormEjercicio({...formEjercicio, nombre: e.target.value})}
+                style={styles.input}
+                placeholder="Ej: Press Banca"
+              />
+            </div>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Categoría *</label>
+              <select
+                value={formEjercicio.categoria}
+                onChange={(e) => setFormEjercicio({...formEjercicio, categoria: e.target.value})}
+                style={styles.select}
+              >
+                <option value="">Seleccionar...</option>
+                {categorias.map(cat => (
+                  <option key={typeof cat === 'string' ? cat : cat.nombre} value={typeof cat === 'string' ? cat : cat.nombre}>
+                    {typeof cat === 'string' ? cat : cat.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Descripción</label>
+              <textarea
+                value={formEjercicio.descripcion}
+                onChange={(e) => setFormEjercicio({...formEjercicio, descripcion: e.target.value})}
+                style={{...styles.input, minHeight: "80px", resize: "vertical"}}
+                placeholder="Descripción del ejercicio..."
+              />
+            </div>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Video (opcional)</label>
+              <input
+                type="file"
+                accept="video/*"
+                onChange={(e) => setVideoFile(e.target.files[0])}
+                style={styles.input}
+              />
+              {editingEjercicio?.videoUrl && !videoFile && (
+                <p style={{fontSize: "14px", color: "#666", marginTop: "4px"}}>
+                  🎥 Ya tiene video. Sube uno nuevo para reemplazarlo.
+                </p>
+              )}
+            </div>
+            <div style={styles.modalActions}>
+              <button onClick={() => setShowEjercicioModal(false)} style={styles.btnCancel} disabled={uploading}>
+                Cancelar
+              </button>
+              <button onClick={handleGuardarEjercicio} style={styles.btnConfirm} disabled={uploading}>
+                {uploading ? "Guardando..." : editingEjercicio ? "Guardar" : "Crear"}
               </button>
             </div>
           </div>
@@ -1212,6 +1617,133 @@ const styles = {
     color: "white",
     border: "none",
     borderRadius: "8px",
+    fontSize: "14px",
+    fontWeight: "600",
+    cursor: "pointer",
+  },
+  // Estilos para tabs de vista
+  viewTabs: {
+    display: "flex",
+    gap: "8px",
+    marginLeft: "auto",
+  },
+  tabButton: {
+    padding: "10px 20px",
+    backgroundColor: "#f5f5f5",
+    color: "#666",
+    border: "2px solid #e0e0e0",
+    borderRadius: "8px",
+    fontSize: "14px",
+    fontWeight: "600",
+    cursor: "pointer",
+    transition: "all 0.2s",
+  },
+  tabButtonActive: {
+    backgroundColor: "#1976d2",
+    color: "white",
+    borderColor: "#1976d2",
+  },
+  // Estilos para gestión
+  sectionHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "16px",
+  },
+  btnPrimary: {
+    padding: "10px 20px",
+    backgroundColor: "#1976d2",
+    color: "white",
+    border: "none",
+    borderRadius: "8px",
+    fontSize: "14px",
+    fontWeight: "600",
+    cursor: "pointer",
+    transition: "all 0.2s",
+    boxShadow: "0 2px 4px rgba(25, 118, 210, 0.3)",
+  },
+  categoriasList: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "12px",
+  },
+  categoriaChip: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    padding: "8px 16px",
+    backgroundColor: "#e3f2fd",
+    borderRadius: "20px",
+    fontSize: "14px",
+    fontWeight: "500",
+    color: "#1976d2",
+  },
+  btnChipEdit: {
+    padding: "4px 8px",
+    backgroundColor: "transparent",
+    border: "none",
+    cursor: "pointer",
+    fontSize: "14px",
+  },
+  btnChipDelete: {
+    padding: "4px 8px",
+    backgroundColor: "transparent",
+    border: "none",
+    cursor: "pointer",
+    fontSize: "14px",
+  },
+  ejerciciosTable: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+  },
+  ejercicioRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "16px",
+    backgroundColor: "#f9f9f9",
+    borderRadius: "8px",
+    border: "1px solid #e0e0e0",
+  },
+  ejercicioRowInfo: {
+    flex: 1,
+  },
+  ejercicioRowNombre: {
+    fontSize: "16px",
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: "4px",
+  },
+  ejercicioRowCategoria: {
+    fontSize: "14px",
+    color: "#666",
+    marginBottom: "4px",
+  },
+  ejercicioRowVideo: {
+    fontSize: "13px",
+    color: "#1976d2",
+  },
+  ejercicioRowActions: {
+    display: "flex",
+    gap: "8px",
+  },
+  btnEdit: {
+    padding: "8px 16px",
+    backgroundColor: "#ff9800",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    fontSize: "14px",
+    fontWeight: "600",
+    cursor: "pointer",
+  },
+  btnDelete: {
+    padding: "8px 16px",
+    backgroundColor: "#f44336",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
     fontSize: "14px",
     fontWeight: "600",
     cursor: "pointer",
