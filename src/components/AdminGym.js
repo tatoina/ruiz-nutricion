@@ -19,6 +19,7 @@ export default function AdminGym() {
   const navigate = useNavigate();
   const [usuarios, setUsuarios] = useState([]);
   const [ejercicios, setEjercicios] = useState([]);
+  const [categorias, setCategorias] = useState([]);
   const [selectedUser, setSelectedUser] = useState("");
   const [userEjerciciosPorDia, setUserEjerciciosPorDia] = useState({});
   const [diaActivo, setDiaActivo] = useState("Día 1");
@@ -41,8 +42,8 @@ export default function AdminGym() {
   // Días de la semana
   const diasSemana = ["Día 1", "Día 2", "Día 3", "Día 4", "Día 5", "Día 6", "Día 7"];
 
-  // Categorías
-  const categorias = [
+  // Categorías por defecto (fallback si no hay en BD)
+  const categoriasDefault = [
     "Jaula",
     "Peso Muerto",
     "Press Banca",
@@ -63,6 +64,25 @@ export default function AdminGym() {
   const loadData = async () => {
     try {
       setLoading(true);
+      
+      // Cargar categorías
+      try {
+        const catSnapshot = await getDocs(collection(db, "gym_categorias"));
+        const catList = catSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })).sort((a, b) => (a.orden || 0) - (b.orden || 0));
+        
+        if (catList.length > 0) {
+          setCategorias(catList.map(c => c.nombre));
+        } else {
+          // Si no hay categorías en BD, usar las por defecto
+          setCategorias(categoriasDefault);
+        }
+      } catch (err) {
+        console.error("Error al cargar categorías:", err);
+        setCategorias(categoriasDefault);
+      }
       
       // Cargar usuarios (CAMBIO: 'usuarios' -> 'users' para contar bien los usuarios)
       // Si necesitas volver atrás, cambia 'users' por 'usuarios' en esta línea
@@ -98,7 +118,7 @@ export default function AdminGym() {
 
       // Cargar ejercicios
       try {
-        const q = query(collection(db, "ejercicios"), orderBy("nombre", "asc"));
+        const q = query(collection(db, "gym_ejercicios"), orderBy("nombre", "asc"));
         const ejSnapshot = await getDocs(q);
         const ejList = ejSnapshot.docs.map((doc) => ({
           id: doc.id,
@@ -107,7 +127,7 @@ export default function AdminGym() {
         setEjercicios(ejList);
       } catch (err) {
         // Fallback sin orderBy
-        const ejSnapshot = await getDocs(collection(db, "ejercicios"));
+        const ejSnapshot = await getDocs(collection(db, "gym_ejercicios"));
         const ejList = ejSnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),

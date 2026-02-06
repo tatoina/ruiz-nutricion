@@ -210,6 +210,39 @@ export default function AdminGymGestion() {
     }
   };
 
+  const handleRestaurarCategoriasDefault = async () => {
+    if (!window.confirm("¿Restaurar las 10 categorías por defecto? Esto NO eliminará las categorías existentes.")) return;
+    
+    try {
+      const categoriasDefault = [
+        { nombre: "Jaula", orden: 1 },
+        { nombre: "Peso Muerto", orden: 2 },
+        { nombre: "Press Banca", orden: 3 },
+        { nombre: "Cardio", orden: 4 },
+        { nombre: "Piernas", orden: 5 },
+        { nombre: "Brazos", orden: 6 },
+        { nombre: "Espalda", orden: 7 },
+        { nombre: "Abdomen", orden: 8 },
+        { nombre: "Flexibilidad", orden: 9 },
+        { nombre: "Funcional", orden: 10 }
+      ];
+      
+      for (const cat of categoriasDefault) {
+        await addDoc(collection(db, "gym_categorias"), {
+          nombre: cat.nombre,
+          orden: cat.orden,
+          createdAt: new Date().toISOString()
+        });
+      }
+      
+      alert("✅ Categorías restauradas exitosamente");
+      await loadData();
+    } catch (err) {
+      console.error("Error al restaurar categorías:", err);
+      alert("Error al restaurar categorías: " + err.message);
+    }
+  };
+
   // ========== GESTIÓN DE EJERCICIOS ==========
   
   const handleNuevoEjercicio = () => {
@@ -473,9 +506,20 @@ export default function AdminGymGestion() {
       <div style={styles.section}>
         <div style={styles.sectionHeader}>
           <h3 style={styles.sectionTitle}>📁 Categorías</h3>
-          <button onClick={handleNuevaCategoria} style={styles.btnPrimary}>
-            ➕ Nueva Categoría
-          </button>
+          <div style={{ display: "flex", gap: "10px" }}>
+            {categorias.length === 0 && (
+              <button 
+                onClick={handleRestaurarCategoriasDefault} 
+                style={{ ...styles.btnPrimary, backgroundColor: "#ff9800" }}
+                title="Restaurar las 10 categorías por defecto"
+              >
+                🔄 Restaurar Categorías
+              </button>
+            )}
+            <button onClick={handleNuevaCategoria} style={styles.btnPrimary}>
+              ➕ Nueva Categoría
+            </button>
+          </div>
         </div>
         <div style={styles.categoriasList}>
           {categorias.length === 0 ? (

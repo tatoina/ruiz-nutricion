@@ -215,6 +215,17 @@ export default function App() {
         />
 
         <Route
+          path="/admin/gym/gestion"
+          element={
+            <PrivateRoute>
+              <AdminLayoutResponsive title="GYM - Gestión de Ejercicios y Categorías">
+                <AdminGymGestion />
+              </AdminLayoutResponsive>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
           path="/admin/mensajes"
           element={
             <PrivateRoute>
