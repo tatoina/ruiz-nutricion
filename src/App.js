@@ -7,7 +7,6 @@ import AdminMenus from "./components/AdminMenus";
 import AdminTipoDieta from "./components/AdminTipoDieta";
 import AdminTarifas from "./components/AdminTarifas";
 import AdminPagosGlobal from "./components/AdminPagosGlobal";
-import AdminGymGestion from "./components/AdminGymGestion";
 import AdminGym from "./components/AdminGym";
 import AdminMensajes from "./components/AdminMensajes";
 import AdminRecursos from "./components/AdminRecursos";
@@ -207,19 +206,8 @@ export default function App() {
           path="/admin/gym"
           element={
             <PrivateRoute>
-              <AdminLayoutResponsive title="GYM - Asignar Ejercicios por Días">
+              <AdminLayoutResponsive title="GYM - Gestión y Asignación">
                 <AdminGym />
-              </AdminLayoutResponsive>
-            </PrivateRoute>
-          }
-        />
-
-        <Route
-          path="/admin/gym/gestion"
-          element={
-            <PrivateRoute>
-              <AdminLayoutResponsive title="GYM - Gestión de Ejercicios y Categorías">
-                <AdminGymGestion />
               </AdminLayoutResponsive>
             </PrivateRoute>
           }
