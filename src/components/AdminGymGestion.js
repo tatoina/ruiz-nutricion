@@ -496,8 +496,8 @@ export default function AdminGymGestion() {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <button onClick={() => navigate('/admin')} style={styles.btnBack}>
-          ← Volver
+        <button onClick={() => navigate('/admin/gym')} style={styles.btnBack}>
+          ← Volver a GYM
         </button>
         <h2 style={styles.mainTitle}>🏋️ Gestión GYM</h2>
       </div>

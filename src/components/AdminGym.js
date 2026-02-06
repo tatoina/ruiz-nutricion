@@ -499,6 +499,13 @@ export default function AdminGym() {
           ← Volver
         </button>
         <h2 style={styles.title}>🏋️ GYM - Asignar Ejercicios por Días</h2>
+        <button
+          onClick={() => navigate("/admin/gym/gestion")}
+          style={styles.btnGestion}
+          title="Gestionar Ejercicios y Categorías"
+        >
+          ⚙️ Gestionar Ejercicios
+        </button>
       </div>
 
       {/* Selector de usuario */}
@@ -821,6 +828,19 @@ const styles = {
     fontWeight: "500",
     cursor: "pointer",
     transition: "background-color 0.2s",
+  },
+  btnGestion: {
+    marginLeft: "auto",
+    padding: "10px 20px",
+    backgroundColor: "#1976d2",
+    color: "white",
+    border: "none",
+    borderRadius: "8px",
+    fontSize: "14px",
+    fontWeight: "600",
+    cursor: "pointer",
+    transition: "all 0.2s",
+    boxShadow: "0 2px 4px rgba(25, 118, 210, 0.3)",
   },
   title: {
     margin: "0",
