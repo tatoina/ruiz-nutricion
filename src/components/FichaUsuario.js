@@ -2283,6 +2283,45 @@ Ruiz Nutrición
     handleDismissCitaReminder();
   };
 
+  // Función para activar/desactivar usuario
+  const handleToggleActivoUsuario = async () => {
+    if (!adminMode || !uid) return;
+    
+    const isActivo = userData.activo !== false; // Por defecto true si no existe
+    const accion = isActivo ? "desactivar" : "activar";
+    
+    const confirmar = window.confirm(
+      `¿Estás seguro de que deseas ${accion} a este usuario?\n\n` +
+      `Usuario: ${userData.nombre || ''} ${userData.apellidos || ''}\n` +
+      (isActivo 
+        ? "Al desactivarlo, aparecerá en la tabla de usuarios NO ACTIVOS." 
+        : "Al activarlo, volverá a la lista de usuarios activos.")
+    );
+    
+    if (!confirmar) return;
+    
+    try {
+      const userRef = doc(db, "users", uid);
+      await updateDoc(userRef, {
+        activo: !isActivo,
+        fechaEstadoActivo: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      
+      // Actualizar estado local
+      setUserData(prev => ({
+        ...prev,
+        activo: !isActivo,
+        fechaEstadoActivo: new Date().toISOString()
+      }));
+      
+      alert(`✅ Usuario ${accion}do correctamente`);
+    } catch (err) {
+      console.error(`Error al ${accion} usuario:`, err);
+      alert(`❌ Error al ${accion} usuario: ${err.message}`);
+    }
+  };
+
   // Función para cargar snacks desde Firestore
   const loadSnacks = async () => {
     setLoadingSnacks(true);
@@ -3880,6 +3919,22 @@ Ruiz Nutrición
                 textOverflow: "ellipsis"
               }}>
                 {userData.nombre ? `${userData.nombre} ${userData.apellidos || ""}` : userData.email}
+                {userData.activo === false && (
+                  <span style={{
+                    marginLeft: "8px",
+                    padding: "4px 10px",
+                    fontSize: "12px",
+                    fontWeight: "700",
+                    backgroundColor: "#ef4444",
+                    color: "white",
+                    borderRadius: "6px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                    boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
+                  }}>
+                    ⛔ DESACTIVADO
+                  </span>
+                )}
                 {userData?.anamnesis?.eligePlan && (
                   <span style={{
                     marginLeft: "8px",
@@ -3952,6 +4007,41 @@ Ruiz Nutrición
                 <rect x="6" y="14" width="12" height="7" rx="1" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
+
+            {/* Botón activar/desactivar usuario - Solo visible para admin */}
+            {adminMode && (
+              <button 
+                className="btn-icon-header" 
+                onClick={handleToggleActivoUsuario} 
+                title={userData.activo === false ? "Activar usuario" : "Desactivar usuario"}
+                style={{
+                  background: userData.activo === false ? "rgba(239, 68, 68, 0.9)" : "rgba(255,255,255,0.2)",
+                  border: "none",
+                  borderRadius: "8px",
+                  width: "36px",
+                  height: "36px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  transition: "all 0.2s"
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = userData.activo === false ? "rgba(239, 68, 68, 1)" : "rgba(255,255,255,0.3)";
+                  e.target.style.transform = "scale(1.1)";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = userData.activo === false ? "rgba(239, 68, 68, 0.9)" : "rgba(255,255,255,0.2)";
+                  e.target.style.transform = "scale(1)";
+                }}
+              >
+                {userData.activo === false ? (
+                  <span style={{ fontSize: "18px" }}>⛔</span>
+                ) : (
+                  <span style={{ fontSize: "18px", filter: "grayscale(0)" }}>✅</span>
+                )}
+              </button>
+            )}
 
             {(!targetUid || targetUid === authUid) && (
               <>

@@ -32,6 +32,7 @@ export default function AdminUsers() {
   const [error, setError] = useState(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [filter, setFilter] = useState("");
+  const [estadoFiltro, setEstadoFiltro] = useState("activos"); // "activos", "desactivados", "todos"
   const listRef = useRef(null);
   const [indexRequired, setIndexRequired] = useState(false);
 
@@ -385,10 +386,22 @@ export default function AdminUsers() {
     }
   };
 
+  // Filtrar por estado activo/desactivado
   const filtered = users.filter((u) => {
-    if (!filter) return true;
-    const s = filter.toLowerCase();
-    return (u.apellidos || "").toLowerCase().includes(s) || (u.nombre || "").toLowerCase().includes(s) || (u.email || "").toLowerCase().includes(s);
+    // Filtro de texto
+    if (filter) {
+      const s = filter.toLowerCase();
+      const matchText = (u.apellidos || "").toLowerCase().includes(s) || 
+                       (u.nombre || "").toLowerCase().includes(s) || 
+                       (u.email || "").toLowerCase().includes(s);
+      if (!matchText) return false;
+    }
+    
+    // Filtro de estado activo (por defecto true si no existe)
+    const isActivo = u.activo !== false;
+    if (estadoFiltro === "activos") return isActivo;
+    if (estadoFiltro === "desactivados") return !isActivo;
+    return true; // "todos"
   });
 
   // Función para obtener la tendencia del peso (comparar con peso anterior)
@@ -880,6 +893,65 @@ export default function AdminUsers() {
               style={{ padding: isMobile ? 12 : 8, width: isMobile ? "100%" : `${leftWidth}px`, flexShrink: 0, marginBottom: isMobile ? "12px" : "0", boxSizing: 'border-box', overflowX: 'hidden', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
             >
               <input className="input" placeholder="Buscar por apellidos, nombre o email..." value={filter} onChange={(e) => setFilter(e.target.value)} style={{ width: "100%", padding: isMobile ? "10px 12px" : "6px 8px", fontSize: isMobile ? "15px" : "13px", flexShrink: 0, borderRadius: "8px", border: isMobile ? "2px solid #e5e7eb" : "1px solid #ddd" }} />
+              
+              {/* Filtro de estado activo/desactivado */}
+              <div style={{ marginTop: isMobile ? 10 : 6, display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                <button
+                  onClick={() => setEstadoFiltro("activos")}
+                  style={{
+                    flex: 1,
+                    minWidth: "80px",
+                    padding: "6px 12px",
+                    fontSize: "13px",
+                    fontWeight: estadoFiltro === "activos" ? "600" : "500",
+                    backgroundColor: estadoFiltro === "activos" ? "#16a34a" : "#f1f5f9",
+                    color: estadoFiltro === "activos" ? "white" : "#475569",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    transition: "all 0.2s"
+                  }}
+                >
+                  ✅ Activos
+                </button>
+                <button
+                  onClick={() => setEstadoFiltro("desactivados")}
+                  style={{
+                    flex: 1,
+                    minWidth: "80px",
+                    padding: "6px 12px",
+                    fontSize: "13px",
+                    fontWeight: estadoFiltro === "desactivados" ? "600" : "500",
+                    backgroundColor: estadoFiltro === "desactivados" ? "#ef4444" : "#f1f5f9",
+                    color: estadoFiltro === "desactivados" ? "white" : "#475569",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    transition: "all 0.2s"
+                  }}
+                >
+                  ⛔ Desactivados
+                </button>
+                <button
+                  onClick={() => setEstadoFiltro("todos")}
+                  style={{
+                    flex: 1,
+                    minWidth: "80px",
+                    padding: "6px 12px",
+                    fontSize: "13px",
+                    fontWeight: estadoFiltro === "todos" ? "600" : "500",
+                    backgroundColor: estadoFiltro === "todos" ? "#3b82f6" : "#f1f5f9",
+                    color: estadoFiltro === "todos" ? "white" : "#475569",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    transition: "all 0.2s"
+                  }}
+                >
+                  📋 Todos
+                </button>
+              </div>
+              
               <div ref={listRef} style={{ marginTop: isMobile ? 10 : 6, flex: 1, overflowY: "auto", overflowX: "hidden" }}>
                 {loading ? (
                   <div style={{ padding: isMobile ? 16 : 8, textAlign: "center", color: "#64748b" }}>Cargando usuarios...</div>
@@ -909,8 +981,20 @@ export default function AdminUsers() {
                             localStorage.setItem("adminSelectedUserId", u.id);
                           }}
                         >
-                          <div style={{ fontSize: "15px", fontWeight: "600", color: "#0f172a", marginBottom: "3px" }}>
-                            {`${(u.apellidos || "").trim()} ${(u.nombre || "").trim()}`.trim() || u.email}
+                          <div style={{ fontSize: "15px", fontWeight: "600", color: "#0f172a", marginBottom: "3px", display: "flex", alignItems: "center", gap: "6px" }}>
+                            <span>{`${(u.apellidos || "").trim()} ${(u.nombre || "").trim()}`.trim() || u.email}</span>
+                            {u.activo === false && (
+                              <span style={{
+                                fontSize: "10px",
+                                fontWeight: "600",
+                                backgroundColor: "#ef4444",
+                                color: "white",
+                                padding: "2px 6px",
+                                borderRadius: "4px"
+                              }}>
+                                DESACTIVADO
+                              </span>
+                            )}
                           </div>
                           <div style={{ fontSize: "12px", color: "#64748b", display: "flex", alignItems: "center", gap: "8px" }}>
                             <span>{u.email}</span>
@@ -968,7 +1052,21 @@ export default function AdminUsers() {
                         }}
                       >
                         <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-                          <strong style={{ fontSize: 13 }}>{`${(u.apellidos || "").trim()} ${(u.nombre || "").trim()}`.trim() || u.email}</strong>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <strong style={{ fontSize: 13 }}>{`${(u.apellidos || "").trim()} ${(u.nombre || "").trim()}`.trim() || u.email}</strong>
+                            {u.activo === false && (
+                              <span style={{
+                                fontSize: "9px",
+                                fontWeight: "600",
+                                backgroundColor: "#ef4444",
+                                color: "white",
+                                padding: "2px 5px",
+                                borderRadius: "3px"
+                              }}>
+                                DESACTIVADO
+                              </span>
+                            )}
+                          </div>
                           <small style={{ color: "#666", fontSize: "11px" }}>{u.email}</small>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
