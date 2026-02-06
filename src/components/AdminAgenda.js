@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { auth, db } from "../Firebase";
 import { onAuthStateChanged, getIdTokenResult } from "firebase/auth";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { useDevice } from "../hooks/useDevice";
 
@@ -54,9 +54,22 @@ export default function AdminAgenda() {
         const tokenResult = await getIdTokenResult(user);
         const hasClaimAdmin = !!tokenResult?.claims?.admin;
         const byEmail = ADMIN_EMAILS.includes(user.email.toLowerCase());
-        setIsAdmin(hasClaimAdmin || byEmail);
         
-        if (hasClaimAdmin || byEmail) {
+        // Verificar también el campo 'rol' en Firestore
+        let hasRolAdmin = false;
+        try {
+          const userDocRef = doc(db, "users", user.uid);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            hasRolAdmin = userDoc.data().rol === "admin";
+          }
+        } catch (err) {
+          console.error("Error checking rol in Firestore:", err);
+        }
+        
+        setIsAdmin(hasClaimAdmin || byEmail || hasRolAdmin);
+        
+        if (hasClaimAdmin || byEmail || hasRolAdmin) {
           loadAllAppointments();
         }
       }

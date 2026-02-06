@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { requestNotificationPermissionAndSaveToken } from "../fcm-setup";
 import "./estilos.css";
-import { signInWithEmailAndPassword, updatePassword } from "firebase/auth";
+import { signInWithEmailAndPassword, updatePassword, sendPasswordResetEmail } from "firebase/auth";
 import logger from "../utils/logger";
 import { auth, db } from "../Firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
@@ -215,7 +215,7 @@ export default function Login({ onLogin /* onShowRegister no usado ahora */ }) {
                   return;
                 }
                 try {
-                  await auth.sendPasswordResetEmail(email.trim());
+                  await sendPasswordResetEmail(auth, email.trim());
                   setError('Se ha enviado un email para restablecer tu contraseña.');
                 } catch (err) {
                   setError('No se pudo enviar el email de recuperación.');

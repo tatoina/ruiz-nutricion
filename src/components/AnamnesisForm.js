@@ -140,6 +140,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
   const [showRutinaSemana, setShowRutinaSemana] = useState(true);
   const [showFinSemana, setShowFinSemana] = useState(true);
   const [showEligePlan, setShowEligePlan] = useState(true);
+  const [showPlanTooltip, setShowPlanTooltip] = useState(false);
   const [showTipoDieta, setShowTipoDieta] = useState(true);
   const [showOtros, setShowOtros] = useState(true);
 
@@ -1516,9 +1517,83 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
           </div>
           {showEligePlan && (
           <div>
-            <label style={labelStyle}>
-              Tipo de plan:
-            </label>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+              <label style={labelStyle}>
+                Tipo de plan:
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowPlanTooltip(!showPlanTooltip)}
+                style={{
+                  backgroundColor: "#3b82f6",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: "20px",
+                  height: "20px",
+                  fontSize: "12px",
+                  cursor: "pointer",
+                  fontWeight: "bold",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 0,
+                  flexShrink: 0
+                }}
+              >
+                ?
+              </button>
+            </div>
+            
+            {/* Tooltip de restricciones - solo visible al pulsar ? */}
+            {showPlanTooltip && (
+              <div style={{
+                padding: "12px",
+                backgroundColor: "#eff6ff",
+                border: "1px solid #3b82f6",
+                borderRadius: "6px",
+                marginBottom: "12px",
+                fontSize: "13px",
+                lineHeight: "1.6",
+                position: "relative"
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setShowPlanTooltip(false)}
+                  style={{
+                    position: "absolute",
+                    top: "8px",
+                    right: "8px",
+                    background: "transparent",
+                    border: "none",
+                    fontSize: "18px",
+                    cursor: "pointer",
+                    color: "#1e40af",
+                    padding: 0,
+                    width: "20px",
+                    height: "20px",
+                    lineHeight: "1"
+                  }}
+                >
+                  ×
+                </button>
+                <div style={{ fontWeight: "600", color: "#1e40af", marginBottom: "8px" }}>
+                  ℹ️ Restricciones por plan:
+                </div>
+                <div style={{ color: "#1e3a8a" }}>
+                  <div style={{ marginBottom: "4px" }}>
+                    <strong>• Básico:</strong> SIN Ejercicios ni GYM (tiene Pesaje, Dieta, Lista Compra, Citas, Mensajes)
+                  </div>
+                  <div style={{ marginBottom: "4px" }}>
+                    <strong>• Básico + Ejercicios:</strong> TODAS las pestañas
+                  </div>
+                  <div>
+                    <strong>• Seguimiento:</strong> SOLO Pesaje y Citas
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <select
               name="eligePlan"
               value={formData.eligePlan}
@@ -1529,11 +1604,10 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               <option value="Basico">Básico</option>
               <option value="Basico + Ejercicios">Básico + Ejercicios</option>
               <option value="Seguimiento">Seguimiento</option>
-              <option value="Otros">Otros</option>
             </select>
             
-            {/* Campo de texto para "Otros" */}
-            {formData.eligePlan === "Otros" && (
+            {/* Eliminar campo de texto para "Otros" ya que se removió la opción */}
+            {false && (
               <div style={{ marginTop: "15px" }}>
                 <label style={labelStyle}>
                   Especificar plan:

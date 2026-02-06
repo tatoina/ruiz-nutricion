@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { doc, updateDoc, arrayUnion, getDoc } from "firebase/firestore";
 import { db } from "../Firebase";
+import { useDevice } from "../hooks/useDevice";
 import "./estilos.css";
 
 /**
@@ -15,6 +16,8 @@ import "./estilos.css";
  */
 
 export default function AdminPagos({ userId, userData }) {
+  const { isMobile } = useDevice();
+  
   // Configuración de tarifas globales (se cargan desde settings)
   const [tarifas, setTarifas] = useState({
     primeraVisita: 0,
@@ -236,19 +239,19 @@ export default function AdminPagos({ userId, userData }) {
   };
 
   return (
-    <div style={{ padding: "20px", maxWidth: "1200px", margin: "0 auto" }}>
-      <h2 style={{ marginBottom: "20px", color: "#16a34a" }}>💰 Gestión de Pagos</h2>
+    <div style={{ padding: isMobile ? "8px" : "20px", maxWidth: "1200px", margin: "0 auto" }}>
 
       {/* Mensajes de error y éxito */}
       {error && (
         <div
           style={{
-            padding: "12px",
-            marginBottom: "16px",
+            padding: isMobile ? "8px" : "12px",
+            marginBottom: isMobile ? "8px" : "16px",
             background: "#fee",
             color: "#c00",
             borderRadius: "6px",
             border: "1px solid #fcc",
+            fontSize: isMobile ? "13px" : "14px"
           }}
         >
           {error}
@@ -257,12 +260,13 @@ export default function AdminPagos({ userId, userData }) {
       {success && (
         <div
           style={{
-            padding: "12px",
-            marginBottom: "16px",
+            padding: isMobile ? "8px" : "12px",
+            marginBottom: isMobile ? "8px" : "16px",
             background: "#efe",
             color: "#060",
             borderRadius: "6px",
             border: "1px solid #cfc",
+            fontSize: isMobile ? "13px" : "14px"
           }}
         >
           {success}
@@ -273,18 +277,18 @@ export default function AdminPagos({ userId, userData }) {
       <div
         style={{
           background: "#f9fafb",
-          padding: "20px",
+          padding: isMobile ? "10px" : "20px",
           borderRadius: "8px",
-          marginBottom: "24px",
+          marginBottom: isMobile ? "12px" : "24px",
           border: "1px solid #e5e7eb",
         }}
       >
-        <h3 style={{ marginBottom: "16px" }}>� Registrar Pago</h3>
+        <h3 style={{ marginBottom: isMobile ? "8px" : "16px", fontSize: isMobile ? "14px" : "16px" }}>📝 Registrar Pago</h3>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
+        <div style={{ display: isMobile ? "flex" : "grid", flexDirection: isMobile ? "column" : undefined, gridTemplateColumns: isMobile ? undefined : "repeat(auto-fit, minmax(200px, 1fr))", gap: isMobile ? "8px" : "16px" }}>
           {/* Tipo de pago */}
           <div>
-            <label style={{ display: "block", marginBottom: "4px", fontWeight: "600", fontSize: "14px" }}>
+            <label style={{ display: "block", marginBottom: "4px", fontWeight: "600", fontSize: isMobile ? "12px" : "14px" }}>
               Tipo de pago *
             </label>
             <select
@@ -308,6 +312,7 @@ export default function AdminPagos({ userId, userData }) {
 
                 setNuevoPago({ ...nuevoPago, tipo, cantidad, concepto });
               }}
+              style={{ fontSize: isMobile ? "14px" : "16px", padding: isMobile ? "8px" : "10px" }}
             >
               <option value="">-- Seleccionar --</option>
               <option value="primeraVisita" disabled={primeraVisitaRealizada}>
@@ -321,7 +326,7 @@ export default function AdminPagos({ userId, userData }) {
 
           {/* Cantidad */}
           <div>
-            <label style={{ display: "block", marginBottom: "4px", fontWeight: "600", fontSize: "14px" }}>
+            <label style={{ display: "block", marginBottom: "4px", fontWeight: "600", fontSize: isMobile ? "12px" : "14px" }}>
               Cantidad (€) *
             </label>
             <input
@@ -332,12 +337,13 @@ export default function AdminPagos({ userId, userData }) {
               min="0"
               step="0.01"
               disabled={nuevoPago.tipo !== "otro"}
+              style={{ fontSize: isMobile ? "14px" : "16px", padding: isMobile ? "8px" : "10px" }}
             />
           </div>
 
           {/* Fecha */}
           <div>
-            <label style={{ display: "block", marginBottom: "4px", fontWeight: "600", fontSize: "14px" }}>
+            <label style={{ display: "block", marginBottom: "4px", fontWeight: "600", fontSize: isMobile ? "12px" : "14px" }}>
               Fecha *
             </label>
             <input
@@ -345,18 +351,20 @@ export default function AdminPagos({ userId, userData }) {
               className="input"
               value={nuevoPago.fecha}
               onChange={(e) => setNuevoPago({ ...nuevoPago, fecha: e.target.value })}
+              style={{ fontSize: isMobile ? "14px" : "16px", padding: isMobile ? "8px" : "10px" }}
             />
           </div>
 
           {/* Estado */}
           <div>
-            <label style={{ display: "block", marginBottom: "4px", fontWeight: "600", fontSize: "14px" }}>
+            <label style={{ display: "block", marginBottom: "4px", fontWeight: "600", fontSize: isMobile ? "12px" : "14px" }}>
               Estado *
             </label>
             <select
               className="input"
               value={nuevoPago.estado}
               onChange={(e) => setNuevoPago({ ...nuevoPago, estado: e.target.value })}
+              style={{ fontSize: isMobile ? "14px" : "16px", padding: isMobile ? "8px" : "10px" }}
             >
               <option value="pagado">✅ Pagado</option>
               <option value="pendiente">⏳ Pendiente</option>
@@ -366,8 +374,8 @@ export default function AdminPagos({ userId, userData }) {
 
         {/* Concepto (solo si es "otro") */}
         {nuevoPago.tipo === "otro" && (
-          <div style={{ marginTop: "16px" }}>
-            <label style={{ display: "block", marginBottom: "4px", fontWeight: "600", fontSize: "14px" }}>
+          <div style={{ marginTop: isMobile ? "8px" : "16px" }}>
+            <label style={{ display: "block", marginBottom: "4px", fontWeight: "600", fontSize: isMobile ? "12px" : "14px" }}>
               Concepto *
             </label>
             <input
@@ -376,21 +384,23 @@ export default function AdminPagos({ userId, userData }) {
               placeholder="Describe el concepto del pago"
               value={nuevoPago.concepto}
               onChange={(e) => setNuevoPago({ ...nuevoPago, concepto: e.target.value })}
+              style={{ fontSize: isMobile ? "14px" : "16px", padding: isMobile ? "8px" : "10px" }}
             />
           </div>
         )}
 
         {/* Notas */}
-        <div style={{ marginTop: "16px" }}>
-          <label style={{ display: "block", marginBottom: "4px", fontWeight: "600", fontSize: "14px" }}>
+        <div style={{ marginTop: isMobile ? "8px" : "16px" }}>
+          <label style={{ display: "block", marginBottom: "4px", fontWeight: "600", fontSize: isMobile ? "12px" : "14px" }}>
             Notas (opcional)
           </label>
           <textarea
             className="input"
-            rows="3"
+            rows={isMobile ? "2" : "3"}
             placeholder="Añade notas adicionales sobre este pago..."
             value={nuevoPago.notas}
             onChange={(e) => setNuevoPago({ ...nuevoPago, notas: e.target.value })}
+            style={{ fontSize: isMobile ? "14px" : "16px", padding: isMobile ? "8px" : "10px" }}
           />
         </div>
 
@@ -398,7 +408,7 @@ export default function AdminPagos({ userId, userData }) {
           className="btn primary"
           onClick={handleRegistrarPago}
           disabled={saving || !nuevoPago.tipo}
-          style={{ marginTop: "16px" }}
+          style={{ marginTop: isMobile ? "8px" : "16px", fontSize: isMobile ? "14px" : "16px", padding: isMobile ? "10px 16px" : "12px 20px" }}
         >
           {saving ? "Registrando..." : "✅ Registrar Pago"}
         </button>
@@ -408,40 +418,40 @@ export default function AdminPagos({ userId, userData }) {
       <div
         style={{
           background: "white",
-          padding: "20px",
+          padding: isMobile ? "10px" : "20px",
           borderRadius: "8px",
           border: "1px solid #e5e7eb",
         }}
       >
-        <h3 style={{ marginBottom: "16px" }}>📊 Historial de Pagos</h3>
+        <h3 style={{ marginBottom: isMobile ? "8px" : "16px", fontSize: isMobile ? "14px" : "16px" }}>📊 Historial de Pagos</h3>
 
         {/* Resumen de totales */}
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-            gap: "12px",
-            marginBottom: "20px",
-            padding: "16px",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gap: isMobile ? "6px" : "12px",
+            marginBottom: isMobile ? "10px" : "20px",
+            padding: isMobile ? "8px" : "16px",
             background: "#f9fafb",
             borderRadius: "6px",
           }}
         >
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "12px", color: "#666", marginBottom: "4px" }}>Total</div>
-            <div style={{ fontSize: "24px", fontWeight: "bold", color: "#16a34a" }}>
+            <div style={{ fontSize: isMobile ? "10px" : "12px", color: "#666", marginBottom: "2px" }}>Total</div>
+            <div style={{ fontSize: isMobile ? "16px" : "24px", fontWeight: "bold", color: "#16a34a" }}>
               {total.toFixed(2)} €
             </div>
           </div>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "12px", color: "#666", marginBottom: "4px" }}>Pagado</div>
-            <div style={{ fontSize: "24px", fontWeight: "bold", color: "#059669" }}>
+            <div style={{ fontSize: isMobile ? "10px" : "12px", color: "#666", marginBottom: "2px" }}>Pagado</div>
+            <div style={{ fontSize: isMobile ? "16px" : "24px", fontWeight: "bold", color: "#059669" }}>
               {totalPagado.toFixed(2)} €
             </div>
           </div>
           <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "12px", color: "#666", marginBottom: "4px" }}>Pendiente</div>
-            <div style={{ fontSize: "24px", fontWeight: "bold", color: "#dc2626" }}>
+            <div style={{ fontSize: isMobile ? "10px" : "12px", color: "#666", marginBottom: "2px" }}>Pendiente</div>
+            <div style={{ fontSize: isMobile ? "16px" : "24px", fontWeight: "bold", color: "#dc2626" }}>
               {totalPendiente.toFixed(2)} €
             </div>
           </div>
@@ -449,8 +459,77 @@ export default function AdminPagos({ userId, userData }) {
 
         {/* Tabla de pagos */}
         {pagos.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "40px", color: "#999" }}>
+          <div style={{ textAlign: "center", padding: isMobile ? "20px" : "40px", color: "#999", fontSize: isMobile ? "13px" : "14px" }}>
             No hay pagos registrados todavía.
+          </div>
+        ) : isMobile ? (
+          /* Vista móvil: Cards */
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {pagos.map((pago, index) => (
+              <div
+                key={index}
+                style={{
+                  background: pago.estado === "pendiente" ? "#fef2f2" : "white",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "8px",
+                  padding: "10px",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                  <div style={{ fontSize: "13px", fontWeight: "bold", color: "#111" }}>
+                    {pago.concepto}
+                    {pago.tipo === "primeraVisita" && <span style={{ marginLeft: "4px" }}>⭐</span>}
+                  </div>
+                  <div style={{ fontSize: "15px", fontWeight: "bold", color: "#16a34a" }}>
+                    {pago.cantidad.toFixed(2)} €
+                  </div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "11px", color: "#666" }}>
+                  <span>{new Date(pago.fecha).toLocaleDateString("es-ES")}</span>
+                  <select
+                    value={pago.estado}
+                    onChange={(e) => handleCambiarEstado(index, e.target.value)}
+                    disabled={saving}
+                    style={{
+                      padding: "3px 6px",
+                      borderRadius: "4px",
+                      border: "1px solid #e5e7eb",
+                      fontSize: "11px",
+                      background: pago.estado === "pagado" ? "#d1fae5" : "#fee2e2",
+                      color: pago.estado === "pagado" ? "#065f46" : "#991b1b",
+                      fontWeight: "600",
+                    }}
+                  >
+                    <option value="pagado">✅ Pagado</option>
+                    <option value="pendiente">⏳ Pendiente</option>
+                  </select>
+                </div>
+                {pago.notas && (
+                  <div style={{ marginTop: "4px", fontSize: "11px", color: "#666", fontStyle: "italic" }}>
+                    {pago.notas}
+                  </div>
+                )}
+                <button
+                  onClick={() => handleEliminarPago(index)}
+                  disabled={saving}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "#dc2626",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                    padding: "4px",
+                    marginTop: "4px",
+                    display: "block",
+                    width: "100%",
+                    textAlign: "center",
+                  }}
+                  title="Eliminar pago"
+                >
+                  🗑️ Eliminar
+                </button>
+              </div>
+            ))}
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>

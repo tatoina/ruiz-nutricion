@@ -20,9 +20,15 @@ service firebase.storage {
     match /users/{userId}/{folder}/{fileName} {
       // Los usuarios pueden leer sus propios archivos
       // Los admins pueden leer y escribir cualquier archivo
-      allow read: if request.auth != null && 
+      allow read, get: if request.auth != null && 
                      (request.auth.uid == userId || isAdmin());
       allow write: if request.auth != null && isAdmin();
+    }
+    
+    // Permitir listar archivos en las carpetas de usuarios
+    match /users/{userId}/{folder} {
+      allow list: if request.auth != null && 
+                     (request.auth.uid == userId || isAdmin());
     }
     
     // Reglas para imagen de tarifas
@@ -39,6 +45,24 @@ service firebase.storage {
       allow read: if request.auth != null;
       // Solo los admins pueden subir/modificar/eliminar archivos
       allow write: if request.auth != null && isAdmin();
+    }
+    
+    // Reglas para carpeta GYM con todas sus subcarpetas
+    match /gym/{allPaths=**} {
+      // Todos los usuarios autenticados pueden leer
+      allow read: if request.auth != null;
+      // Solo los admins pueden escribir
+      allow write: if request.auth != null && isAdmin();
+    }
+    
+    // Reglas para fotos de dieta
+    match /dietaFotos/{userId}/{fileName} {
+      // Los usuarios pueden leer sus propias fotos
+      // Los admins pueden leer cualquier foto
+      allow read: if request.auth != null && 
+                     (request.auth.uid == userId || isAdmin());
+      // Solo los admins pueden escribir y eliminar fotos
+      allow write, delete: if request.auth != null && isAdmin();
     }
     
     // Denegar acceso por defecto a otras rutas

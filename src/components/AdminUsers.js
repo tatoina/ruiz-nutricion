@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import HelpForm from "./HelpForm";
 import { auth, db, functions } from "../Firebase";
-import { onAuthStateChanged, signOut, getIdTokenResult } from "firebase/auth";
+import { onAuthStateChanged, signOut, getIdTokenResult, sendPasswordResetEmail } from "firebase/auth";
 import { collection, getDocs, query, orderBy, doc, deleteDoc, updateDoc, getDoc } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { useNavigate } from "react-router-dom";
@@ -51,6 +51,9 @@ export default function AdminUsers() {
   const [panelVisible, setPanelVisible] = useState(true);
   const [solicitudesPendientes, setSolicitudesPendientes] = useState(0);
 
+  // Estados para modal de gestión de usuarios
+  const [showGestionModal, setShowGestionModal] = useState(false);
+  
   // Estados para modal de crear/editar usuario
   const [showModal, setShowModal] = useState(false);
   const [modalMode, setModalMode] = useState("create"); // "create" o "edit"
@@ -64,7 +67,8 @@ export default function AdminUsers() {
     nacimiento: "",
     telefono: "",
     objetivoNutricional: "",
-    pesoActual: ""
+    pesoActual: "",
+    rol: "paciente"
   });
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState("");
@@ -100,14 +104,40 @@ export default function AdminUsers() {
         const token = await getIdTokenResult(u, true);
         const hasClaimAdmin = !!token?.claims?.admin;
         const byEmail = ADMIN_EMAILS.includes((u.email || "").toLowerCase());
-        const resolvedIsAdmin = hasClaimAdmin || byEmail;
+        
+        // Verificar también el campo 'rol' en Firestore
+        let hasRolAdmin = false;
+        try {
+          const userDocRef = doc(db, "users", u.uid);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            hasRolAdmin = userDoc.data().rol === "admin";
+          }
+        } catch (err) {
+          logger.error("Error checking rol in Firestore:", err);
+        }
+        
+        const resolvedIsAdmin = hasClaimAdmin || byEmail || hasRolAdmin;
         setIsAdmin(resolvedIsAdmin);
-        logDebug("Auth:", { uid: u.uid, email: u.email, claims: token?.claims, byEmail, resolvedIsAdmin });
+        logDebug("Auth:", { uid: u.uid, email: u.email, claims: token?.claims, byEmail, hasRolAdmin, resolvedIsAdmin });
       } catch (err) {
         logger.error("getIdTokenResult error:", err);
         const byEmail = ADMIN_EMAILS.includes((u.email || "").toLowerCase());
-        setIsAdmin(byEmail);
-        logDebug("Fallback isAdmin by email:", { email: u.email, byEmail });
+        
+        // Verificar rol en Firestore como fallback
+        let hasRolAdmin = false;
+        try {
+          const userDocRef = doc(db, "users", u.uid);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            hasRolAdmin = userDoc.data().rol === "admin";
+          }
+        } catch (err2) {
+          logger.error("Fallback rol check error:", err2);
+        }
+        
+        setIsAdmin(byEmail || hasRolAdmin);
+        logDebug("Fallback isAdmin by email:", { email: u.email, byEmail, hasRolAdmin });
       }
     });
     return () => unsub();
@@ -132,8 +162,23 @@ export default function AdminUsers() {
         if (!mounted) return;
         const list = snap.docs
           .map((d) => ({ id: d.id, ...d.data() }))
-          .filter((u) => !ADMIN_EMAILS.includes((u.email || "").toLowerCase()));
-        setUsers(list);
+          .filter((u) => {
+            // Filtrar admins
+            if (ADMIN_EMAILS.includes((u.email || "").toLowerCase())) return false;
+            if (u.role === "admin" || u.rol === "admin") return false;
+            // Filtrar usuarios sin datos válidos
+            if (!u.nombre || !u.apellidos || !u.email) return false;
+            // Filtrar usuarios con datos inválidos (solo "0" o vacíos)
+            if (u.nombre === "0" || u.apellidos === "0") return false;
+            return true;
+          });
+        
+        // Eliminar duplicados por email
+        const usuariosUnicos = list.filter((user, index, self) => 
+          index === self.findIndex((u) => u.email === user.email)
+        );
+        
+        setUsers(usuariosUnicos);
         // Restaurar usuario seleccionado por ID
         const savedUserId = localStorage.getItem("adminSelectedUserId");
         if (savedUserId) {
@@ -156,8 +201,23 @@ export default function AdminUsers() {
             if (!mounted) return;
             const list = snap.docs
               .map((d) => ({ id: d.id, ...d.data() }))
-              .filter((u) => !ADMIN_EMAILS.includes((u.email || "").toLowerCase()));
-            list.sort((a, b) => {
+              .filter((u) => {
+                // Filtrar admins
+                if (ADMIN_EMAILS.includes((u.email || "").toLowerCase())) return false;
+                if (u.role === "admin" || u.rol === "admin") return false;
+                // Filtrar usuarios sin datos válidos
+                if (!u.nombre || !u.apellidos || !u.email) return false;
+                // Filtrar usuarios con datos inválidos (solo "0" o vacíos)
+                if (u.nombre === "0" || u.apellidos === "0") return false;
+                return true;
+              });
+            
+            // Eliminar duplicados por email antes de ordenar
+            const usuariosUnicos = list.filter((user, index, self) => 
+              index === self.findIndex((u) => u.email === user.email)
+            );
+            
+            usuariosUnicos.sort((a, b) => {
               const A = (a.apellidos || "").toString().trim().toLowerCase();
               const B = (b.apellidos || "").toString().trim().toLowerCase();
               if (A === B) {
@@ -165,7 +225,7 @@ export default function AdminUsers() {
               }
               return A.localeCompare(B);
             });
-            setUsers(list);
+            setUsers(usuariosUnicos);
             // Restaurar usuario seleccionado por ID
             const savedUserId = localStorage.getItem("adminSelectedUserId");
             if (savedUserId) {
@@ -394,8 +454,14 @@ export default function AdminUsers() {
     }
   };
 
+  // Abrir modal de gestión de usuarios
+  const handleGestionUsuarios = () => {
+    setShowGestionModal(true);
+  };
+
   // Abrir modal para crear nuevo cliente
   const handleNuevoCliente = () => {
+    setShowGestionModal(false);
     setModalMode("create");
     setEditingUser(null);
     setFormData({
@@ -407,10 +473,33 @@ export default function AdminUsers() {
       nacimiento: "",
       telefono: "",
       objetivoNutricional: "",
-      pesoActual: ""
+      pesoActual: "",
+      rol: "paciente"
     });
     setModalError("");
     setShowModal(true);
+  };
+
+  // Enviar email de restablecer contraseña
+  const handleEnviarRestablecerPassword = async (usuario) => {
+    if (!usuario || !usuario.email) {
+      alert("No se puede enviar el email: falta el correo del usuario.");
+      return;
+    }
+
+    const confirmar = window.confirm(
+      `¿Enviar email de restablecimiento de contraseña a:\n\n${usuario.email}?`
+    );
+
+    if (!confirmar) return;
+
+    try {
+      await sendPasswordResetEmail(auth, usuario.email);
+      alert(`✅ Email de restablecimiento enviado a ${usuario.email}`);
+    } catch (err) {
+      console.error("Error enviando email de restablecimiento:", err);
+      alert(`❌ Error al enviar el email: ${err.message}`);
+    }
   };
 
   // Cargar datos del perfil admin
@@ -533,7 +622,8 @@ export default function AdminUsers() {
 
   // Abrir modal para editar cliente
   const handleEditarCliente = (usuario, e) => {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
+    setShowGestionModal(false);
     setModalMode("edit");
     setEditingUser(usuario);
     setFormData({
@@ -544,7 +634,8 @@ export default function AdminUsers() {
       nacimiento: usuario.nacimiento || "",
       telefono: usuario.telefono || "",
       objetivoNutricional: usuario.objetivoNutricional || "",
-      pesoActual: usuario.pesoActual || ""
+      pesoActual: usuario.pesoActual || "",
+      rol: usuario.rol || "paciente"
     });
     setModalError("");
     setShowModal(true);
@@ -575,7 +666,8 @@ export default function AdminUsers() {
           nacimiento: formData.nacimiento,
           telefono: formData.telefono,
           objetivoNutricional: formData.objetivoNutricional,
-          pesoActual: formData.pesoActual ? parseFloat(formData.pesoActual) : null
+          pesoActual: formData.pesoActual ? parseFloat(formData.pesoActual) : null,
+          rol: formData.rol
         });
         alert("Cliente creado correctamente");
         
@@ -587,22 +679,32 @@ export default function AdminUsers() {
           .filter((u) => !ADMIN_EMAILS.includes((u.email || "").toLowerCase()));
         setUsers(list);
       } else {
-        // Editar usuario existente
-        const userRef = doc(db, "users", editingUser.id);
-        const updateData = {
+        // Editar usuario existente usando Cloud Function
+        const updateUser = httpsCallable(functions, "updateUser");
+        await updateUser({
+          uid: editingUser.id,
           nombre: formData.nombre,
           apellidos: formData.apellidos,
           nacimiento: formData.nacimiento,
           telefono: formData.telefono,
           objetivoNutricional: formData.objetivoNutricional,
-          pesoActual: formData.pesoActual ? parseFloat(formData.pesoActual) : null
-        };
-        await updateDoc(userRef, updateData);
+          pesoActual: formData.pesoActual ? parseFloat(formData.pesoActual) : null,
+          rol: formData.rol
+        });
         
         // Actualizar en la lista local
         setUsers((prevUsers) =>
           prevUsers.map((u) =>
-            u.id === editingUser.id ? { ...u, ...updateData } : u
+            u.id === editingUser.id ? { 
+              ...u, 
+              nombre: formData.nombre,
+              apellidos: formData.apellidos,
+              nacimiento: formData.nacimiento,
+              telefono: formData.telefono,
+              objetivoNutricional: formData.objetivoNutricional,
+              pesoActual: formData.pesoActual ? parseFloat(formData.pesoActual) : null,
+              rol: formData.rol
+            } : u
           )
         );
         
@@ -674,7 +776,16 @@ export default function AdminUsers() {
           <div className="title" style={{ fontSize: isMobile ? "14px" : "16px", marginBottom: "2px" }}>
             Panel administrativo <span style={{ color: '#666', fontWeight: '400', fontSize: isMobile ? '12px' : '14px' }}>({users.length} usuarios)</span>
           </div>
-          {!isMobile && <div className="subtitle" style={{ fontSize: "11px" }}>Navega por los usuarios y edita sus fichas</div>}
+          {!isMobile && (
+            <>
+              <div style={{ fontSize: "10px", color: '#16a34a', fontWeight: '500', marginBottom: "2px" }}>
+                Sesión: {currentUser?.email}
+              </div>
+              <div className="subtitle" style={{ fontSize: "11px" }}>
+                Navega por los usuarios y edita sus fichas
+              </div>
+            </>
+          )}
         </div>
         
         <div style={{ display: "flex", gap: isMobile ? "4px" : "6px", alignItems: "center", flexWrap: "wrap", justifyContent: isMobile ? "center" : "flex-start", width: isMobile ? "100%" : "auto", maxWidth: '100%', overflow: 'hidden' }}>
@@ -723,7 +834,7 @@ export default function AdminUsers() {
               <button className="btn primary" onClick={() => navigate("/admin/recursos")} style={{ padding: "6px 10px", fontSize: "13px" }}>📁 Recursos</button>
             </>
           )}
-          {!isMobile && <button className="btn primary" onClick={handleNuevoCliente} style={{ fontWeight: "bold", padding: "6px 10px", fontSize: "13px" }}>➕ Nuevo cliente</button>}
+          {!isMobile && <button className="btn primary" onClick={handleGestionUsuarios} style={{ fontWeight: "bold", padding: "6px 10px", fontSize: "13px" }}>👥 Gestión de Usuarios</button>}
           {!isMobile && <button className="btn primary" onClick={() => { setShowAdminProfile(true); loadAdminProfile(); }} style={{ padding: "6px 10px", fontSize: "13px" }}>👤 Perfil</button>}
           {!isMobile && <>
             <button className="btn danger" onClick={handleSignOut} style={{ padding: "6px 10px", fontSize: "13px" }}>Cerrar sesión</button>
@@ -776,9 +887,7 @@ export default function AdminUsers() {
                   <div style={{ color: "var(--danger, #b91c1c)", padding: isMobile ? 16 : 8, background: "#fee2e2", borderRadius: "8px" }}>{error}</div>
                 ) : isMobile ? (
                   filter.length < 2 ? (
-                    <div style={{ padding: 20, textAlign: "center", color: "#64748b", fontSize: 15 }}>
-                      Busca un usuario por nombre, apellidos o email.
-                    </div>
+                    null
                   ) : filtered.length === 0 ? (
                     <div style={{ padding: 20, textAlign: "center", color: "#64748b", fontSize: 15 }}>No se encontraron usuarios.</div>
                   ) : (
@@ -1277,6 +1386,203 @@ export default function AdminUsers() {
         </div>
       )}
 
+      {/* Modal de Gestión de Usuarios */}
+      {showGestionModal && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(0,0,0,0.5)",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          zIndex: 10000,
+          padding: "20px"
+        }}>
+          <div style={{
+            backgroundColor: "white",
+            padding: isMobile ? "20px" : "24px",
+            borderRadius: "12px",
+            width: "100%",
+            maxWidth: "900px",
+            maxHeight: "90vh",
+            overflowY: "auto",
+            boxSizing: "border-box"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h2 style={{ fontSize: isMobile ? "20px" : "22px", margin: "0", color: "#0f172a" }}>
+                👥 Gestión de Usuarios
+              </h2>
+              <button
+                onClick={() => setShowGestionModal(false)}
+                style={{
+                  background: "#fee2e2",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: "36px",
+                  height: "36px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  fontSize: "20px",
+                  color: "#dc2626"
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ marginBottom: "20px" }}>
+              <button
+                onClick={handleNuevoCliente}
+                className="btn primary"
+                style={{
+                  width: "100%",
+                  padding: "14px",
+                  fontSize: "16px",
+                  fontWeight: "bold",
+                  background: "linear-gradient(135deg, #16a34a 0%, #15803d 100%)",
+                  borderRadius: "8px"
+                }}
+              >
+                ➕ Crear Nuevo Usuario
+              </button>
+            </div>
+
+            <div style={{ marginBottom: "12px" }}>
+              <input
+                className="input"
+                placeholder="Buscar por nombre, apellidos o email..."
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  fontSize: "15px",
+                  borderRadius: "8px",
+                  border: "2px solid #e5e7eb"
+                }}
+              />
+            </div>
+
+            <div style={{ overflowX: "auto" }}>
+              <table style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: isMobile ? "13px" : "14px"
+              }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e2e8f0" }}>
+                    <th style={{ padding: "12px 8px", textAlign: "left", fontWeight: "600", color: "#475569" }}>Nombre</th>
+                    <th style={{ padding: "12px 8px", textAlign: "left", fontWeight: "600", color: "#475569" }}>Email</th>
+                    <th style={{ padding: "12px 8px", textAlign: "left", fontWeight: "600", color: "#475569" }}>Teléfono</th>
+                    <th style={{ padding: "12px 8px", textAlign: "center", fontWeight: "600", color: "#475569" }}>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>
+                        No se encontraron usuarios
+                      </td>
+                    </tr>
+                  ) : (
+                    filtered.map((usuario) => (
+                      <tr key={usuario.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        <td style={{ padding: "12px 8px" }}>
+                          <div style={{ fontWeight: "600", color: "#0f172a" }}>
+                            {usuario.nombre} {usuario.apellidos}
+                          </div>
+                        </td>
+                        <td style={{ padding: "12px 8px", color: "#64748b" }}>
+                          {usuario.email}
+                        </td>
+                        <td style={{ padding: "12px 8px", color: "#64748b" }}>
+                          {usuario.telefono || "-"}
+                        </td>
+                        <td style={{ padding: "12px 8px", textAlign: "center" }}>
+                          <div style={{ display: "flex", gap: "6px", justifyContent: "center", flexWrap: "wrap" }}>
+                            <button
+                              onClick={(e) => handleEditarCliente(usuario, e)}
+                              className="btn primary"
+                              style={{
+                                padding: "6px 10px",
+                                fontSize: "12px",
+                                background: "#3b82f6",
+                                fontWeight: "600",
+                                whiteSpace: "nowrap"
+                              }}
+                            >
+                              ✏️ Editar
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                handleDeleteUser(
+                                  usuario.id, 
+                                  `${usuario.nombre || ''} ${usuario.apellidos || ''}`.trim() || usuario.email,
+                                  usuario.email,
+                                  e
+                                );
+                              }}
+                              className="btn danger"
+                              style={{
+                                padding: "6px 10px",
+                                fontSize: "12px",
+                                background: "#dc2626",
+                                color: "white",
+                                border: "none",
+                                fontWeight: "600",
+                                whiteSpace: "nowrap"
+                              }}
+                            >
+                              🗑️ Borrar
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEnviarRestablecerPassword(usuario);
+                              }}
+                              className="btn"
+                              style={{
+                                padding: "6px 10px",
+                                fontSize: "12px",
+                                background: "#0284c7",
+                                color: "white",
+                                border: "none",
+                                fontWeight: "600",
+                                whiteSpace: "nowrap"
+                              }}
+                            >
+                              📧 Mail
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ marginTop: "20px", textAlign: "right" }}>
+              <button
+                onClick={() => setShowGestionModal(false)}
+                className="btn ghost"
+                style={{
+                  padding: "12px 24px",
+                  fontSize: "14px"
+                }}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal para crear/editar usuario */}
       {showModal && (
         <div style={{
@@ -1468,7 +1774,10 @@ export default function AdminUsers() {
                   onChange={(e) => setFormData({ ...formData, pesoActual: e.target.value })}
                   style={{ width: "100%", padding: isMobile ? "12px" : "6px", fontSize: isMobile ? "16px" : "13px", border: "2px solid #e5e7eb", borderRadius: isMobile ? "8px" : "4px", boxSizing: "border-box" }}
                 />
-            </div>
+                <small style={{ color: "#64748b", fontSize: isMobile ? "13px" : "11px", marginTop: "4px", display: "block" }}>
+                  💡 El rol se puede cambiar desde el perfil del usuario después de crearlo
+                </small>
+              </div>
               </div>
 
               <div style={{ display: "flex", gap: isMobile ? 10 : 8, marginTop: isMobile ? 16 : 8, flexDirection: isMobile ? "column-reverse" : "row" }}>

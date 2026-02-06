@@ -8,6 +8,7 @@ import AdminTipoDieta from "./components/AdminTipoDieta";
 import AdminTarifas from "./components/AdminTarifas";
 import AdminPagosGlobal from "./components/AdminPagosGlobal";
 import AdminGymGestion from "./components/AdminGymGestion";
+import AdminGym from "./components/AdminGym";
 import AdminMensajes from "./components/AdminMensajes";
 import AdminRecursos from "./components/AdminRecursos";
 import AdminLayoutResponsive from "./components/Layouts/AdminLayoutResponsive";
@@ -17,28 +18,58 @@ import Register from "./components/Register";
 import ChangePassword from "./components/ChangePassword";
 import PrivateRoute from "./components/PrivateRoute";
 // import FloatingInstallButton from "./components/FloatingInstallButton";
-import { auth } from "./Firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "./Firebase";
+import { onAuthStateChanged, getIdTokenResult } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 
 /**
  * LoginWrapper
- * - Redirige automáticamente según el email tras login o si ya hay sesión activa.
- * - Prioriza admin@admin.es: si el usuario es admin siempre va a /admin, aunque exista `from`.
+ * - Redirige automáticamente según el rol del usuario tras login o si ya hay sesión activa.
+ * - Verifica custom claims y campo rol en Firestore para determinar si es admin.
  */
 function LoginWrapper() {
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || null;
-  const ADMIN_EMAIL = "admin@admin.es";
+  const ADMIN_EMAILS = ["admin@admin.es"];
+
+  // Función para verificar si un usuario es admin
+  const checkIfAdmin = async (user) => {
+    if (!user) return false;
+    
+    try {
+      // Verificar custom claim
+      const token = await getIdTokenResult(user, true);
+      if (token?.claims?.admin) return true;
+      
+      // Verificar email hardcodeado
+      const email = String(user.email || "").trim().toLowerCase();
+      if (ADMIN_EMAILS.includes(email)) return true;
+      
+      // Verificar rol en Firestore
+      const userDocRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
+      if (userDoc.exists() && userDoc.data().rol === "admin") {
+        return true;
+      }
+    } catch (err) {
+      console.error("Error checking admin status:", err);
+    }
+    
+    return false;
+  };
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) return;
-      const emailNow = String(u.email || "").trim().toLowerCase();
-      if (emailNow === ADMIN_EMAIL) {
+      
+      const isAdmin = await checkIfAdmin(u);
+      
+      if (isAdmin) {
         navigate("/admin", { replace: true });
         return;
       }
+      
       // No es admin: si veníamos de una ruta protegida, volvemos a ella; si no, a /mi-ficha
       if (from) {
         navigate(from, { replace: true });
@@ -50,16 +81,19 @@ function LoginWrapper() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate, from]);
 
-  const handleOnLogin = (user) => {
+  const handleOnLogin = async (user) => {
     if (!user) {
       // fallback: rely on onAuthStateChanged
       return;
     }
-    const email = String(user?.email || "").trim().toLowerCase();
-    if (email === ADMIN_EMAIL) {
+    
+    const isAdmin = await checkIfAdmin(user);
+    
+    if (isAdmin) {
       navigate("/admin", { replace: true });
       return;
     }
+    
     // No es admin: respeta from si existe
     if (from) {
       navigate(from, { replace: true });
@@ -173,8 +207,8 @@ export default function App() {
           path="/admin/gym"
           element={
             <PrivateRoute>
-              <AdminLayoutResponsive title="GYM">
-                <AdminGymGestion />
+              <AdminLayoutResponsive title="GYM - Asignar Ejercicios por Días">
+                <AdminGym />
               </AdminLayoutResponsive>
             </PrivateRoute>
           }

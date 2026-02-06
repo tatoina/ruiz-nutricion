@@ -9,6 +9,24 @@
       "type": "image/x-icon"
     },
     {
+      "src": "logoclinica-120.png",
+      "type": "image/png",
+      "sizes": "120x120",
+      "purpose": "any"
+    },
+    {
+      "src": "logoclinica-152.png",
+      "type": "image/png",
+      "sizes": "152x152",
+      "purpose": "any"
+    },
+    {
+      "src": "logoclinica-180.png",
+      "type": "image/png",
+      "sizes": "180x180",
+      "purpose": "any"
+    },
+    {
       "src": "logoclinica-192.png",
       "type": "image/png",
       "sizes": "192x192",

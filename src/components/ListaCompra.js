@@ -78,6 +78,15 @@ const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
     }
   };
 
+  // Función para normalizar texto (eliminar acentos, convertir a minúsculas, quitar plurales)
+  const normalizarTexto = (texto) => {
+    return texto
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // Eliminar acentos
+      .replace(/s$/, ''); // Quitar 's' final (plurales simples)
+  };
+
   const agruparPorCategoria = async (platos) => {
     const resultado = {
       lacteos: new Set(),
@@ -94,15 +103,16 @@ const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
     };
 
     // Palabras clave para clasificar productos con sus nombres normalizados
+    // Ahora incluimos sinónimos y variaciones
     const clasificacion = {
       lacteos: [
         { palabras: ['leche'], nombre: 'Leche' },
         { palabras: ['yogur'], nombre: 'Yogur' },
-        { palabras: ['queso', 'quesos'], nombre: 'Queso' },
-        { palabras: ['kéfir'], nombre: 'Kéfir' },
+        { palabras: ['queso'], nombre: 'Queso' },
+        { palabras: ['kefir'], nombre: 'Kéfir' },
         { palabras: ['nata'], nombre: 'Nata' },
         { palabras: ['mantequilla'], nombre: 'Mantequilla' },
-        { palabras: ['requesón'], nombre: 'Requesón' },
+        { palabras: ['requeson'], nombre: 'Requesón' },
         { palabras: ['cuajada'], nombre: 'Cuajada' }
       ],
       carnes: [
@@ -113,104 +123,100 @@ const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
         { palabras: ['cordero'], nombre: 'Cordero' },
         { palabras: ['pechuga'], nombre: 'Pechuga de pollo' },
         { palabras: ['lomo'], nombre: 'Lomo' },
-        { palabras: ['jamón', 'jamon'], nombre: 'Jamón' },
+        { palabras: ['jamon'], nombre: 'Jamón' },
         { palabras: ['fiambre'], nombre: 'Fiambre' },
-        { palabras: ['salchicha'], nombre: 'Salchicha' },
-        { palabras: ['pechuga'], nombre: 'Pechuga' }
+        { palabras: ['salchicha'], nombre: 'Salchicha' }
       ],
       pescados: [
-        { palabras: ['salmón', 'salmon'], nombre: 'Salmón' },
-        { palabras: ['atún', 'atun'], nombre: 'Atún' },
+        { palabras: ['salmon'], nombre: 'Salmón' },
+        { palabras: ['atun'], nombre: 'Atún' },
         { palabras: ['merluza'], nombre: 'Merluza' },
         { palabras: ['bacalao'], nombre: 'Bacalao' },
         { palabras: ['pescado'], nombre: 'Pescado' },
         { palabras: ['marisco'], nombre: 'Marisco' },
         { palabras: ['gamba'], nombre: 'Gambas' },
         { palabras: ['langostino'], nombre: 'Langostinos' },
-        { palabras: ['mejillón', 'mejillon'], nombre: 'Mejillones' },
+        { palabras: ['mejillon'], nombre: 'Mejillones' },
         { palabras: ['calamar'], nombre: 'Calamar' },
         { palabras: ['pulpo'], nombre: 'Pulpo' }
       ],
       frutas: [
-        { palabras: ['manzana'], nombre: 'Manzana' },
-        { palabras: ['plátano', 'platano', 'banana'], nombre: 'Plátano' },
-        { palabras: ['naranja'], nombre: 'Naranja' },
-        { palabras: ['pera'], nombre: 'Pera' },
+        { palabras: ['manzana'], nombre: 'Manzanas' },
+        { palabras: ['platano', 'banana'], nombre: 'Plátanos' },
+        { palabras: ['naranja'], nombre: 'Naranjas' },
+        { palabras: ['pera'], nombre: 'Peras' },
         { palabras: ['fresa'], nombre: 'Fresas' },
-        { palabras: ['kiwi'], nombre: 'Kiwi' },
+        { palabras: ['kiwi'], nombre: 'Kiwis' },
         { palabras: ['uva'], nombre: 'Uvas' },
-        { palabras: ['melón', 'melon'], nombre: 'Melón' },
-        { palabras: ['sandía', 'sandia'], nombre: 'Sandía' },
-        { palabras: ['piña', 'pina'], nombre: 'Piña' },
-        { palabras: ['melocotón', 'melocoton'], nombre: 'Melocotón' },
+        { palabras: ['melon'], nombre: 'Melón' },
+        { palabras: ['sandia'], nombre: 'Sandía' },
+        { palabras: ['pina'], nombre: 'Piña' },
+        { palabras: ['melocoton'], nombre: 'Melocotones' },
         { palabras: ['albaricoque'], nombre: 'Albaricoques' },
         { palabras: ['ciruela'], nombre: 'Ciruelas' },
         { palabras: ['cereza'], nombre: 'Cerezas' },
         { palabras: ['frambuesa'], nombre: 'Frambuesas' },
-        { palabras: ['arándano', 'arandano'], nombre: 'Arándanos' },
+        { palabras: ['arandano'], nombre: 'Arándanos' },
         { palabras: ['mandarina'], nombre: 'Mandarinas' },
-        { palabras: ['limón', 'limon'], nombre: 'Limón' },
-        { palabras: ['pomelo'], nombre: 'Pomelo' },
-        { palabras: ['manzana'], nombre: 'Manzanas' }
+        { palabras: ['limon'], nombre: 'Limones' },
+        { palabras: ['pomelo'], nombre: 'Pomelos' }
       ],
       verduras: [
         { palabras: ['lechuga'], nombre: 'Lechuga' },
-        { palabras: ['tomate'], nombre: 'Tomate' },
+        { palabras: ['tomate'], nombre: 'Tomates' },
         { palabras: ['pepino'], nombre: 'Pepino' },
-        { palabras: ['zanahoria'], nombre: 'Zanahoria' },
-        { palabras: ['brócoli', 'brocoli'], nombre: 'Brócoli' },
+        { palabras: ['zanahoria'], nombre: 'Zanahorias' },
+        { palabras: ['brocoli'], nombre: 'Brócoli' },
         { palabras: ['espinaca'], nombre: 'Espinacas' },
         { palabras: ['acelga'], nombre: 'Acelgas' },
-        { palabras: ['calabacín', 'calabacin'], nombre: 'Calabacín' },
-        { palabras: ['berenjena'], nombre: 'Berenjena' },
+        { palabras: ['calabacin'], nombre: 'Calabacín' },
+        { palabras: ['berenjena'], nombre: 'Berenjenas' },
         { palabras: ['pimiento'], nombre: 'Pimientos' },
-        { palabras: ['cebolla'], nombre: 'Cebolla' },
-        { palabras: ['ajo', 'ajos'], nombre: 'Ajo' },
+        { palabras: ['cebolla'], nombre: 'Cebollas' },
+        { palabras: ['ajo'], nombre: 'Ajos' },
         { palabras: ['coliflor'], nombre: 'Coliflor' },
         { palabras: ['col'], nombre: 'Col' },
-        { palabras: ['espárrago', 'esparrago'], nombre: 'Espárragos' },
+        { palabras: ['esparrago'], nombre: 'Espárragos' },
         { palabras: ['apio'], nombre: 'Apio' },
         { palabras: ['remolacha'], nombre: 'Remolacha' },
-        { palabras: ['rábano', 'rabano'], nombre: 'Rábanos' },
-        { palabras: ['puerro'], nombre: 'Puerro' },
-        { palabras: ['judía verde', 'judia verde'], nombre: 'Judías verdes' },
+        { palabras: ['rabano'], nombre: 'Rábanos' },
+        { palabras: ['puerro'], nombre: 'Puerros' },
+        { palabras: ['judia verde'], nombre: 'Judías verdes' },
         { palabras: ['guisante'], nombre: 'Guisantes' },
         { palabras: ['alcachofa'], nombre: 'Alcachofas' },
-        { palabras: ['champiñón', 'champinon', 'champiñones', 'champinones'], nombre: 'Champiñones' },
-        { palabras: ['seta'], nombre: 'Setas' },
-        { palabras: ['cogollos', 'cogollo'], nombre: 'Cogollos' }
+        { palabras: ['champinon', 'seta'], nombre: 'Champiñones/Setas' },
+        { palabras: ['cogollo'], nombre: 'Cogollos' }
       ],
       legumbres: [
-        { palabras: ['lentejas'], nombre: 'Lentejas' },
-        { palabras: ['garbanzos'], nombre: 'Garbanzos' },
-        { palabras: ['alubias'], nombre: 'Alubias' },
-        { palabras: ['judías', 'judias'], nombre: 'Judías' },
+        { palabras: ['lenteja'], nombre: 'Lentejas' },
+        { palabras: ['garbanzo'], nombre: 'Garbanzos' },
+        { palabras: ['alubia'], nombre: 'Alubias' },
+        { palabras: ['judia'], nombre: 'Judías' },
         { palabras: ['soja'], nombre: 'Soja' }
       ],
       cereales: [
         { palabras: ['arroz'], nombre: 'Arroz' },
         { palabras: ['pasta'], nombre: 'Pasta' },
-        { palabras: ['pan'], nombre: 'Pan' },
+        { palabras: ['pan', 'tosta', 'tostada'], nombre: 'Pan/Tostadas' },
         { palabras: ['avena'], nombre: 'Avena' },
         { palabras: ['quinoa'], nombre: 'Quinoa' },
         { palabras: ['trigo'], nombre: 'Trigo' },
         { palabras: ['centeno'], nombre: 'Centeno' },
         { palabras: ['cebada'], nombre: 'Cebada' },
-        { palabras: ['maíz', 'maiz'], nombre: 'Maíz' },
+        { palabras: ['maiz'], nombre: 'Maíz' },
         { palabras: ['cereal'], nombre: 'Cereales' },
         { palabras: ['tortita'], nombre: 'Tortitas' },
-        { palabras: ['tostada'], nombre: 'Tostadas' },
         { palabras: ['integral'], nombre: 'Pan integral' }
       ],
       frutos_secos: [
         { palabras: ['almendra'], nombre: 'Almendras' },
-        { palabras: ['nuez', 'nueces'], nombre: 'Nueces' },
+        { palabras: ['nuez', 'nuece'], nombre: 'Nueces' },
         { palabras: ['avellana'], nombre: 'Avellanas' },
         { palabras: ['pistacho'], nombre: 'Pistachos' },
         { palabras: ['anacardo'], nombre: 'Anacardos' },
         { palabras: ['cacahuete'], nombre: 'Cacahuetes' },
-        { palabras: ['castaña'], nombre: 'Castañas' },
-        { palabras: ['piñón', 'pinon'], nombre: 'Piñones' }
+        { palabras: ['castana'], nombre: 'Castañas' },
+        { palabras: ['pinon'], nombre: 'Piñones' }
       ],
       huevos: [
         { palabras: ['huevo'], nombre: 'Huevos' },
@@ -224,23 +230,35 @@ const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
         { palabras: ['girasol'], nombre: 'Aceite de girasol' },
         { palabras: ['vinagre'], nombre: 'Vinagre' },
         { palabras: ['salsa'], nombre: 'Salsa' },
-        { palabras: ['especias', 'especia'], nombre: 'Especias' }
+        { palabras: ['especia'], nombre: 'Especias' }
       ]
     };
 
     // Procesar cada plato
     platos.forEach(plato => {
-      const platoLower = plato.toLowerCase();
+      const platoNormalizado = normalizarTexto(plato);
+      let encontrado = false;
       
       // Buscar en cada categoría
       Object.entries(clasificacion).forEach(([categoria, items]) => {
         items.forEach(item => {
-          // Verificar si alguna de las palabras clave está en el plato
-          if (item.palabras.some(palabra => platoLower.includes(palabra))) {
+          // Verificar si alguna de las palabras clave está en el plato (normalizadas)
+          const match = item.palabras.some(palabra => {
+            const palabraNormalizada = normalizarTexto(palabra);
+            return platoNormalizado.includes(palabraNormalizada);
+          });
+          
+          if (match && !encontrado) {
             resultado[categoria].add(item.nombre);
+            encontrado = true;
           }
         });
       });
+      
+      // Si no se clasificó, añadir a "otros"
+      if (!encontrado) {
+        resultado.otros.add(plato);
+      }
     });
 
     // Convertir Sets a arrays ordenados

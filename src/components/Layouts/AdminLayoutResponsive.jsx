@@ -169,7 +169,7 @@ const styles = {
   mobileContent: {
     flex: 1,
     overflowY: 'auto',
-    paddingBottom: '60px', // Espacio para la navegación inferior (reducido)
+    paddingBottom: '80px', // Espacio para la navegación inferior más grande
   },
   bottomNav: {
     display: 'flex',
@@ -186,12 +186,11 @@ const styles = {
   bottomNavItem: {
     flex: '1 1 0',
     minWidth: '0',
-    maxWidth: '60px',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '6px 0 2px 0',
+    padding: '12px 8px',
     border: 'none',
     background: 'none',
     cursor: 'pointer',
@@ -205,7 +204,7 @@ const styles = {
     fontWeight: '600',
   },
   bottomNavIcon: {
-    fontSize: '26px',
+    fontSize: '32px',
     marginBottom: '0',
     lineHeight: '1',
     display: 'block',

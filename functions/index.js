@@ -1,4 +1,5 @@
 const {onDocumentCreated} = require("firebase-functions/v2/firestore");
+const {onDocumentWritten} = require("firebase-functions/v2/firestore");
 const {onCall} = require("firebase-functions/v2/https");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {initializeApp} = require("firebase-admin/app");
@@ -260,7 +261,7 @@ exports.createUser = onCall(async (request) => {
     throw new Error("Permisos insuficientes");
   }
 
-  const { email, password, nombre, apellidos, nacimiento, telefono } = request.data;
+  const { email, password, nombre, apellidos, nacimiento, telefono, rol, objetivoNutricional, pesoActual } = request.data;
 
   if (!email || !password) {
     throw new Error("Email y contraseña son requeridos");
@@ -274,6 +275,11 @@ exports.createUser = onCall(async (request) => {
       displayName: `${nombre || ""} ${apellidos || ""}`.trim() || undefined,
     });
 
+    // Si el rol es admin, asignar custom claim
+    if (rol === "admin") {
+      await getAuth().setCustomUserClaims(userRecord.uid, { admin: true });
+    }
+
     // Crear documento en Firestore
     const db = getFirestore();
     await db.collection("users").doc(userRecord.uid).set({
@@ -282,8 +288,10 @@ exports.createUser = onCall(async (request) => {
       email: email.trim(),
       nacimiento: nacimiento || "",
       telefono: telefono || "",
+      rol: rol || "paciente",
+      objetivoNutricional: objetivoNutricional || "",
       createdAt: new Date(),
-      pesoActual: null,
+      pesoActual: pesoActual || null,
       pesoHistorico: [],
       medidas: {},
       ejercicios: false,
@@ -299,6 +307,156 @@ exports.createUser = onCall(async (request) => {
   } catch (error) {
     console.error("Error creating user:", error);
     throw new Error(`Error al crear usuario: ${error.message}`);
+  }
+});
+
+/**
+ * Trigger que se ejecuta cuando se actualiza un documento de usuario
+ * Sincroniza el custom claim 'admin' con el campo 'rol' en Firestore
+ */
+exports.syncUserRoleClaim = onDocumentWritten("users/{userId}", async (event) => {
+  const beforeData = event.data?.before?.data();
+  const afterData = event.data?.after?.data();
+  const userId = event.params.userId;
+
+  // Solo procesar si cambió el campo 'rol'
+  if (beforeData?.rol === afterData?.rol) {
+    return null;
+  }
+
+  try {
+    const newRol = afterData?.rol || "paciente";
+    
+    // Actualizar custom claim
+    if (newRol === "admin") {
+      await getAuth().setCustomUserClaims(userId, { admin: true });
+      console.log(`Custom claim 'admin: true' set for user ${userId}`);
+    } else {
+      await getAuth().setCustomUserClaims(userId, { admin: false });
+      console.log(`Custom claim 'admin: false' set for user ${userId}`);
+    }
+
+    return null;
+  } catch (error) {
+    console.error(`Error syncing custom claim for user ${userId}:`, error);
+    return null;
+  }
+});
+
+/**
+ * Cloud Function para actualizar el rol de un usuario
+ * Actualiza tanto el campo en Firestore como el custom claim
+ */
+exports.updateUserRole = onCall(async (request) => {
+  // Verificar que el usuario está autenticado
+  if (!request.auth) {
+    throw new Error("No autenticado");
+  }
+
+  // Verificar que es admin
+  const adminEmails = ["admin@admin.es"];
+  const isAdmin = request.auth.token.admin === true || 
+                  adminEmails.includes(request.auth.token.email?.toLowerCase());
+
+  if (!isAdmin) {
+    throw new Error("Permisos insuficientes");
+  }
+
+  const { uid, rol } = request.data;
+
+  if (!uid || !rol) {
+    throw new Error("UID y rol son requeridos");
+  }
+
+  if (rol !== "admin" && rol !== "paciente") {
+    throw new Error("Rol inválido. Debe ser 'admin' o 'paciente'");
+  }
+
+  try {
+    // Actualizar custom claim
+    if (rol === "admin") {
+      await getAuth().setCustomUserClaims(uid, { admin: true });
+    } else {
+      await getAuth().setCustomUserClaims(uid, { admin: false });
+    }
+
+    // Actualizar campo en Firestore
+    const db = getFirestore();
+    await db.collection("users").doc(uid).update({
+      rol: rol,
+      updatedAt: new Date(),
+    });
+
+    return {
+      success: true,
+      message: `Rol actualizado a '${rol}' correctamente`,
+    };
+  } catch (error) {
+    console.error("Error updating user role:", error);
+    throw new Error(`Error al actualizar rol: ${error.message}`);
+  }
+});
+
+/**
+ * Cloud Function para actualizar datos de usuario (admin only)
+ * Incluye la actualización del rol y sincronización de custom claims
+ */
+exports.updateUser = onCall(async (request) => {
+  // Verificar que el usuario está autenticado
+  if (!request.auth) {
+    throw new Error("No autenticado");
+  }
+
+  // Verificar que es admin
+  const adminEmails = ["admin@admin.es"];
+  const isAdmin = request.auth.token.admin === true || 
+                  adminEmails.includes(request.auth.token.email?.toLowerCase());
+
+  if (!isAdmin) {
+    throw new Error("Permisos insuficientes");
+  }
+
+  const { uid, nombre, apellidos, nacimiento, telefono, objetivoNutricional, pesoActual, rol } = request.data;
+
+  if (!uid) {
+    throw new Error("UID es requerido");
+  }
+
+  try {
+    const db = getFirestore();
+    const updateData = {
+      updatedAt: new Date(),
+    };
+
+    if (nombre !== undefined) updateData.nombre = nombre;
+    if (apellidos !== undefined) updateData.apellidos = apellidos;
+    if (nacimiento !== undefined) updateData.nacimiento = nacimiento;
+    if (telefono !== undefined) updateData.telefono = telefono;
+    if (objetivoNutricional !== undefined) updateData.objetivoNutricional = objetivoNutricional;
+    if (pesoActual !== undefined) updateData.pesoActual = pesoActual;
+    if (rol !== undefined) {
+      if (rol !== "admin" && rol !== "paciente") {
+        throw new Error("Rol inválido. Debe ser 'admin' o 'paciente'");
+      }
+      updateData.rol = rol;
+      
+      // Actualizar custom claim si cambia el rol
+      if (rol === "admin") {
+        await getAuth().setCustomUserClaims(uid, { admin: true });
+      } else {
+        await getAuth().setCustomUserClaims(uid, { admin: false });
+      }
+    }
+
+    await db.collection("users").doc(uid).update(updateData);
+
+    return {
+      success: true,
+      message: "Usuario actualizado correctamente",
+    };
+  } catch (error) {
+    console.error("Error updating user:", error);
+    throw new Error(`Error al actualizar usuario: ${error.message}`);
   }
 });
 

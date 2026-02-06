@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { db } from "../Firebase";
 import { doc, getDoc, setDoc, collection, getDocs, updateDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
+import { useDevice } from "../hooks/useDevice";
 import "./estilos.css";
 
 /**
@@ -18,6 +19,7 @@ import "./estilos.css";
 
 export default function AdminPagosGlobal() {
   const navigate = useNavigate();
+  const { isMobile } = useDevice();
   
   // Tarifas globales
   const [tarifas, setTarifas] = useState({
@@ -35,10 +37,11 @@ export default function AdminPagosGlobal() {
   const [usuarios, setUsuarios] = useState([]);
   
   // Filtros
+  const todayISO = new Date().toISOString().slice(0, 10);
   const [filtroUsuario, setFiltroUsuario] = useState("");
   const [filtroEstado, setFiltroEstado] = useState("todos"); // "todos", "pagado", "pendiente"
-  const [filtroFechaDesde, setFiltroFechaDesde] = useState("");
-  const [filtroFechaHasta, setFiltroFechaHasta] = useState("");
+  const [filtroFechaDesde, setFiltroFechaDesde] = useState(todayISO);
+  const [filtroFechaHasta, setFiltroFechaHasta] = useState(todayISO);
   
   // Estados UI
   const [loading, setLoading] = useState(true);
@@ -47,6 +50,7 @@ export default function AdminPagosGlobal() {
   const [success, setSuccess] = useState(null);
   const [editandoTarifas, setEditandoTarifas] = useState(false);
   const [tarifasColapsadas, setTarifasColapsadas] = useState(true);
+  const [filtrosColapsados, setFiltrosColapsados] = useState(isMobile);
   
   // Cargar tarifas globales
   useEffect(() => {
@@ -206,8 +210,8 @@ export default function AdminPagosGlobal() {
   const limpiarFiltros = () => {
     setFiltroUsuario("");
     setFiltroEstado("todos");
-    setFiltroFechaDesde("");
-    setFiltroFechaHasta("");
+    setFiltroFechaDesde(todayISO);
+    setFiltroFechaHasta(todayISO);
   };
   
   // Cambiar estado de un pago
@@ -339,19 +343,21 @@ export default function AdminPagosGlobal() {
   return (
     <div className="admin-fullscreen" style={{ overflowY: "auto", height: "100vh" }}>
       {/* Cabecera */}
-      <div className="card header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <div className="title">💰 Gestión Global de Pagos</div>
-          <div className="subtitle">Configuración de tarifas y vista de todos los pagos</div>
+      {!isMobile && (
+        <div className="card header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div className="title">💰 Gestión Global de Pagos</div>
+            <div className="subtitle">Configuración de tarifas y vista de todos los pagos</div>
+          </div>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button className="btn ghost" onClick={() => navigate("/admin")}>
+              ← Volver al Panel
+            </button>
+          </div>
         </div>
-        <div style={{ display: "flex", gap: "8px" }}>
-          <button className="btn ghost" onClick={() => navigate("/admin")}>
-            ← Volver al Panel
-          </button>
-        </div>
-      </div>
+      )}
       
-      <div style={{ padding: "20px", width: "100%", flex: 1, overflowY: "auto" }}>
+      <div style={{ padding: isMobile ? "8px" : "20px", width: "100%", flex: 1, overflowY: "auto" }}>
         {/* Mensajes */}
         {error && (
           <div
@@ -386,13 +392,13 @@ export default function AdminPagosGlobal() {
         <div
           style={{
             background: "#f9fafb",
-            padding: "20px",
+            padding: isMobile ? (tarifasColapsadas ? "8px" : "10px") : "20px",
             borderRadius: "8px",
-            marginBottom: "24px",
+            marginBottom: isMobile ? "10px" : "24px",
             border: "1px solid #e5e7eb",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tarifasColapsadas ? "0" : "16px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: tarifasColapsadas ? "0" : (isMobile ? "8px" : "16px") }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <button
                 onClick={() => setTarifasColapsadas(!tarifasColapsadas)}
@@ -400,7 +406,7 @@ export default function AdminPagosGlobal() {
                   background: "transparent",
                   border: "none",
                   cursor: "pointer",
-                  fontSize: "20px",
+                  fontSize: isMobile ? "16px" : "20px",
                   padding: "0",
                   display: "flex",
                   alignItems: "center",
@@ -409,14 +415,14 @@ export default function AdminPagosGlobal() {
               >
                 {tarifasColapsadas ? "▶" : "▼"}
               </button>
-              <h3 style={{ margin: 0 }}>⚙️ Configuración de Tarifas Globales</h3>
+              <h3 style={{ margin: 0, fontSize: isMobile ? "13px" : "16px" }}>⚙️ Configuración de Tarifas Globales</h3>
             </div>
             {!tarifasColapsadas && (
               !editandoTarifas ? (
                 <button
                   className="btn ghost"
                   onClick={() => setEditandoTarifas(true)}
-                  style={{ fontSize: "14px" }}
+                  style={{ fontSize: isMobile ? "12px" : "14px", padding: isMobile ? "6px 12px" : "8px 16px" }}
                 >
                   ✏️ Editar
                 </button>
@@ -426,6 +432,7 @@ export default function AdminPagosGlobal() {
                     className="btn primary"
                     onClick={handleGuardarTarifas}
                     disabled={saving}
+                    style={{ fontSize: isMobile ? "12px" : "14px", padding: isMobile ? "6px 12px" : "8px 16px" }}
                   >
                     {saving ? "Guardando..." : "💾 Guardar"}
                   </button>
@@ -619,78 +626,105 @@ export default function AdminPagosGlobal() {
         <div
           style={{
             background: "#f9fafb",
-            padding: "20px",
+            padding: isMobile ? (filtrosColapsados ? "8px" : "10px") : "20px",
             borderRadius: "8px",
-            marginBottom: "24px",
+            marginBottom: isMobile ? "10px" : "24px",
             border: "1px solid #e5e7eb",
           }}
         >
-          <h3 style={{ marginBottom: "16px" }}>🔍 Filtros</h3>
-          
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
-            <div>
-              <label style={{ display: "block", marginBottom: "4px", fontWeight: "600", fontSize: "14px" }}>
-                Usuario
-              </label>
-              <select
-                className="input"
-                value={filtroUsuario}
-                onChange={(e) => setFiltroUsuario(e.target.value)}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: filtrosColapsados ? "0" : (isMobile ? "8px" : "16px") }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <button
+                onClick={() => setFiltrosColapsados(!filtrosColapsados)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: isMobile ? "16px" : "20px",
+                  padding: "0",
+                  display: "flex",
+                  alignItems: "center",
+                }}
+                title={filtrosColapsados ? "Expandir" : "Colapsar"}
               >
-                <option value="">Todos los usuarios</option>
-                {usuarios.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label style={{ display: "block", marginBottom: "4px", fontWeight: "600", fontSize: "14px" }}>
-                Estado
-              </label>
-              <select
-                className="input"
-                value={filtroEstado}
-                onChange={(e) => setFiltroEstado(e.target.value)}
-              >
-                <option value="todos">Todos</option>
-                <option value="pagado">✅ Pagado</option>
-                <option value="pendiente">⏳ Pendiente</option>
-              </select>
-            </div>
-            
-            <div>
-              <label style={{ display: "block", marginBottom: "4px", fontWeight: "600", fontSize: "14px" }}>
-                Desde
-              </label>
-              <input
-                type="date"
-                className="input"
-                value={filtroFechaDesde}
-                onChange={(e) => setFiltroFechaDesde(e.target.value)}
-              />
-            </div>
-            
-            <div>
-              <label style={{ display: "block", marginBottom: "4px", fontWeight: "600", fontSize: "14px" }}>
-                Hasta
-              </label>
-              <input
-                type="date"
-                className="input"
-                value={filtroFechaHasta}
-                onChange={(e) => setFiltroFechaHasta(e.target.value)}
-              />
+                {filtrosColapsados ? "▶" : "▼"}
+              </button>
+              <h3 style={{ margin: 0, fontSize: isMobile ? "13px" : "16px" }}>🔍 Filtros</h3>
             </div>
           </div>
           
-          <div style={{ marginTop: "16px" }}>
-            <button className="btn ghost" onClick={limpiarFiltros}>
-              ✖️ Limpiar filtros
-            </button>
-          </div>
+          {!filtrosColapsados && (
+            <>
+              <div style={{ display: isMobile ? "flex" : "grid", flexDirection: isMobile ? "column" : undefined, gridTemplateColumns: isMobile ? undefined : "repeat(auto-fit, minmax(200px, 1fr))", gap: isMobile ? "8px" : "16px" }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: "4px", fontWeight: "600", fontSize: isMobile ? "12px" : "14px" }}>
+                    Usuario
+                  </label>
+                  <select
+                    className="input"
+                    value={filtroUsuario}
+                    onChange={(e) => setFiltroUsuario(e.target.value)}
+                    style={{ fontSize: isMobile ? "14px" : "16px", padding: isMobile ? "6px" : "8px" }}
+                  >
+                    <option value="">Todos los usuarios</option>
+                    {usuarios.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label style={{ display: "block", marginBottom: "4px", fontWeight: "600", fontSize: isMobile ? "12px" : "14px" }}>
+                    Estado
+                  </label>
+                  <select
+                    className="input"
+                    value={filtroEstado}
+                    onChange={(e) => setFiltroEstado(e.target.value)}
+                    style={{ fontSize: isMobile ? "14px" : "16px", padding: isMobile ? "6px" : "8px" }}
+                  >
+                    <option value="todos">Todos</option>
+                    <option value="pagado">✅ Pagado</option>
+                    <option value="pendiente">⏳ Pendiente</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label style={{ display: "block", marginBottom: "4px", fontWeight: "600", fontSize: isMobile ? "12px" : "14px" }}>
+                    Desde
+                  </label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={filtroFechaDesde}
+                    onChange={(e) => setFiltroFechaDesde(e.target.value)}
+                    style={{ fontSize: isMobile ? "14px" : "16px", padding: isMobile ? "6px" : "8px" }}
+                  />
+                </div>
+                
+                <div>
+                  <label style={{ display: "block", marginBottom: "4px", fontWeight: "600", fontSize: isMobile ? "12px" : "14px" }}>
+                    Hasta
+                  </label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={filtroFechaHasta}
+                    onChange={(e) => setFiltroFechaHasta(e.target.value)}
+                    style={{ fontSize: isMobile ? "14px" : "16px", padding: isMobile ? "6px" : "8px" }}
+                  />
+                </div>
+              </div>
+              
+              <div style={{ marginTop: isMobile ? "8px" : "16px" }}>
+                <button className="btn ghost" onClick={limpiarFiltros} style={{ fontSize: isMobile ? "12px" : "14px", padding: isMobile ? "6px 12px" : "8px 16px" }}>
+                  ✖️ Limpiar filtros
+                </button>
+              </div>
+            </>
+          )}
         </div>
         
         {/* Resumen de Totales */}

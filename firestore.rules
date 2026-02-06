@@ -6,7 +6,9 @@ service cloud.firestore {
       return request.auth != null && 
              (request.auth.token.email == 'ruiznutricionapp@gmail.com' ||
               request.auth.token.email == 'admin@admin.es' ||
-              request.auth.token.admin == true);
+              request.auth.token.admin == true ||
+              (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol == 'admin'));
     }
     
     // Colección de usuarios - acceso completo para admins
@@ -18,18 +20,36 @@ service cloud.firestore {
                       request.auth.token.email == 'ruiznutricionapp@gmail.com' ||
                       request.auth.token.email == 'admin@admin.es');
       
-      // Los usuarios pueden actualizar su propia información
-      // Los admins pueden actualizar cualquier usuario
-      allow write: if request.auth != null && 
-                      (request.auth.uid == userId || 
-                       request.auth.token.email == 'ruiznutricionapp@gmail.com' ||
-                       request.auth.token.email == 'admin@admin.es');
+      // Los usuarios pueden actualizar su propia información EXCEPTO el campo 'rol'
+      // Solo admins pueden modificar cualquier campo, incluyendo 'rol'
+      allow update: if request.auth != null && (
+        // Si es admin, puede actualizar todo
+        isAdmin() ||
+        // Si es el propio usuario, solo puede actualizar si NO cambia el campo 'rol'
+        (request.auth.uid == userId && 
+         (!request.resource.data.keys().hasAny(['rol']) || 
+          request.resource.data.rol == resource.data.rol))
+      );
+      
+      // Solo admins pueden crear usuarios
+      allow create: if isAdmin();
+      
+      // Solo admins pueden eliminar usuarios
+      allow delete: if isAdmin();
       
       // Subcolección de mensajes - los usuarios pueden leer y actualizar sus propios mensajes
       match /mensajes/{mensajeId} {
         allow read: if request.auth != null && request.auth.uid == userId;
         allow write: if request.auth != null && (request.auth.uid == userId || isAdmin());
         allow create: if request.auth != null && isAdmin();
+      }
+      
+      // Subcolección de metadata de fotos de dieta
+      match /dietaFotos/{docId} {
+        // Los usuarios pueden leer sus propias fotos
+        // Los admins pueden leer y escribir cualquier foto
+        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+        allow write: if request.auth != null && isAdmin();
       }
     }
     

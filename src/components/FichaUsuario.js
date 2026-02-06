@@ -9,7 +9,7 @@ import CitaReminder from "./CitaReminder";
 import HelpForm from "./HelpForm";
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import "./estilos.css";
-import { auth, db } from "../Firebase";
+import { auth, db, storage } from "../Firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import {
   doc,
@@ -27,6 +27,7 @@ import {
   addDoc,
 } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject, listAll, getMetadata } from "firebase/storage";
 
 import { useNavigate } from "react-router-dom";
 import { useDevice } from "../hooks/useDevice";
@@ -128,6 +129,16 @@ export default function FichaUsuario(props) {
   const [contenidoManual, setContenidoManual] = useState("");
   const editorManualRef = useRef(null);
   
+  // Estado para controlar qué comidas están activas en modo manual
+  const [comidasActivas, setComidasActivas] = useState({
+    desayuno: true,
+    almuerzo: true,
+    comida: true,
+    merienda: true,
+    cena: true,
+    tips: true
+  });
+  
   // Estados para opciones disponibles desde BD
   const [menuItemsDisponibles, setMenuItemsDisponibles] = useState({
     desayuno: [],
@@ -194,6 +205,17 @@ export default function FichaUsuario(props) {
   
   // Estados para solicitud de nueva tabla GYM
   const [showSolicitudNuevaTabla, setShowSolicitudNuevaTabla] = useState(false);
+  
+  // Estados para galería de fotos de dieta
+  const [showFotosModal, setShowFotosModal] = useState(false);
+  const [fotosGaleria, setFotosGaleria] = useState([]);
+  const [loadingFotos, setLoadingFotos] = useState(false);
+  const [uploadingFoto, setUploadingFoto] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [selectedFoto, setSelectedFoto] = useState(null);
+  const [editingCaption, setEditingCaption] = useState(null);
+  const [tempCaption, setTempCaption] = useState('');
+  const fileInputRef = useRef(null);
   
   // Email de notificaciones global, leído del perfil del admin
   const [emailNotificaciones, setEmailNotificaciones] = useState('asesoramiento.ruiz@gmail.com');
@@ -266,19 +288,29 @@ export default function FichaUsuario(props) {
 
   // Calcular tabs filtradas según el plan del usuario
   const tabs = useMemo(() => {
-    const esPlanSeguimiento = userData?.anamnesis?.eligePlan === "Seguimiento";
+    const planUsuario = userData?.anamnesis?.eligePlan;
+    
     // En modo admin, mostrar siempre todas las pestañas para poder gestionar todo
     // En modo usuario, filtrar según el plan
-    const tabsFiltradas = (esPlanSeguimiento && !adminMode)
-      ? baseTabs.filter(tab => tab.id === "pesaje" || tab.id === "citas")
-      : baseTabs;
+    let tabsFiltradas = baseTabs;
+    
+    if (!adminMode) {
+      if (planUsuario === "Seguimiento") {
+        // Plan Seguimiento: solo Pesaje y Citas
+        tabsFiltradas = baseTabs.filter(tab => tab.id === "pesaje" || tab.id === "citas");
+      } else if (planUsuario === "Basico") {
+        // Plan Básico: sin Ejercicios ni GYM
+        tabsFiltradas = baseTabs.filter(tab => tab.id !== "ejercicios" && tab.id !== "gym");
+      }
+      // Plan "Basico + Ejercicios" y cualquier otro: todas las pestañas
+    }
     
     // En modo admin móvil, reorganizar pestañas: lo importante primero
     if (adminMode) {
       const adminTabs = isMobile 
         ? [
             ...tabsFiltradas,
-            { id: "anamnesis", label: "👤 Perfil", icon: "👤" },
+            { id: "anamnesis", label: "👤 Anamnesis", icon: "👤" },
             { id: "pagos", label: "💰 Pagos", icon: "💰" }
           ]
         : [
@@ -427,6 +459,18 @@ export default function FichaUsuario(props) {
           // Cargar modo manual
           setModoManual(data.modoManual || false);
           setContenidoManual(data.contenidoManual || "");
+          
+          // Cargar estado de comidas activas
+          if (data.comidasActivas) {
+            setComidasActivas({
+              desayuno: data.comidasActivas.desayuno !== false,
+              almuerzo: data.comidasActivas.almuerzo !== false,
+              comida: data.comidasActivas.comida !== false,
+              merienda: data.comidasActivas.merienda !== false,
+              cena: data.comidasActivas.cena !== false,
+              tips: data.comidasActivas.tips !== false
+            });
+          }
           
           // Cargar orden de campos si existe
           if (data.fieldsOrder && Array.isArray(data.fieldsOrder)) {
@@ -578,10 +622,11 @@ export default function FichaUsuario(props) {
     });
   };
 
-  // autosave menu
+  // autosave menu (modo tabla/vertical)
   useEffect(() => {
     if (!uid) return;
     if (!editable.menu) return;
+    if (modoManual) return; // No autoguardar en modo manual
     if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
 
     setSaveStatus("pending");
@@ -611,7 +656,589 @@ export default function FichaUsuario(props) {
 
     return () => { if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; } };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editable.menu, uid]);
+  }, [editable.menu, uid, modoManual]);
+
+  // Autoguardar contenido manual en localStorage mientras se edita
+  const autoSaveManualTimerRef = useRef(null);
+  
+  useEffect(() => {
+    if (!adminMode || !modoManual || !uid || !contenidoManual) return;
+    
+    // Limpiar timer anterior
+    if (autoSaveManualTimerRef.current) {
+      clearTimeout(autoSaveManualTimerRef.current);
+      autoSaveManualTimerRef.current = null;
+    }
+    
+    // Guardar en localStorage después de 800ms de inactividad
+    autoSaveManualTimerRef.current = setTimeout(() => {
+      const storageKey = `menu_manual_draft_${uid}`;
+      try {
+        localStorage.setItem(storageKey, contenidoManual);
+        logger.log("[FichaUsuario] Contenido manual autoguardado en localStorage");
+      } catch (err) {
+        logger.error("[FichaUsuario] Error guardando en localStorage:", err);
+      }
+    }, 800);
+    
+    return () => {
+      if (autoSaveManualTimerRef.current) {
+        clearTimeout(autoSaveManualTimerRef.current);
+        autoSaveManualTimerRef.current = null;
+      }
+    };
+  }, [contenidoManual, adminMode, modoManual, uid]);
+  
+  // Establecer el contenido inicial del editor manual
+  const contenidoManualRef = useRef(contenidoManual);
+  useEffect(() => {
+    contenidoManualRef.current = contenidoManual;
+  }, [contenidoManual]);
+  
+  const setEditorManualRef = useCallback((node) => {
+    if (!node || !adminMode || !modoManual || !uid) return;
+    
+    editorManualRef.current = node;
+    
+    const defaultContent = `
+      <style>
+        table { 
+          width: 100%; 
+          border-collapse: collapse; 
+          font-family: Arial, sans-serif; 
+          font-size: 13px; 
+          table-layout: auto;
+        }
+        th, td { 
+          border: 1px solid #ddd; 
+          padding: 10px; 
+          vertical-align: top; 
+          word-break: break-word;
+          min-width: 120px;
+        }
+        th { 
+          background-color: #15803d; 
+          color: white; 
+          text-align: center; 
+          font-weight: 600;
+          user-select: none;
+          cursor: not-allowed;
+          font-size: 12px;
+          white-space: nowrap;
+        }
+        td:first-child { 
+          font-weight: 600; 
+          background-color: #f0fdf4; 
+          text-align: center;
+          min-width: 90px;
+          width: 90px;
+          user-select: none;
+          cursor: not-allowed;
+          font-size: 11px;
+        }
+        td:not(:first-child) { 
+          min-height: 80px;
+          height: auto;
+          font-size: 14px;
+          line-height: 1.5;
+        }
+        
+        /* Estilos para móvil */
+        @media (max-width: 768px) {
+          table {
+            font-size: 16px;
+            display: block;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+          thead {
+            display: block;
+          }
+          tbody {
+            display: block;
+          }
+          tr {
+            display: table;
+            width: 100%;
+            table-layout: auto;
+          }
+          th, td {
+            padding: 12px;
+            font-size: 16px;
+            min-width: 140px;
+          }
+          td:first-child {
+            min-width: 100px;
+            width: 100px;
+            font-size: 14px;
+            position: sticky;
+            left: 0;
+            z-index: 2;
+            box-shadow: 2px 0 4px rgba(0,0,0,0.1);
+          }
+          th:first-child {
+            position: sticky;
+            left: 0;
+            z-index: 3;
+            box-shadow: 2px 0 4px rgba(0,0,0,0.1);
+          }
+          td:not(:first-child) {
+            min-height: 100px;
+            font-size: 16px;
+            line-height: 1.6;
+          }
+        }
+      </style>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 120px;" contenteditable="false">COMIDA</th>
+            <th contenteditable="false">LUNES</th>
+            <th contenteditable="false">MARTES</th>
+            <th contenteditable="false">MIÉRCOLES</th>
+            <th contenteditable="false">JUEVES</th>
+            <th contenteditable="false">VIERNES</th>
+            <th contenteditable="false">SÁBADO</th>
+            <th contenteditable="false">DOMINGO</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td contenteditable="false">DESAYUNO</td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+          </tr>
+          <tr>
+            <td contenteditable="false">ALMUERZO</td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+          </tr>
+          <tr>
+            <td contenteditable="false">COMIDA</td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+          </tr>
+          <tr>
+            <td contenteditable="false">MERIENDA</td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+          </tr>
+          <tr>
+            <td contenteditable="false">CENA</td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+          </tr>
+          <tr>
+            <td style="background-color: #fff7ed;" contenteditable="false">TIPS</td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+          </tr>
+        </tbody>
+      </table>
+    `;
+    
+    const storageKey = `menu_manual_draft_${uid}`;
+    const savedContent = localStorage.getItem(storageKey);
+    
+    // Función para asegurar que el contenido tiene los estilos
+    const ensureStyles = (content) => {
+      if (!content) return defaultContent;
+      
+      // Si ya tiene la etiqueta <style>, devolverlo tal cual
+      if (content.includes('<style>')) return content;
+      
+      // Si no tiene estilos, añadirlos
+      const styleTag = `
+      <style>
+        table { 
+          width: 100%; 
+          border-collapse: collapse; 
+          font-family: Arial, sans-serif; 
+          font-size: 13px; 
+          table-layout: auto;
+        }
+        th, td { 
+          border: 1px solid #ddd; 
+          padding: 10px; 
+          vertical-align: top; 
+          word-break: break-word;
+          min-width: 120px;
+        }
+        th { 
+          background-color: #15803d; 
+          color: white; 
+          text-align: center; 
+          font-weight: 600;
+          user-select: none;
+          cursor: not-allowed;
+          font-size: 12px;
+          white-space: nowrap;
+        }
+        td:first-child { 
+          font-weight: 600; 
+          background-color: #f0fdf4; 
+          text-align: center;
+          min-width: 90px;
+          width: 90px;
+          user-select: none;
+          cursor: not-allowed;
+          font-size: 11px;
+        }
+        td:not(:first-child) { 
+          min-height: 80px;
+          height: auto;
+          font-size: 14px;
+          line-height: 1.5;
+        }
+        
+        /* Estilos para móvil */
+        @media (max-width: 768px) {
+          table {
+            font-size: 16px;
+            display: block;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+          thead {
+            display: block;
+          }
+          tbody {
+            display: block;
+          }
+          tr {
+            display: table;
+            width: 100%;
+            table-layout: auto;
+          }
+          th, td {
+            padding: 12px;
+            font-size: 16px;
+            min-width: 140px;
+          }
+          td:first-child {
+            min-width: 100px;
+            width: 100px;
+            font-size: 14px;
+            position: sticky;
+            left: 0;
+            z-index: 2;
+            box-shadow: 2px 0 4px rgba(0,0,0,0.1);
+          }
+          th:first-child {
+            position: sticky;
+            left: 0;
+            z-index: 3;
+            box-shadow: 2px 0 4px rgba(0,0,0,0.1);
+          }
+          td:not(:first-child) {
+            min-height: 100px;
+            font-size: 16px;
+            line-height: 1.6;
+          }
+        }
+      </style>
+      `;
+      return styleTag + content;
+    };
+    
+    // Prioridad: localStorage > contenidoManual > default
+    if (savedContent) {
+      node.innerHTML = ensureStyles(savedContent);
+    } else if (contenidoManualRef.current) {
+      node.innerHTML = ensureStyles(contenidoManualRef.current);
+    } else {
+      node.innerHTML = defaultContent;
+    }
+    
+    // Aplicar estado de comidas activas después de cargar el contenido
+    setTimeout(() => {
+      const table = node.querySelector('table');
+      if (!table) return;
+      
+      const tbody = table.querySelector('tbody');
+      if (!tbody) return;
+      
+      const rows = tbody.querySelectorAll('tr');
+      rows.forEach(row => {
+        const firstCell = row.querySelector('td:first-child');
+        if (!firstCell) return;
+        
+        const cellText = firstCell.textContent.trim().toUpperCase();
+        const mealKey = cellText.toLowerCase();
+        
+        // Verificar si esta comida está activa
+        const isActive = comidasActivas[mealKey];
+        
+        // Actualizar todas las celdas de esta fila (excepto la primera)
+        const cells = row.querySelectorAll('td:not(:first-child)');
+        cells.forEach(cell => {
+          if (isActive !== false) {
+            cell.removeAttribute('contenteditable');
+            cell.style.backgroundColor = '';
+            cell.style.opacity = '1';
+            cell.style.cursor = 'text';
+          } else {
+            cell.setAttribute('contenteditable', 'false');
+            cell.style.backgroundColor = '#f1f5f9';
+            cell.style.opacity = '0.6';
+            cell.style.cursor = 'not-allowed';
+          }
+        });
+      });
+    }, 100);
+  }, [adminMode, modoManual, uid, comidasActivas]);
+
+  // Actualizar contenido cuando cambia el usuario
+  const lastLoadedUidRef = useRef(null);
+  useEffect(() => {
+    if (!editorManualRef.current || !adminMode || !modoManual || !uid) return;
+    
+    // Si cambió el usuario, recargar el contenido
+    if (lastLoadedUidRef.current && lastLoadedUidRef.current !== uid) {
+      const defaultContent = `
+      <style>
+        table { 
+          width: 100%; 
+          border-collapse: collapse; 
+          font-family: Arial, sans-serif; 
+          font-size: 13px; 
+          table-layout: fixed; 
+        }
+        th, td { 
+          border: 1px solid #ddd; 
+          padding: 8px; 
+          vertical-align: top; 
+          word-break: break-word;
+        }
+        th { 
+          background-color: #15803d; 
+          color: white; 
+          text-align: center; 
+          font-weight: 600;
+          user-select: none;
+          cursor: not-allowed;
+        }
+        td:first-child { 
+          font-weight: 600; 
+          background-color: #f0fdf4; 
+          text-align: center;
+          width: 100px;
+          user-select: none;
+          cursor: not-allowed;
+        }
+        td:not(:first-child) { 
+          min-height: 80px;
+          height: auto;
+        }
+      </style>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 120px;" contenteditable="false">COMIDA</th>
+            <th contenteditable="false">LUNES</th>
+            <th contenteditable="false">MARTES</th>
+            <th contenteditable="false">MIÉRCOLES</th>
+            <th contenteditable="false">JUEVES</th>
+            <th contenteditable="false">VIERNES</th>
+            <th contenteditable="false">SÁBADO</th>
+            <th contenteditable="false">DOMINGO</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td contenteditable="false">DESAYUNO</td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+          </tr>
+          <tr>
+            <td>ALMUERZO</td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+          </tr>
+          <tr>
+            <td>COMIDA</td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+          </tr>
+          <tr>
+            <td contenteditable="false">MERIENDA</td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+          </tr>
+          <tr>
+            <td contenteditable="false">CENA</td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+          </tr>
+          <tr>
+            <td style="background-color: #fff7ed;" contenteditable="false">TIPS</td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+            <td><br></td>
+          </tr>
+        </tbody>
+      </table>
+    `;
+      
+      const ensureStyles = (content) => {
+        if (!content) return defaultContent;
+        if (content.includes('<style>')) return content;
+        
+        const styleTag = `
+      <style>
+        table { 
+          width: 100%; 
+          border-collapse: collapse; 
+          font-family: Arial, sans-serif; 
+          font-size: 13px; 
+          table-layout: fixed; 
+        }
+        th, td { 
+          border: 1px solid #ddd; 
+          padding: 8px; 
+          vertical-align: top; 
+          word-break: break-word;
+        }
+        th { 
+          background-color: #15803d; 
+          color: white; 
+          text-align: center; 
+          font-weight: 600;
+          user-select: none;
+          cursor: not-allowed;
+        }
+        td:first-child { 
+          font-weight: 600; 
+          background-color: #f0fdf4; 
+          text-align: center;
+          width: 100px;
+          user-select: none;
+          cursor: not-allowed;
+        }
+        td:not(:first-child) { 
+          min-height: 80px;
+          height: auto;
+        }
+      </style>
+      `;
+        return styleTag + content;
+      };
+      
+      const storageKey = `menu_manual_draft_${uid}`;
+      const savedContent = localStorage.getItem(storageKey);
+      
+      // Cargar contenido del nuevo usuario
+      if (savedContent) {
+        editorManualRef.current.innerHTML = ensureStyles(savedContent);
+      } else if (contenidoManual) {
+        editorManualRef.current.innerHTML = ensureStyles(contenidoManual);
+      } else {
+        editorManualRef.current.innerHTML = defaultContent;
+      }
+    }
+    
+    lastLoadedUidRef.current = uid;
+  }, [uid, adminMode, modoManual, contenidoManual]);
+
+  // Aplicar estado de comidas activas al editor
+  useEffect(() => {
+    if (!editorManualRef.current || !adminMode || !modoManual) return;
+    
+    const table = editorManualRef.current.querySelector('table');
+    if (!table) return;
+    
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    
+    const rows = tbody.querySelectorAll('tr');
+    rows.forEach(row => {
+      const firstCell = row.querySelector('td:first-child');
+      if (!firstCell) return;
+      
+      const cellText = firstCell.textContent.trim().toUpperCase();
+      const mealKey = cellText.toLowerCase();
+      
+      // Verificar si esta comida está activa
+      const isActive = comidasActivas[mealKey];
+      
+      // Actualizar todas las celdas de esta fila (excepto la primera)
+      const cells = row.querySelectorAll('td:not(:first-child)');
+      cells.forEach(cell => {
+        if (isActive !== false) {
+          // Comida activa: permitir edición
+          cell.removeAttribute('contenteditable');
+          cell.style.backgroundColor = '';
+          cell.style.opacity = '1';
+          cell.style.cursor = 'text';
+        } else {
+          // Comida desactivada: bloquear edición
+          cell.setAttribute('contenteditable', 'false');
+          cell.style.backgroundColor = '#f1f5f9';
+          cell.style.opacity = '0.6';
+          cell.style.cursor = 'not-allowed';
+        }
+      });
+    });
+  }, [comidasActivas, adminMode, modoManual, contenidoManual]);
 
   const saveSemana = useCallback(async () => {
     if (!uid) { setError("Usuario objetivo no disponible."); return; }
@@ -818,6 +1445,7 @@ export default function FichaUsuario(props) {
         menuHistorico: arrayUnion({ createdAt: timestamp, menu: menuToSave }),
         modoManual: modoManual,
         tipoMenu: tipoMenu,
+        comidasActivas: comidasActivas, // Guardar estado de comidas activas
         updatedAt: serverTimestamp()
       };
       
@@ -833,13 +1461,41 @@ export default function FichaUsuario(props) {
       const newSnap = await getDoc(doc(db, "users", uid));
       if (newSnap.exists()) setUserData(newSnap.data());
       
-      // Enviar email de notificación al usuario
-      if (currentData.email) {
-        const userName = currentData.nombre || 'Usuario';
-        await sendDietUpdateEmail(currentData.email, userName);
+      // Limpiar el borrador de localStorage después de guardar exitosamente
+      if (modoManual) {
+        const storageKey = `menu_manual_draft_${uid}`;
+        try {
+          localStorage.removeItem(storageKey);
+          logger.log("[FichaUsuario] Borrador de localStorage eliminado después de guardar");
+        } catch (err) {
+          logger.error("[FichaUsuario] Error eliminando borrador de localStorage:", err);
+        }
       }
       
-      alert(`✅ Dieta #${versionNumber} guardada correctamente`);
+      // Preguntar si desea enviar email de notificación al usuario
+      let emailEnviado = false;
+      if (currentData.email) {
+        const confirmarEmail = window.confirm(
+          `✅ Dieta #${versionNumber} guardada correctamente.\n\n¿Deseas enviar un email de notificación al usuario?`
+        );
+        
+        if (confirmarEmail) {
+          try {
+            const userName = currentData.nombre || 'Usuario';
+            await sendDietUpdateEmail(currentData.email, userName);
+            emailEnviado = true;
+          } catch (emailError) {
+            console.error("Error enviando email:", emailError);
+            alert("⚠️ La dieta se guardó pero hubo un error al enviar el email.");
+          }
+        }
+      }
+      
+      if (emailEnviado) {
+        alert(`✅ Dieta #${versionNumber} guardada y email enviado al usuario`);
+      } else {
+        alert(`✅ Dieta #${versionNumber} guardada correctamente`);
+      }
     } catch (err) {
       console.error("[FichaUsuario] saveVersionMenu error:", err);
       setError(err?.message || "No se pudo guardar la versión del menú.");
@@ -857,7 +1513,27 @@ export default function FichaUsuario(props) {
         ejerciciosDescripcion: editable.ejerciciosDescripcion || "",
         updatedAt: serverTimestamp(),
       };
-      await updateDoc(doc(db, "users", uid), payload);
+      
+      // Si es admin y está cambiando el rol, usar Cloud Function
+      if (adminMode && editable.rol && editable.rol !== userData?.rol) {
+        const { httpsCallable } = await import("firebase/functions");
+        const { functions } = await import("../Firebase");
+        const updateUser = httpsCallable(functions, "updateUser");
+        
+        await updateUser({
+          uid: uid,
+          ...payload,
+          rol: editable.rol
+        });
+      } else if (adminMode && editable.rol) {
+        // Si es admin pero no cambió el rol, incluir rol en el payload
+        payload.rol = editable.rol;
+        await updateDoc(doc(db, "users", uid), payload);
+      } else {
+        // Usuario normal actualizando su perfil (sin tocar el rol)
+        await updateDoc(doc(db, "users", uid), payload);
+      }
+      
       const snap = await getDoc(doc(db, "users", uid));
       if (snap.exists()) setUserData(snap.data());
       setShowProfile(false);
@@ -2128,6 +2804,239 @@ Ruiz Nutrición
     setDraggedIndex(null);
   };
 
+  // ================== FUNCIONES PARA GALERÍA DE FOTOS ==================
+  
+  // Cargar fotos desde Firebase Storage
+  const loadFotos = async () => {
+    if (!uid) return;
+    setLoadingFotos(true);
+    try {
+      const fotosRef = storageRef(storage, `dietaFotos/${uid}`);
+      const listResult = await listAll(fotosRef);
+      
+      // Cargar metadata de Firestore si existe
+      const fotosDocRef = doc(db, "users", uid, "dietaFotos", "metadata");
+      const fotosDoc = await getDoc(fotosDocRef);
+      const fotosMetadata = fotosDoc.exists() ? fotosDoc.data().fotos || {} : {};
+      
+      const fotosPromises = listResult.items.map(async (itemRef) => {
+        const url = await getDownloadURL(itemRef);
+        const metadata = await getMetadata(itemRef);
+        const fileName = itemRef.name;
+        
+        return {
+          name: fileName,
+          url: url,
+          fullPath: itemRef.fullPath,
+          createdAt: metadata.timeCreated,
+          size: metadata.size,
+          caption: fotosMetadata[fileName]?.caption || ''
+        };
+      });
+      
+      const fotos = await Promise.all(fotosPromises);
+      // Ordenar por fecha de creación (más recientes primero)
+      fotos.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      setFotosGaleria(fotos);
+    } catch (err) {
+      console.error("Error cargando fotos:", err);
+      setError("Error al cargar las fotos");
+    } finally {
+      setLoadingFotos(false);
+    }
+  };
+
+  // Subir foto a Firebase Storage
+  const uploadFoto = async (file, caption = '') => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setError("Solo se permiten archivos de imagen");
+      return;
+    }
+    
+    // Limitar tamaño a 5MB
+    if (file.size > 5 * 1024 * 1024) {
+      setError("La imagen no debe superar los 5MB");
+      return;
+    }
+    
+    setUploadingFoto(true);
+    setError(null);
+    
+    try {
+      const timestamp = Date.now();
+      const fileName = `${timestamp}_${file.name}`;
+      const fotoRef = storageRef(storage, `dietaFotos/${uid}/${fileName}`);
+      
+      await uploadBytes(fotoRef, file);
+      
+      // Guardar caption en Firestore si se proporcionó
+      if (caption || caption === '') {
+        const fotosDocRef = doc(db, "users", uid, "dietaFotos", "metadata");
+        const fotosDoc = await getDoc(fotosDocRef);
+        const currentData = fotosDoc.exists() ? fotosDoc.data().fotos || {} : {};
+        
+        await setDoc(fotosDocRef, {
+          fotos: {
+            ...currentData,
+            [fileName]: {
+              caption: caption,
+              createdAt: new Date().toISOString()
+            }
+          }
+        });
+      }
+      
+      await loadFotos(); // Recargar la lista
+    } catch (err) {
+      console.error("Error subiendo foto:", err);
+      setError("Error al subir la foto");
+    } finally {
+      setUploadingFoto(false);
+    }
+  };
+
+  // Actualizar caption de una foto
+  const updateCaption = async (foto, newCaption) => {
+    try {
+      const fotosDocRef = doc(db, "users", uid, "dietaFotos", "metadata");
+      const fotosDoc = await getDoc(fotosDocRef);
+      const currentData = fotosDoc.exists() ? fotosDoc.data().fotos || {} : {};
+      
+      await setDoc(fotosDocRef, {
+        fotos: {
+          ...currentData,
+          [foto.name]: {
+            caption: newCaption,
+            createdAt: currentData[foto.name]?.createdAt || new Date().toISOString()
+          }
+        }
+      });
+      
+      await loadFotos();
+    } catch (err) {
+      console.error("Error actualizando pie de foto:", err);
+      setError("Error al actualizar el pie de foto");
+    }
+  };
+
+  // Eliminar foto
+  const deleteFoto = async (foto) => {
+    if (!window.confirm("¿Estás seguro de eliminar esta foto?")) return;
+    
+    try {
+      // Eliminar archivo de Storage
+      const fotoRef = storageRef(storage, foto.fullPath);
+      await deleteObject(fotoRef);
+      
+      // Eliminar metadata de Firestore
+      const fotosDocRef = doc(db, "users", uid, "dietaFotos", "metadata");
+      const fotosDoc = await getDoc(fotosDocRef);
+      if (fotosDoc.exists()) {
+        const currentData = fotosDoc.data().fotos || {};
+        delete currentData[foto.name];
+        await setDoc(fotosDocRef, { fotos: currentData });
+      }
+      
+      await loadFotos(); // Recargar la lista
+    } catch (err) {
+      console.error("Error eliminando foto:", err);
+      setError("Error al eliminar la foto");
+    }
+  };
+
+  // Manejar selección de archivos
+  const handleFileSelect = async (e) => {
+    const files = Array.from(e.target.files);
+    for (const file of files) {
+      const caption = prompt('Introduce un pie de foto (opcional):');
+      if (caption !== null) { // Si no canceló el prompt
+        await uploadFoto(file, caption);
+      }
+    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Manejar drag & drop
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDragOverFotos = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDropFotos = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    for (const file of files) {
+      const caption = prompt('Introduce un pie de foto (opcional):');
+      if (caption !== null) { // Si no canceló el prompt
+        await uploadFoto(file, caption);
+      }
+    }
+  };
+
+  // Manejar paste desde clipboard
+  const handlePaste = async (e) => {
+    if (!showFotosModal || !adminMode) return;
+    
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const blob = items[i].getAsFile();
+        if (blob) {
+          const caption = prompt('Introduce un pie de foto (opcional):');
+          if (caption !== null) { // Si no canceló el prompt
+            await uploadFoto(blob, caption);
+          }
+        }
+      }
+    }
+  };
+
+  // Abrir modal de fotos
+  const openFotosModal = () => {
+    setShowFotosModal(true);
+    loadFotos();
+  };
+
+  // Cerrar modal de fotos
+  const closeFotosModal = () => {
+    setShowFotosModal(false);
+    setSelectedFoto(null);
+    setEditingCaption(null);
+  };
+
+  // Efecto para escuchar paste cuando el modal está abierto
+  useEffect(() => {
+    const handlePasteEvent = (e) => handlePaste(e);
+    
+    if (showFotosModal && adminMode) {
+      document.addEventListener('paste', handlePasteEvent);
+      return () => {
+        document.removeEventListener('paste', handlePasteEvent);
+      };
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showFotosModal, adminMode]);
+
+  // ================== FIN FUNCIONES GALERÍA DE FOTOS ==================
+
   // chart helpers
   const timestampToMs = (t) => {
     if (!t) return null;
@@ -2923,7 +3832,22 @@ Ruiz Nutrición
           {/* User info */}
           <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0 }}>
             <div 
-              onClick={() => !(adminMode && isMobile) && setShowProfile((s) => !s)}
+              onClick={() => {
+                setShowProfile((s) => {
+                  if (!s) {
+                    // Al abrir el perfil, inicializar editable con los datos actuales
+                    setEditable((prev) => ({
+                      ...prev,
+                      nombre: userData.nombre || "",
+                      apellidos: userData.apellidos || "",
+                      nacimiento: userData.nacimiento || "",
+                      telefono: userData.telefono || "",
+                      rol: userData.rol || "paciente"
+                    }));
+                  }
+                  return !s;
+                });
+              }}
               style={{
                 width: "48px",
                 height: "48px",
@@ -2937,12 +3861,12 @@ Ruiz Nutrición
                 color: "#16a34a",
                 flexShrink: 0,
                 boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                cursor: !(adminMode && isMobile) ? "pointer" : "default",
+                cursor: "pointer",
                 transition: "transform 0.2s, box-shadow 0.2s"
               }}
-              onMouseEnter={(e) => !(adminMode && isMobile) && (e.currentTarget.style.transform = "scale(1.05)", e.currentTarget.style.boxShadow = "0 4px 8px rgba(0,0,0,0.2)")}
+              onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.05)", e.currentTarget.style.boxShadow = "0 4px 8px rgba(0,0,0,0.2)")}
               onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)", e.currentTarget.style.boxShadow = "0 2px 4px rgba(0,0,0,0.1)")}
-              title={!(adminMode && isMobile) ? "Click para ver perfil" : ""}
+              title="Click para ver perfil"
             >
               {(userData.nombre?.[0] || userData.email?.[0] || "U").toUpperCase()}
             </div>
@@ -3260,17 +4184,59 @@ Ruiz Nutrición
         </div>
       )}
 
-      {showProfile && !(adminMode && isMobile) && (
-        <div className="card" style={{ padding: 12, margin: "0 12px 12px 12px" }}>
-          <h3>Mi Perfil</h3>
+      {showProfile && (
+        <div className="card" style={{ 
+          padding: isMobile ? 16 : 12, 
+          margin: isMobile ? "0 0 12px 0" : "0 12px 12px 12px" 
+        }}>
+          <h3 style={{ fontSize: isMobile ? "18px" : "16px" }}>
+            {adminMode ? "Perfil de Usuario" : "Mi Perfil"}
+          </h3>
           <div className="panel-section">
             {/* Datos Personales Editables */}
-            <h4 style={{ marginBottom: 12, fontSize: "15px", color: "#374151" }}>📝 Datos Personales</h4>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
-              <div className="field"><label>Nombre</label><input className="input" value={editable.nombre || ""} onChange={(e) => setEditable((s) => ({ ...s, nombre: e.target.value }))} /></div>
-              <div className="field"><label>Apellidos</label><input className="input" value={editable.apellidos || ""} onChange={(e) => setEditable((s) => ({ ...s, apellidos: e.target.value }))} /></div>
-              <div className="field"><label>Fecha de nacimiento</label><input className="input" type="date" value={editable.nacimiento || ""} onChange={(e) => setEditable((s) => ({ ...s, nacimiento: e.target.value }))} /></div>
-              <div className="field"><label>Teléfono</label><input className="input" type="tel" inputMode="tel" value={editable.telefono || ""} onChange={(e) => setEditable((s) => ({ ...s, telefono: e.target.value }))} /></div>
+            <h4 style={{ marginBottom: 12, fontSize: isMobile ? "16px" : "15px", color: "#374151" }}>📝 Datos Personales</h4>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? 16 : 12, marginBottom: 20 }}>
+              <div className="field"><label style={{ fontSize: isMobile ? "14px" : "13px" }}>Nombre</label><input className="input" style={{ fontSize: isMobile ? "16px" : "14px", padding: isMobile ? "12px" : "8px" }} value={editable.nombre || ""} onChange={(e) => setEditable((s) => ({ ...s, nombre: e.target.value }))} /></div>
+              <div className="field"><label style={{ fontSize: isMobile ? "14px" : "13px" }}>Apellidos</label><input className="input" style={{ fontSize: isMobile ? "16px" : "14px", padding: isMobile ? "12px" : "8px" }} value={editable.apellidos || ""} onChange={(e) => setEditable((s) => ({ ...s, apellidos: e.target.value }))} /></div>
+              <div className="field"><label style={{ fontSize: isMobile ? "14px" : "13px" }}>Fecha de nacimiento</label><input className="input" style={{ fontSize: isMobile ? "16px" : "14px", padding: isMobile ? "12px" : "8px" }} type="date" value={editable.nacimiento || ""} onChange={(e) => setEditable((s) => ({ ...s, nacimiento: e.target.value }))} /></div>
+              <div className="field"><label style={{ fontSize: isMobile ? "14px" : "13px" }}>Teléfono</label><input className="input" style={{ fontSize: isMobile ? "16px" : "14px", padding: isMobile ? "12px" : "8px" }} type="tel" inputMode="tel" value={editable.telefono || ""} onChange={(e) => setEditable((s) => ({ ...s, telefono: e.target.value }))} /></div>
+              
+              {/* Campo Rol - Solo visible/editable para admins */}
+              <div className="field">
+                <label style={{ fontSize: isMobile ? "14px" : "13px" }}>Rol</label>
+                {adminMode ? (
+                  <select 
+                    className="input" 
+                    value={editable.rol || "paciente"} 
+                    onChange={(e) => setEditable((s) => ({ ...s, rol: e.target.value }))}
+                    style={{ 
+                      backgroundColor: "white",
+                      fontSize: isMobile ? "16px" : "14px",
+                      padding: isMobile ? "12px" : "8px"
+                    }}
+                  >
+                    <option value="paciente">Paciente</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                ) : (
+                  <input 
+                    className="input" 
+                    value={editable.rol === "admin" ? "Administrador" : "Paciente"} 
+                    disabled 
+                    style={{ 
+                      backgroundColor: "#f5f5f5", 
+                      color: "#666",
+                      fontSize: isMobile ? "16px" : "14px",
+                      padding: isMobile ? "12px" : "8px"
+                    }}
+                  />
+                )}
+                {adminMode && (
+                  <small style={{ display: "block", marginTop: "4px", color: "#64748b", fontSize: isMobile ? "12px" : "11px" }}>
+                    {editable.rol === "admin" ? "⚠️ Acceso completo al panel" : "Usuario regular"}
+                  </small>
+                )}
+              </div>
             </div>
 
             {/* Plan y Tipo de Dieta Asignados (Solo Visible) */}
@@ -3341,9 +4307,38 @@ Ruiz Nutrición
               </>
             )}
 
-            <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-              <button className="btn primary" onClick={saveProfile}>Guardar cambios</button>
-              <button className="btn ghost" onClick={() => { setEditable((prev) => ({ ...prev, nombre: userData.nombre || "", apellidos: userData.apellidos || "", nacimiento: userData.nacimiento || "", telefono: userData.telefono || "" })); setShowProfile(false); }}>Cancelar</button>
+            <div style={{ marginTop: isMobile ? 20 : 12, display: "flex", gap: isMobile ? 12 : 8, flexDirection: isMobile ? "column" : "row" }}>
+              <button 
+                className="btn primary" 
+                onClick={saveProfile}
+                style={{
+                  fontSize: isMobile ? "16px" : "14px",
+                  padding: isMobile ? "14px 20px" : "10px 16px",
+                  fontWeight: "600"
+                }}
+              >
+                💾 Guardar cambios
+              </button>
+              <button 
+                className="btn ghost" 
+                onClick={() => { 
+                  setEditable((prev) => ({ 
+                    ...prev, 
+                    nombre: userData.nombre || "", 
+                    apellidos: userData.apellidos || "", 
+                    nacimiento: userData.nacimiento || "", 
+                    telefono: userData.telefono || "", 
+                    rol: userData.rol || "paciente" 
+                  })); 
+                  setShowProfile(false); 
+                }}
+                style={{
+                  fontSize: isMobile ? "16px" : "14px",
+                  padding: isMobile ? "14px 20px" : "10px 16px"
+                }}
+              >
+                ✕ Cancelar
+              </button>
             </div>
           </div>
         </div>
@@ -3355,9 +4350,10 @@ Ruiz Nutrición
           {/* Tabs modernos con iconos */}
           <nav className="tabs" role="tablist" aria-label="Secciones" style={{ 
             display: isMobile && adminMode ? "grid" : "flex",
-            gridTemplateColumns: isMobile && adminMode ? "repeat(6, 1fr)" : "none",
-            gap: isMobile ? "4px" : "6px", 
-            padding: adminMode ? (isMobile ? "0 8px" : "0 20px") : "0",
+            gridTemplateColumns: isMobile && adminMode ? "repeat(3, 1fr)" : "none",
+            gridTemplateRows: isMobile && adminMode ? "repeat(3, auto)" : "none",
+            gap: isMobile ? "6px" : "6px", 
+            padding: adminMode ? (isMobile ? "0 8px" : "0 20px") : (isMobile ? "0 8px" : "0"),
             overflowX: isMobile && adminMode ? "visible" : "auto",
             WebkitOverflowScrolling: "touch",
             scrollbarWidth: "none",
@@ -3370,9 +4366,9 @@ Ruiz Nutrición
                 className={i === tabIndex ? "tab-modern tab-modern-active" : "tab-modern"} 
                 onClick={() => setTabIndex(i)}
                 style={{
-                  flex: isMobile && adminMode ? "none" : "1 1 auto",
-                  minWidth: isMobile && adminMode ? "auto" : "fit-content",
-                  padding: isMobile && adminMode ? "6px 2px" : (isMobile ? "12px 8px" : "10px 16px"),
+                  flex: isMobile && adminMode ? "none" : (isMobile ? "0 0 auto" : "1 1 auto"),
+                  minWidth: isMobile && adminMode ? "auto" : (isMobile ? "fit-content" : "fit-content"),
+                  padding: isMobile && adminMode ? "10px 4px" : (isMobile ? "10px 12px" : "10px 16px"),
                   borderRadius: isMobile ? "8px" : "10px",
                   background: i === tabIndex 
                     ? "linear-gradient(135deg, #16a34a 0%, #15803d 100%)" 
@@ -3380,7 +4376,7 @@ Ruiz Nutrición
                   border: (isMobile && i !== tabIndex) ? "1px solid #e5e7eb" : "none",
                   color: i === tabIndex ? "white" : "#64748b",
                   fontWeight: i === tabIndex ? "700" : "500",
-                  fontSize: isMobile ? "13px" : "14px",
+                  fontSize: isMobile && adminMode ? "11px" : (isMobile ? "14px" : "14px"),
                   cursor: "pointer",
                   transition: "all 0.2s",
                   boxShadow: i === tabIndex 
@@ -3389,17 +4385,17 @@ Ruiz Nutrición
                   whiteSpace: isMobile && adminMode ? "normal" : "nowrap",
                   textAlign: "center",
                   display: "flex",
-                  flexDirection: "column",
+                  flexDirection: isMobile && !adminMode ? "row" : "column",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: "2px",
+                  gap: isMobile && !adminMode ? "6px" : "2px",
                   position: "relative"
                 }}
               >
                 {isMobile && adminMode ? (
                   <>
-                    <span style={{ fontSize: "16px" }}>{t.icon}</span>
-                    <span style={{ fontSize: "9px", lineHeight: "1.1" }}>
+                    <span style={{ fontSize: "18px" }}>{t.icon}</span>
+                    <span style={{ fontSize: "10px", lineHeight: "1.2", wordBreak: "break-word" }}>
                       {t.label.replace(/^[^\s]+\s/, '')}
                     </span>
                     {/* Badge de mensajes no leídos */}
@@ -3490,89 +4486,6 @@ Ruiz Nutrición
 
                 {showFormulario && (
                 <div className="panel-section">
-                  {/* Botón flotante de guardar - más compacto */}
-                  <div style={{
-                    position: "fixed",
-                    bottom: "20px",
-                    right: "20px",
-                    zIndex: 1000,
-                    display: "flex",
-                    gap: "8px",
-                    alignItems: "center"
-                  }}>
-                    <button 
-                      type="button" 
-                      onClick={() => { 
-                        setPeso(""); 
-                        setFechaPeso(todayISO); 
-                        setEditable(prev => ({ ...prev, peso: "" }));
-                      }}
-                      title="Limpiar formulario"
-                      style={{
-                        backgroundColor: "#f1f5f9",
-                        color: "#64748b",
-                        padding: "12px",
-                        borderRadius: "50%",
-                        border: "none",
-                        cursor: "pointer",
-                        width: "48px",
-                        height: "48px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                        transition: "all 0.2s"
-                      }}
-                      onMouseEnter={(e) => e.target.style.backgroundColor = "#e2e8f0"}
-                      onMouseLeave={(e) => e.target.style.backgroundColor = "#f1f5f9"}
-                    >
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polyline points="3 6 5 6 21 6" strokeLinecap="round" strokeLinejoin="round"/>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </button>
-                    
-                    <button 
-                      className="btn primary" 
-                      type="button" 
-                      disabled={savingPeso} 
-                      onClick={(e) => submitPeso(e)}
-                      style={{
-                        background: savingPeso ? "#94a3b8" : "linear-gradient(135deg, #16a34a 0%, #15803d 100%)",
-                        color: "white",
-                        padding: "12px 24px",
-                        borderRadius: "24px",
-                        border: "none",
-                        cursor: savingPeso ? "not-allowed" : "pointer",
-                        fontWeight: "600",
-                        fontSize: "15px",
-                        boxShadow: "0 4px 16px rgba(22, 163, 74, 0.4)",
-                        transition: "all 0.3s ease",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px"
-                      }}
-                    >
-                      {savingPeso ? (
-                        <>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: "spin 1s linear infinite" }}>
-                            <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                          Guardando...
-                        </>
-                      ) : (
-                        <>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" strokeLinecap="round" strokeLinejoin="round"/>
-                            <polyline points="17 21 17 13 7 13 7 21" strokeLinecap="round" strokeLinejoin="round"/>
-                            <polyline points="7 3 7 8 15 8" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                          Guardar
-                        </>
-                      )}
-                    </button>
-                  </div>
-
                   <div className="pesaje-container">
                     {/* Fila con Fecha, Peso, Edad y Altura */}
                     <div style={{ 
@@ -3686,6 +4599,61 @@ Ruiz Nutrición
                     <div style={{ marginTop: "16px" }}>
                       <label style={{ display: "block", fontSize: "12px", color: "#475569", marginBottom: "6px", fontWeight: "500" }}>Notas</label>
                       <textarea className="input" rows={2} value={editable.notas || ""} onChange={(e) => setEditable((s) => ({ ...s, notas: e.target.value }))} style={{ width: "100%" }} />
+                    </div>
+
+                    {/* Botón de guardar */}
+                    <div style={{ marginTop: "20px", display: "flex", justifyContent: "flex-end" }}>
+                      <button 
+                        className="btn primary" 
+                        type="button" 
+                        disabled={savingPeso} 
+                        onClick={(e) => submitPeso(e)}
+                        style={{
+                          background: savingPeso ? "#94a3b8" : "linear-gradient(135deg, #16a34a 0%, #15803d 100%)",
+                          color: "white",
+                          padding: "10px 24px",
+                          borderRadius: "8px",
+                          border: "none",
+                          cursor: savingPeso ? "not-allowed" : "pointer",
+                          fontWeight: "600",
+                          fontSize: "14px",
+                          boxShadow: savingPeso ? "none" : "0 2px 8px rgba(22, 163, 74, 0.3)",
+                          transition: "all 0.2s",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px"
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!savingPeso) {
+                            e.target.style.transform = "translateY(-1px)";
+                            e.target.style.boxShadow = "0 4px 12px rgba(22, 163, 74, 0.4)";
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!savingPeso) {
+                            e.target.style.transform = "translateY(0)";
+                            e.target.style.boxShadow = "0 2px 8px rgba(22, 163, 74, 0.3)";
+                          }
+                        }}
+                      >
+                        {savingPeso ? (
+                          <>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: "spin 1s linear infinite" }}>
+                              <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                            Guardando...
+                          </>
+                        ) : (
+                          <>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" strokeLinecap="round" strokeLinejoin="round"/>
+                              <polyline points="17 21 17 13 7 13 7 21" strokeLinecap="round" strokeLinejoin="round"/>
+                              <polyline points="7 3 7 8 15 8" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                            Guardar Medidas
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -4241,13 +5209,9 @@ Ruiz Nutrición
           )}
           {tabs[tabIndex]?.id === "semana" && (
             <div className="card" style={{ width: "100%", maxWidth: "none", margin: "0", padding: "0", borderRadius: "0" }}>
-              <div className="panel-section" style={{ padding: "16px 20px", maxWidth: "none" }}>
-                {/* Título y selectores en una sola línea */}
-                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px", flexWrap: "wrap" }}>
-                  <h3 style={{ margin: "0", fontSize: "16px", fontWeight: "600", color: "#15803d" }}>
-                    🍽️ Dieta semanal
-                  </h3>
-                  
+              <div className="panel-section" style={{ padding: "8px 20px 16px", maxWidth: "none" }}>
+                {/* Selectores modo admin */}
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px", flexWrap: "wrap" }}>
                   {adminMode && (
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       <button 
@@ -4382,28 +5346,269 @@ Ruiz Nutrición
                       >
                         💾
                       </button>
+                      
+                      <button 
+                        onClick={openFotosModal}
+                        title="Gestionar Fotos de Dieta"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          padding: "0",
+                          margin: "0",
+                          backgroundColor: "#3b82f6",
+                          borderRadius: "6px",
+                          border: "2px solid #3b82f6",
+                          color: "white",
+                          fontSize: "20px",
+                          width: "40px",
+                          height: "40px",
+                          boxSizing: "border-box",
+                          flexShrink: 0,
+                          outline: "none"
+                        }}
+                      >
+                        📸
+                      </button>
                     </div>
                   )}
                 </div>
 
                 {/* Editor Modo Manual */}
                 {adminMode && modoManual ? (
-                  <div style={{ marginTop: "20px" }}>
+                  isMobile ? (
+                    <div style={{ marginTop: "20px" }}>
+                      {/* Navegación de días */}
+                      <div style={{ 
+                        display: "flex", 
+                        alignItems: "center", 
+                        justifyContent: "space-between", 
+                        marginBottom: "16px", 
+                        gap: "10px",
+                        backgroundColor: "#f0fdf4",
+                        padding: "12px",
+                        borderRadius: "8px",
+                        border: "1px solid #86efac"
+                      }}>
+                        <button 
+                          onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.max(0, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) - 1) }))}
+                          style={{ 
+                            padding: "8px 16px", 
+                            fontSize: "20px",
+                            backgroundColor: "#fff",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            minWidth: "44px",
+                            minHeight: "44px"
+                          }}
+                        >←</button>
+                        
+                        <div style={{ 
+                          fontWeight: "700", 
+                          color: "#15803d",
+                          fontSize: "17px",
+                          textAlign: "center"
+                        }}>{dayName}</div>
+                        
+                        <button 
+                          onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.min(6, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) + 1) }))}
+                          style={{ 
+                            padding: "8px 16px", 
+                            fontSize: "20px",
+                            backgroundColor: "#fff",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            minWidth: "44px",
+                            minHeight: "44px"
+                          }}
+                        >→</button>
+                      </div>
+
+                      {/* Editor simplificado por comidas */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                        {(() => {
+                          const mealNames = ['DESAYUNO', 'ALMUERZO', 'COMIDA', 'MERIENDA', 'CENA', 'TIPS'];
+                          const mealKeys = ['desayuno', 'almuerzo', 'comida', 'merienda', 'cena', 'tips'];
+                          const mealIcons = ['🌅', '☕', '🍽️', '🥤', '🌙', '💡'];
+                          
+                          return mealNames.map((mealName, idx) => {
+                            const mealKey = mealKeys[idx];
+                            if (!comidasActivas[mealKey]) return null;
+                            
+                            // Extraer contenido actual del día para esta comida (considerando colspan)
+                            let currentContent = '';
+                            let targetCell = null;
+                            if (contenidoManual) {
+                              try {
+                                const parser = new DOMParser();
+                                const doc = parser.parseFromString(contenidoManual, 'text/html');
+                                const table = doc.querySelector('table');
+                                
+                                if (table) {
+                                  const rows = table.querySelectorAll('tbody tr');
+                                  const row = rows[idx];
+                                  if (row) {
+                                    const cells = Array.from(row.querySelectorAll('td'));
+                                    let cellPosition = 0;
+                                    
+                                    for (let i = 0; i < cells.length; i++) {
+                                      const cell = cells[i];
+                                      const colspan = parseInt(cell.getAttribute('colspan') || '1', 10);
+                                      
+                                      if (cellPosition <= selDay + 1 && cellPosition + colspan > selDay + 1) {
+                                        targetCell = cell;
+                                        currentContent = cell.innerHTML || '';
+                                        break;
+                                      }
+                                      
+                                      cellPosition += colspan;
+                                    }
+                                  }
+                                }
+                              } catch (e) {
+                                console.error('Error parseando contenido:', e);
+                              }
+                            }
+                            
+                            return (
+                              <div key={mealKey} style={{
+                                backgroundColor: "#fff",
+                                border: "2px solid #e5e7eb",
+                                borderRadius: "10px",
+                                overflow: "hidden"
+                              }}>
+                                <div style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "8px",
+                                  padding: "10px 14px",
+                                  backgroundColor: "#f9fafb",
+                                  borderBottom: "2px solid #e5e7eb"
+                                }}>
+                                  <span style={{ fontSize: "18px" }}>{mealIcons[idx]}</span>
+                                  <span style={{ 
+                                    fontSize: "15px", 
+                                    fontWeight: "700", 
+                                    color: "#0f172a" 
+                                  }}>{mealName}</span>
+                                </div>
+                                <div
+                                  contentEditable
+                                  suppressContentEditableWarning
+                                  data-meal={mealKey}
+                                  data-day={selDay}
+                                  dangerouslySetInnerHTML={{ __html: currentContent }}
+                                  onInput={(e) => {
+                                    try {
+                                      const newText = e.currentTarget.innerHTML;
+                                      const parser = new DOMParser();
+                                      const doc = parser.parseFromString(contenidoManual, 'text/html');
+                                      const table = doc.querySelector('table');
+                                      
+                                      if (table) {
+                                        const tbody = table.querySelector('tbody');
+                                        if (tbody) {
+                                          const rows = tbody.querySelectorAll('tr');
+                                          const row = rows[idx];
+                                          if (row) {
+                                            const cells = Array.from(row.querySelectorAll('td'));
+                                            let cellPosition = 0;
+                                            
+                                            for (let i = 0; i < cells.length; i++) {
+                                              const cell = cells[i];
+                                              const colspan = parseInt(cell.getAttribute('colspan') || '1', 10);
+                                              
+                                              if (cellPosition <= selDay + 1 && cellPosition + colspan > selDay + 1) {
+                                                cell.innerHTML = newText;
+                                                const serializer = new XMLSerializer();
+                                                setContenidoManual(serializer.serializeToString(doc));
+                                                break;
+                                              }
+                                              
+                                              cellPosition += colspan;
+                                            }
+                                          }
+                                        }
+                                      }
+                                    } catch (e) {
+                                      console.error('Error actualizando contenido:', e);
+                                    }
+                                  }}
+                                  style={{
+                                    padding: "14px",
+                                    backgroundColor: "#fff",
+                                    fontSize: "15px",
+                                    lineHeight: "1.6",
+                                    color: "#374151",
+                                    minHeight: "100px",
+                                    outline: "none",
+                                    WebkitUserSelect: "text",
+                                    userSelect: "text"
+                                  }}
+                                />
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: "20px" }}>
+                      <>
                     {/* Barra de herramientas de formato */}
                     <div style={{
                       display: "flex",
-                      gap: "6px",
-                      padding: "8px",
+                      gap: isMobile ? "4px" : "6px",
+                      padding: isMobile ? "6px" : "8px",
                       backgroundColor: "#f8fafc",
                       borderRadius: "6px 6px 0 0",
                       border: "1px solid #e5e7eb",
                       borderBottom: "1px solid #e5e7eb",
-                      alignItems: "center"
+                      alignItems: "center",
+                      overflowX: "auto",
+                      WebkitOverflowScrolling: "touch",
+                      flexWrap: isMobile ? "nowrap" : "wrap"
                     }}>
+                      <button
+                        onClick={() => document.execCommand('undo', false, null)}
+                        style={{
+                          padding: isMobile ? "8px 12px" : "6px 10px",
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "4px",
+                          backgroundColor: "white",
+                          cursor: "pointer",
+                          fontSize: isMobile ? "18px" : "16px",
+                          minWidth: isMobile ? "44px" : "auto",
+                          minHeight: isMobile ? "44px" : "auto"
+                        }}
+                        title="Deshacer"
+                      >
+                        ↶
+                      </button>
+                      <button
+                        onClick={() => document.execCommand('redo', false, null)}
+                        style={{
+                          padding: isMobile ? "8px 12px" : "6px 10px",
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "4px",
+                          backgroundColor: "white",
+                          cursor: "pointer",
+                          fontSize: isMobile ? "18px" : "16px",
+                          minWidth: isMobile ? "44px" : "auto",
+                          minHeight: isMobile ? "44px" : "auto"
+                        }}
+                        title="Rehacer"
+                      >
+                        ↷
+                      </button>
+                      {!isMobile && <div style={{ width: "1px", backgroundColor: "#cbd5e1", height: "24px", margin: "0 2px" }}></div>}
                       <button
                         onClick={() => document.execCommand('bold', false, null)}
                         style={{
-                          padding: "6px 10px",
+                          padding: isMobile ? "8px 12px" : "6px 10px",
                           border: "1px solid #cbd5e1",
                           borderRadius: "4px",
                           backgroundColor: "white",
@@ -4541,135 +5746,363 @@ Ruiz Nutrición
                       >
                         🔗 Combinar
                       </button>
+                      <button
+                        onClick={(e) => {
+                          // Buscar la celda que está actualmente en foco o seleccionada
+                          let cell = null;
+                          
+                          // Intentar obtener desde la selección
+                          const selection = window.getSelection();
+                          if (selection && selection.rangeCount > 0) {
+                            const range = selection.getRangeAt(0);
+                            let currentElement = range.startContainer;
+                            
+                            // Buscar la celda más cercana
+                            if (currentElement.nodeType === Node.TEXT_NODE) {
+                              currentElement = currentElement.parentElement;
+                            }
+                            
+                            cell = currentElement?.closest('td, th');
+                          }
+                          
+                          // Si no hay selección, buscar la última celda clickeada en el editor
+                          if (!cell && editorManualRef.current) {
+                            // Obtener todas las celdas con colspan o rowspan
+                            const table = editorManualRef.current.querySelector('table');
+                            if (table) {
+                              const allCells = table.querySelectorAll('td[colspan], td[rowspan], th[colspan], th[rowspan]');
+                              if (allCells.length === 1) {
+                                // Si solo hay una celda combinada, usar esa
+                                cell = allCells[0];
+                              } else if (allCells.length > 1) {
+                                alert('Hay varias celdas combinadas. Por favor, haz clic primero dentro de la celda que deseas separar y luego presiona el botón Descombinar.');
+                                return;
+                              }
+                            }
+                          }
+                          
+                          if (!cell) {
+                            alert('Por favor, haz clic primero dentro de una celda de la tabla y luego presiona Descombinar');
+                            return;
+                          }
+                          
+                          // Verificar si la celda tiene colspan o rowspan
+                          const colspan = parseInt(cell.getAttribute('colspan') || '1', 10);
+                          const rowspan = parseInt(cell.getAttribute('rowspan') || '1', 10);
+                          
+                          if (colspan === 1 && rowspan === 1) {
+                            alert('Esta celda no está combinada');
+                            return;
+                          }
+                          
+                          // Obtener el contenido actual
+                          const currentContent = cell.innerHTML;
+                          
+                          // Si tiene colspan, añadir las celdas que faltan en la misma fila
+                          if (colspan > 1) {
+                            const row = cell.parentElement;
+                            
+                            // Eliminar el atributo colspan
+                            cell.removeAttribute('colspan');
+                            
+                            // Añadir las celdas faltantes después de la celda actual
+                            for (let i = 1; i < colspan; i++) {
+                              const newCell = document.createElement('td');
+                              newCell.innerHTML = '<br>';
+                              
+                              // Copiar estilos básicos si no es la primera columna
+                              const isFirstColumn = Array.from(row.children).indexOf(cell) === 0;
+                              if (!isFirstColumn) {
+                                newCell.style.minHeight = '80px';
+                              }
+                              
+                              // Insertar después de la celda actual
+                              if (cell.nextSibling) {
+                                row.insertBefore(newCell, cell.nextSibling);
+                              } else {
+                                row.appendChild(newCell);
+                              }
+                            }
+                          }
+                          
+                          // Si tiene rowspan, añadir las celdas que faltan en las filas siguientes
+                          if (rowspan > 1) {
+                            const table = cell.closest('table');
+                            const tbody = table.querySelector('tbody');
+                            const currentRow = cell.parentElement;
+                            const allRows = Array.from(tbody.querySelectorAll('tr'));
+                            const currentRowIndex = allRows.indexOf(currentRow);
+                            const cellIndex = Array.from(currentRow.children).indexOf(cell);
+                            
+                            // Eliminar el atributo rowspan
+                            cell.removeAttribute('rowspan');
+                            
+                            // Añadir celdas en las filas siguientes
+                            for (let i = 1; i < rowspan; i++) {
+                              const targetRow = allRows[currentRowIndex + i];
+                              if (targetRow) {
+                                const newCell = document.createElement('td');
+                                newCell.innerHTML = '<br>';
+                                newCell.style.minHeight = '80px';
+                                
+                                // Insertar en la posición correcta
+                                if (cellIndex < targetRow.children.length) {
+                                  targetRow.insertBefore(newCell, targetRow.children[cellIndex]);
+                                } else {
+                                  targetRow.appendChild(newCell);
+                                }
+                              }
+                            }
+                          }
+                          
+                          // Actualizar el contenido en el estado
+                          if (editorManualRef.current) {
+                            setContenidoManual(editorManualRef.current.innerHTML);
+                          }
+                        }}
+                        style={{
+                          padding: "6px 10px",
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "4px",
+                          backgroundColor: "white",
+                          cursor: "pointer",
+                          fontSize: "12px",
+                          whiteSpace: "nowrap",
+                          marginLeft: "4px"
+                        }}
+                        title="Separar celda combinada"
+                      >
+                        ⛓️‍💥 Descombinar
+                      </button>
+                    </div>
+                    
+                    {/* Panel de control de comidas activas */}
+                    <div style={{
+                      padding: isMobile ? "4px 2px" : "8px 12px",
+                      backgroundColor: "#f0fdf4",
+                      border: "1px solid #bbf7d0",
+                      borderRadius: "6px",
+                      marginBottom: "12px",
+                      marginTop: "12px",
+                      overflow: isMobile ? "visible" : "auto"
+                    }}>
+                      <div style={{ 
+                        fontSize: isMobile ? "10px" : "12px", 
+                        fontWeight: "600", 
+                        color: "#166534",
+                        marginBottom: isMobile ? "2px" : "4px"
+                      }}>
+                        ✓ Comidas:
+                      </div>
+                      <div style={{ 
+                        display: isMobile ? "grid" : "flex",
+                        gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : undefined,
+                        flexWrap: isMobile ? undefined : "wrap",
+                        gap: isMobile ? "3px 6px" : "8px",
+                        justifyContent: "flex-start",
+                        width: "100%"
+                      }}>
+                        {[
+                          { key: 'desayuno', label: '🌅 Desayuno' },
+                          { key: 'almuerzo', label: '🥪 Almuerzo' },
+                          { key: 'comida', label: '🍽️ Comida' },
+                          { key: 'merienda', label: '🍎 Merienda' },
+                          { key: 'cena', label: '🌙 Cena' },
+                          { key: 'tips', label: '💡 Tips' }
+                        ].map(({ key, label }) => (
+                          <label
+                            key={key}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "flex-start",
+                              gap: isMobile ? "2px" : "3px",
+                              cursor: "pointer",
+                              padding: "0",
+                              backgroundColor: "transparent",
+                              border: "none",
+                              transition: "all 0.2s",
+                              fontSize: isMobile ? "10px" : "11px",
+                              fontWeight: "500",
+                              color: comidasActivas[key] ? "#166534" : "#991b1b",
+                              whiteSpace: "nowrap"
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={comidasActivas[key]}
+                              onChange={(e) => {
+                                const newValue = e.target.checked;
+                                setComidasActivas(prev => ({ ...prev, [key]: newValue }));
+                                
+                                // Actualizar el editor para reflejar el cambio
+                                if (editorManualRef.current) {
+                                  const table = editorManualRef.current.querySelector('table');
+                                  if (table) {
+                                    const tbody = table.querySelector('tbody');
+                                    if (tbody) {
+                                      const rows = tbody.querySelectorAll('tr');
+                                      rows.forEach(row => {
+                                        const firstCell = row.querySelector('td:first-child');
+                                        if (firstCell) {
+                                          const cellText = firstCell.textContent.trim().toUpperCase();
+                                          if (cellText === key.toUpperCase()) {
+                                            // Actualizar todas las celdas de esta fila
+                                            const cells = row.querySelectorAll('td:not(:first-child)');
+                                            cells.forEach(cell => {
+                                              if (newValue) {
+                                                cell.removeAttribute('contenteditable');
+                                                cell.style.backgroundColor = '';
+                                                cell.style.opacity = '1';
+                                                cell.style.cursor = 'text';
+                                              } else {
+                                                cell.setAttribute('contenteditable', 'false');
+                                                cell.style.backgroundColor = '#f1f5f9';
+                                                cell.style.opacity = '0.6';
+                                                cell.style.cursor = 'not-allowed';
+                                              }
+                                            });
+                                          }
+                                        }
+                                      });
+                                    }
+                                  }
+                                }
+                              }}
+                              style={{
+                                width: isMobile ? "12px" : "14px",
+                                height: isMobile ? "12px" : "14px",
+                                cursor: "pointer",
+                                flexShrink: 0,
+                                margin: "0"
+                              }}
+                            />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <div style={{ 
+                        fontSize: isMobile ? "10px" : "10px", 
+                        color: "#059669",
+                        marginTop: "4px",
+                        fontStyle: "italic",
+                        paddingLeft: isMobile ? "2px" : "0"
+                      }}>
+                        💡 Desactiva las comidas que el paciente no necesite.
+                      </div>
                     </div>
                     
                     <div 
-                      ref={editorManualRef}
+                      ref={setEditorManualRef}
                       contentEditable
                       suppressContentEditableWarning
+                      onInput={(e) => {
+                        // Proteger cabeceras de la tabla
+                        const editor = e.currentTarget;
+                        const table = editor.querySelector('table');
+                        
+                        if (table) {
+                          // Verificar que existan las cabeceras del thead
+                          const thead = table.querySelector('thead');
+                          if (!thead) {
+                            // Si se borró el thead, restaurar la tabla completa
+                            console.warn('⚠️ Cabecera de tabla eliminada - restaurando...');
+                            if (editorManualRef.current && contenidoManualRef.current) {
+                              editorManualRef.current.innerHTML = contenidoManualRef.current;
+                            }
+                            return;
+                          }
+                          
+                          // Verificar que existan todas las filas de comidas (primera celda de cada fila)
+                          const tbody = table.querySelector('tbody');
+                          if (tbody) {
+                            const requiredMeals = ['DESAYUNO', 'ALMUERZO', 'COMIDA', 'MERIENDA', 'CENA', 'TIPS'];
+                            const firstCells = Array.from(tbody.querySelectorAll('tr td:first-child'));
+                            const mealTexts = firstCells.map(td => td.textContent.trim().toUpperCase());
+                            
+                            // Verificar si falta alguna comida
+                            const missingMeals = requiredMeals.filter(meal => !mealTexts.includes(meal));
+                            
+                            if (missingMeals.length > 0) {
+                              console.warn('⚠️ Cabeceras de comidas eliminadas:', missingMeals, '- restaurando...');
+                              // Restaurar desde el contenido guardado
+                              if (editorManualRef.current && contenidoManualRef.current) {
+                                editorManualRef.current.innerHTML = contenidoManualRef.current;
+                              }
+                              return;
+                            }
+                            
+                            // Asegurar que todas las celdas de comidas tengan contenteditable="false"
+                            firstCells.forEach(td => {
+                              if (td.getAttribute('contenteditable') !== 'false') {
+                                td.setAttribute('contenteditable', 'false');
+                                td.style.userSelect = 'none';
+                                td.style.cursor = 'not-allowed';
+                              }
+                            });
+                            
+                            // Asegurar que todos los th tengan contenteditable="false"
+                            const headers = thead.querySelectorAll('th');
+                            headers.forEach(th => {
+                              if (th.getAttribute('contenteditable') !== 'false') {
+                                th.setAttribute('contenteditable', 'false');
+                                th.style.userSelect = 'none';
+                                th.style.cursor = 'not-allowed';
+                              }
+                            });
+                          }
+                        }
+                        
+                        // Actualizar el estado cuando el admin escribe
+                        setContenidoManual(e.currentTarget.innerHTML);
+                      }}
+                      onKeyDown={(e) => {
+                        // Prevenir borrado de elementos protegidos
+                        const selection = window.getSelection();
+                        if (!selection || selection.rangeCount === 0) return;
+                        
+                        const range = selection.getRangeAt(0);
+                        const container = range.commonAncestorContainer;
+                        
+                        // Buscar si estamos dentro de un elemento con contenteditable="false"
+                        let node = container.nodeType === Node.TEXT_NODE ? container.parentElement : container;
+                        
+                        while (node && node !== e.currentTarget) {
+                          if (node.getAttribute && node.getAttribute('contenteditable') === 'false') {
+                            // Estamos dentro de un elemento protegido
+                            if (e.key === 'Backspace' || e.key === 'Delete') {
+                              e.preventDefault();
+                              return;
+                            }
+                          }
+                          node = node.parentElement;
+                        }
+                      }}
                       style={{
                         border: "1px solid #e2e8f0",
                         borderRadius: "8px",
-                        padding: "16px",
-                        minHeight: "400px",
+                        padding: isMobile ? "8px" : "16px",
+                        minHeight: isMobile ? "300px" : "400px",
                         backgroundColor: "white",
-                        overflowX: "auto"
+                        overflowX: "auto",
+                        WebkitOverflowScrolling: "touch"
                       }}
-                      dangerouslySetInnerHTML={{ __html: contenidoManual || `
-                        <style>
-                          table { 
-                            width: 100%; 
-                            border-collapse: collapse; 
-                            font-family: Arial, sans-serif; 
-                            font-size: 13px; 
-                            table-layout: fixed; 
-                          }
-                          th, td { 
-                            border: 1px solid #ddd; 
-                            padding: 8px; 
-                            vertical-align: top; 
-                            word-break: break-word;
-                          }
-                          th { 
-                            background-color: #15803d; 
-                            color: white; 
-                            text-align: center; 
-                            font-weight: 600;
-                          }
-                          td:first-child { 
-                            font-weight: 600; 
-                            background-color: #f0fdf4; 
-                            text-align: center;
-                            width: 100px; 
-                          }
-                          td:not(:first-child) { 
-                            min-height: 80px;
-                            height: auto;
-                          }
-                        </style>
-                        <table>
-                          <thead>
-                            <tr>
-                              <th style="width: 120px;">COMIDA</th>
-                              <th>LUNES</th>
-                              <th>MARTES</th>
-                              <th>MIÉRCOLES</th>
-                              <th>JUEVES</th>
-                              <th>VIERNES</th>
-                              <th>SÁBADO</th>
-                              <th>DOMINGO</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr>
-                              <td>DESAYUNO</td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                            </tr>
-                            <tr>
-                              <td>ALMUERZO</td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                            </tr>
-                            <tr>
-                              <td>COMIDA</td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                            </tr>
-                            <tr>
-                              <td>MERIENDA</td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                            </tr>
-                            <tr>
-                              <td>CENA</td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                            </tr>
-                            <tr>
-                              <td style="background-color: #fff7ed;">TIPS</td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                              <td><br></td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      ` }}
                     />
                     
-                    <div style={{ marginTop: "12px", fontSize: "13px", color: "#64748b", padding: "12px", backgroundColor: "#f8fafc", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-                      💡 <strong>Instrucciones:</strong> Haz clic en cualquier celda para editar el contenido. Puedes escribir, dar formato, añadir listas, etc. El contenido se guardará tal como lo veas.
+                    <div style={{ 
+                      marginTop: "12px", 
+                      fontSize: isMobile ? "14px" : "13px", 
+                      color: "#64748b", 
+                      padding: "12px", 
+                      backgroundColor: "#f8fafc", 
+                      borderRadius: "6px", 
+                      border: "1px solid #e2e8f0" 
+                    }}>
+                      💡 <strong>Instrucciones:</strong> {isMobile ? "Toca" : "Haz clic en"} cualquier celda para editar el contenido. La tabla se puede desplazar horizontalmente.
                     </div>
-                  </div>
+                      </>
+                    </div>
+                  )
                 ) : adminMode && tipoMenu === "tabla" ? (
                   <div style={{ overflowX: "auto", width: "100%" }}>
                     <table style={{
@@ -5250,6 +6683,23 @@ Ruiz Nutrición
                             consejos: "💡 Consejos"
                           };
                           
+                          // Verificar si esta comida está activa (excepto consejos que siempre se muestra si tiene contenido)
+                          const userComidasActivas = userData?.comidasActivas || {
+                            desayuno: true,
+                            almuerzo: true,
+                            comida: true,
+                            merienda: true,
+                            cena: true,
+                            tips: true
+                          };
+                          
+                          // Mapear "consejos" a "tips" para la verificación
+                          const keyToCheck = seccion === "consejos" ? "tips" : seccion;
+                          if (userComidasActivas[keyToCheck] === false) {
+                            // No mostrar esta comida si está desactivada
+                            return null;
+                          }
+                          
                           const itemIds = userData?.menuVertical?.[seccion] || [];
                           
                           // Para consejos, puede ser texto libre
@@ -5453,6 +6903,226 @@ Ruiz Nutrición
                       </>
                     )}
                   </div>
+                ) : modoManual && userData?.contenidoManual ? (
+                  /* Vista USUARIO: Modo Manual - Extraer contenido día por día de la tabla HTML */
+                  <>
+                    <div style={{ 
+                      display: "flex", 
+                      alignItems: "center", 
+                      justifyContent: "space-between",
+                      marginBottom: "10px",
+                      gap: "8px"
+                    }}>
+                      {/* Navegación de días */}
+                      <button 
+                        className="btn ghost" 
+                        onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.max(0, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) - 1) }))}
+                        style={{ padding: "6px 10px", minHeight: "32px", fontSize: "16px" }}
+                      >←</button>
+                      
+                      <div style={{ 
+                        fontWeight: "700", 
+                        color: "#16a34a",
+                        fontSize: "14px",
+                        textAlign: "center",
+                        flex: "0 0 auto"
+                      }}>{dayName}</div>
+                      
+                      <button 
+                        className="btn ghost" 
+                        onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.min(6, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) + 1) }))}
+                        style={{ padding: "6px 10px", minHeight: "32px", fontSize: "16px" }}
+                      >→</button>
+
+                      {/* Botones de acción */}
+                      <button
+                        onClick={openFotosModal}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: "16px",
+                          backgroundColor: "#3b82f6",
+                          color: "white",
+                          border: "none",
+                          cursor: "pointer",
+                          fontSize: "18px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          boxShadow: "0 2px 8px rgba(59, 130, 246, 0.3)",
+                          width: "40px",
+                          height: "32px",
+                          flex: "0 0 auto"
+                        }}
+                        title="Ver Fotos de Alimentos"
+                      >
+                        📸
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          setShowSnacksModal(true);
+                          loadSnacks();
+                        }}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: "16px",
+                          backgroundColor: "#fb923c",
+                          color: "white",
+                          border: "none",
+                          cursor: "pointer",
+                          fontSize: "18px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          boxShadow: "0 2px 8px rgba(251, 146, 60, 0.3)",
+                          width: "40px",
+                          height: "32px",
+                          flex: "0 0 auto"
+                        }}
+                        title="Ver SNACK's disponibles"
+                      >
+                        🍎
+                      </button>
+                      
+                      <button
+                        onClick={() => setShowSolicitudDieta(true)}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: "16px",
+                          backgroundColor: "#16a34a",
+                          color: "white",
+                          border: "none",
+                          cursor: "pointer",
+                          fontSize: "18px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          boxShadow: "0 2px 8px rgba(22, 163, 74, 0.3)",
+                          width: "40px",
+                          height: "32px",
+                          flex: "0 0 auto"
+                        }}
+                        title="Solicitar cambios en tu dieta"
+                      >
+                        💬
+                      </button>
+                    </div>
+
+                    {/* Contenido del día desde la tabla HTML */}
+                    <div style={{ 
+                      backgroundColor: "white",
+                      borderRadius: "12px",
+                      padding: "20px",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
+                    }}>
+                      {(() => {
+                        // Parsear el HTML y extraer el contenido del día actual
+                        try {
+                          const parser = new DOMParser();
+                          const doc = parser.parseFromString(userData.contenidoManual, 'text/html');
+                          const table = doc.querySelector('table');
+                          
+                          if (!table) {
+                            return <div style={{ padding: "20px", color: "#6b7280", textAlign: "center" }}>No hay menú disponible</div>;
+                          }
+
+                          const rows = table.querySelectorAll('tbody tr');
+                          const mealNames = ['DESAYUNO', 'ALMUERZO', 'COMIDA', 'MERIENDA', 'CENA', 'TIPS'];
+                          const mealKeys = ['desayuno', 'almuerzo', 'comida', 'merienda', 'cena', 'tips'];
+                          const mealIcons = ['🌅', '☕', '🍽️', '🥤', '🌙', '💡'];
+                          
+                          // Obtener el estado de comidas activas del usuario
+                          const userComidasActivas = userData.comidasActivas || {
+                            desayuno: true,
+                            almuerzo: true,
+                            comida: true,
+                            merienda: true,
+                            cena: true,
+                            tips: true
+                          };
+                          
+                          return (
+                            <div className="weekly-menu-grid">
+                              {Array.from(rows).map((row, rowIndex) => {
+                                const cells = Array.from(row.querySelectorAll('td'));
+                                
+                                // Verificar si esta comida está activa
+                                const mealKey = mealKeys[rowIndex];
+                                if (mealKey && userComidasActivas[mealKey] === false) {
+                                  return null;
+                                }
+                                
+                                // Buscar la celda que corresponde al día seleccionado considerando colspan
+                                // La primera celda (índice 0) es el nombre de la comida
+                                // Las celdas 1-7 son los días Lunes-Domingo
+                                let dayCell = null;
+                                let cellPosition = 0; // Posición lógica (0 = nombre, 1-7 = días)
+                                
+                                for (let i = 0; i < cells.length; i++) {
+                                  const cell = cells[i];
+                                  const colspan = parseInt(cell.getAttribute('colspan') || '1', 10);
+                                  
+                                  // Si la posición lógica actual + colspan abarca el día seleccionado
+                                  if (cellPosition <= selDay + 1 && cellPosition + colspan > selDay + 1) {
+                                    dayCell = cell;
+                                    break;
+                                  }
+                                  
+                                  cellPosition += colspan;
+                                }
+                                
+                                if (!dayCell) return null;
+                                
+                                const content = dayCell.innerHTML || dayCell.textContent || '';
+                                if (!content.trim() || content.trim() === '<br>') return null;
+                                
+                                return (
+                                  <div key={rowIndex} className="weekly-field" style={{ marginBottom: "16px" }}>
+                                    <label style={{ 
+                                      display: "flex", 
+                                      alignItems: "center", 
+                                      gap: "6px",
+                                      fontSize: "15px",
+                                      fontWeight: "600",
+                                      color: "#0f172a",
+                                      marginBottom: "8px"
+                                    }}>
+                                      <span>{mealIcons[rowIndex] || '🍴'}</span>
+                                      {mealNames[rowIndex] || `Comida ${rowIndex + 1}`}
+                                    </label>
+                                    <div 
+                                      style={{
+                                        padding: "12px",
+                                        backgroundColor: "#f8fafc",
+                                        borderRadius: "8px",
+                                        border: "1px solid #e2e8f0",
+                                        fontSize: "14px",
+                                        lineHeight: "1.6",
+                                        color: "#374151",
+                                        whiteSpace: "pre-wrap",
+                                        minHeight: "60px"
+                                      }}
+                                      dangerouslySetInnerHTML={{ __html: content }}
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        } catch (err) {
+                          console.error("Error parseando contenido manual:", err);
+                          return <div style={{ padding: "20px", color: "#ef4444", textAlign: "center" }}>Error al cargar el menú</div>;
+                        }
+                      })()}
+                    </div>
+
+                    <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center" }}>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button className="btn ghost" onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.max(0, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) - 1) }))}>Día anterior</button>
+                        <button className="btn ghost" onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.min(6, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) + 1) }))}>Siguiente día</button>
+                      </div>
+                    </div>
+                  </>
                 ) : (
                   /* Vista USUARIO: Navegación día por día (formato tabla) */
                   <>
@@ -5461,103 +7131,82 @@ Ruiz Nutrición
                       alignItems: "center", 
                       justifyContent: "space-between",
                       marginBottom: "10px",
-                      flexWrap: "wrap",
                       gap: "8px"
                     }}>
-                      {/* Grupo izquierdo: Navegación de días */}
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <button 
-                          className="btn ghost" 
-                          onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.max(0, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) - 1) }))}
-                          style={{ padding: "6px 12px", minHeight: "32px", fontSize: "18px" }}
-                        >←</button>
-                        
-                        <div style={{ 
-                          fontWeight: "700", 
-                          color: "#16a34a",
-                          fontSize: "15px",
-                          minWidth: "90px",
-                          textAlign: "center"
-                        }}>{dayName}</div>
-                        
-                        <button 
-                          className="btn ghost" 
-                          onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.min(6, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) + 1) }))}
-                          style={{ padding: "6px 12px", minHeight: "32px", fontSize: "18px" }}
-                        >→</button>
-                      </div>
+                      {/* Navegación de días */}
+                      <button 
+                        className="btn ghost" 
+                        onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.max(0, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) - 1) }))}
+                        style={{ padding: "6px 10px", minHeight: "32px", fontSize: "16px" }}
+                      >←</button>
                       
-                      {/* Grupo derecho: Botones de acción */}
-                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      <div style={{ 
+                        fontWeight: "700", 
+                        color: "#16a34a",
+                        fontSize: "14px",
+                        textAlign: "center",
+                        flex: "0 0 auto"
+                      }}>{dayName}</div>
+                      
+                      <button 
+                        className="btn ghost" 
+                        onClick={() => setEditable((s) => ({ ...s, _selectedDay: Math.min(6, (typeof s._selectedDay === "number" ? s._selectedDay : selDay) + 1) }))}
+                        style={{ padding: "6px 10px", minHeight: "32px", fontSize: "16px" }}
+                      >→</button>
+                      
+                      {/* Botones de acción */}
+                      <button
+                        onClick={() => {
+                          setShowSnacksModal(true);
+                          loadSnacks();
+                        }}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: "16px",
+                          backgroundColor: "#fb923c",
+                          color: "white",
+                          border: "none",
+                          cursor: "pointer",
+                          fontSize: "12px",
+                          fontWeight: "600",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "3px",
+                          boxShadow: "0 2px 8px rgba(251, 146, 60, 0.3)",
+                          whiteSpace: "nowrap",
+                          flex: "0 0 auto"
+                        }}
+                        title="Ver SNACK's disponibles"
+                      >
+                        <span style={{ fontSize: "14px" }}>🍎</span>
+                        <span>SNACK's</span>
+                      </button>
+                      
+                      {!adminMode && (
                         <button
-                          onClick={() => {
-                            setShowSnacksModal(true);
-                            loadSnacks();
-                          }}
+                          onClick={() => setShowSolicitudDieta(true)}
                           style={{
-                            padding: "6px 12px",
+                            padding: "6px 10px",
                             borderRadius: "16px",
-                            backgroundColor: "#fb923c",
+                            backgroundColor: "#16a34a",
                             color: "white",
                             border: "none",
                             cursor: "pointer",
-                            fontSize: "13px",
+                            fontSize: "12px",
                             fontWeight: "600",
                             display: "flex",
                             alignItems: "center",
-                            gap: "4px",
-                            boxShadow: "0 2px 8px rgba(251, 146, 60, 0.3)",
-                            transition: "all 0.2s ease",
-                            whiteSpace: "nowrap"
+                            gap: "3px",
+                            boxShadow: "0 2px 8px rgba(22, 163, 74, 0.3)",
+                            whiteSpace: "nowrap",
+                            flex: "0 0 auto"
                           }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.transform = "scale(1.05)";
-                            e.currentTarget.style.backgroundColor = "#f97316";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.transform = "scale(1)";
-                            e.currentTarget.style.backgroundColor = "#fb923c";
-                          }}
-                          title="Ver SNACK's disponibles"
+                          title="Solicitar cambios en tu dieta"
                         >
-                          <span style={{ fontSize: "16px" }}>🍎</span>
-                          <span>SNACK's</span>
+                          <span style={{ fontSize: "14px" }}>💬</span>
+                          <span>C.Dieta</span>
                         </button>
-                        
-                        {!adminMode && (
-                          <button
-                            onClick={() => setShowSolicitudDieta(true)}
-                            style={{
-                              padding: "6px 12px",
-                              borderRadius: "16px",
-                              backgroundColor: "#16a34a",
-                              color: "white",
-                              border: "none",
-                              cursor: "pointer",
-                              fontSize: "13px",
-                              fontWeight: "600",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "4px",
-                              boxShadow: "0 2px 8px rgba(22, 163, 74, 0.3)",
-                              transition: "all 0.2s ease",
-                              whiteSpace: "nowrap"
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.transform = "scale(1.05)";
-                              e.currentTarget.style.backgroundColor = "#15803d";
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.transform = "scale(1)";
-                              e.currentTarget.style.backgroundColor = "#16a34a";
-                            }}
-                            title="Solicitar cambios en tu dieta"
-                          >
-                            <span style={{ fontSize: "16px" }}>💬</span>
-                            <span>Cambio de dieta</span>
-                          </button>
-                        )}
-                      </div>
+                      )}
                     </div>
                     <div>
                       <div className="weekly-menu-grid">
@@ -5973,7 +7622,207 @@ Ruiz Nutrición
                     </button>
                   )}
                 </div>
-                {userData?.tablaGym && userData.tablaGym.length > 0 ? (
+                {userData?.ejerciciosPorDia && Object.keys(userData.ejerciciosPorDia).some(dia => userData.ejerciciosPorDia[dia]?.length > 0) ? (
+                  <div style={{ marginTop: "8px" }}>
+                    {/* Mostrar ejercicios organizados por días */}
+                    {["Día 1", "Día 2", "Día 3", "Día 4", "Día 5", "Día 6", "Día 7"].map((dia) => {
+                      const ejerciciosDelDia = userData.ejerciciosPorDia[dia] || [];
+                      if (ejerciciosDelDia.length === 0) return null;
+                      
+                      return (
+                        <div key={dia} style={{
+                          marginBottom: "20px",
+                          padding: "12px",
+                          backgroundColor: "#f8f9fa",
+                          borderRadius: "12px",
+                          border: "2px solid #e0e7ff"
+                        }}>
+                          {/* Encabezado del día */}
+                          <div style={{
+                            fontSize: "16px",
+                            fontWeight: "700",
+                            color: "#1976d2",
+                            marginBottom: "12px",
+                            paddingBottom: "8px",
+                            borderBottom: "2px solid #1976d2",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px"
+                          }}>
+                            <span>📅</span>
+                            <span>{dia}</span>
+                            <span style={{
+                              fontSize: "12px",
+                              fontWeight: "500",
+                              backgroundColor: "#1976d2",
+                              color: "white",
+                              padding: "2px 8px",
+                              borderRadius: "12px"
+                            }}>
+                              {ejerciciosDelDia.length} ejercicio{ejerciciosDelDia.length !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                          
+                          {/* Lista de ejercicios del día */}
+                          <div style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "8px"
+                          }}>
+                            {ejerciciosDelDia.map((ejercicio, index) => (
+                              <div 
+                                key={ejercicio.id} 
+                                style={{
+                                  padding: "10px",
+                                  backgroundColor: "white",
+                                  border: "2px solid #2196F3",
+                                  borderRadius: "8px",
+                                  boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
+                                }}
+                              >
+                                <div style={{
+                                  display: "flex",
+                                  alignItems: "flex-start",
+                                  gap: "10px"
+                                }}>
+                                  <div style={{
+                                    fontSize: "14px",
+                                    fontWeight: "700",
+                                    color: "#1976d2",
+                                    minWidth: "28px",
+                                    height: "28px",
+                                    borderRadius: "50%",
+                                    backgroundColor: "#e3f2fd",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    border: "2px solid #2196F3",
+                                    flexShrink: 0
+                                  }}>
+                                    {index + 1}
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{
+                                      fontSize: "15px",
+                                      fontWeight: "600",
+                                      color: "#333",
+                                      marginBottom: "3px"
+                                    }}>
+                                      {ejercicio.nombre}
+                                    </div>
+                                    <div style={{
+                                      fontSize: "12px",
+                                      color: "#1976d2",
+                                      marginBottom: "6px",
+                                      fontWeight: "500"
+                                    }}>
+                                      📁 {ejercicio.categoria}
+                                    </div>
+                                    
+                                    {/* Parámetros del ejercicio */}
+                                    {(ejercicio.series || ejercicio.repeticiones || ejercicio.peso || ejercicio.tiempo || ejercicio.intervalo) && (
+                                      <div style={{
+                                        display: "flex",
+                                        flexWrap: "wrap",
+                                        gap: "4px",
+                                        marginBottom: "6px"
+                                      }}>
+                                        {ejercicio.series && (
+                                          <span style={{ 
+                                            backgroundColor: "#e8f5e9", 
+                                            padding: "3px 8px", 
+                                            borderRadius: "4px", 
+                                            fontSize: "11px",
+                                            fontWeight: "500",
+                                            border: "1px solid #4caf50",
+                                            color: "#2e7d32"
+                                          }}>
+                                            📊 {ejercicio.series}
+                                          </span>
+                                        )}
+                                        {ejercicio.repeticiones && (
+                                          <span style={{ 
+                                            backgroundColor: "#e3f2fd", 
+                                            padding: "3px 8px", 
+                                            borderRadius: "4px", 
+                                            fontSize: "11px",
+                                            fontWeight: "500",
+                                            border: "1px solid #2196f3",
+                                            color: "#1565c0"
+                                          }}>
+                                            🔢 {ejercicio.repeticiones}
+                                          </span>
+                                        )}
+                                        {ejercicio.peso && (
+                                          <span style={{ 
+                                            backgroundColor: "#fff3e0", 
+                                            padding: "3px 8px", 
+                                            borderRadius: "4px", 
+                                            fontSize: "11px",
+                                            fontWeight: "500",
+                                            border: "1px solid #ff9800",
+                                            color: "#e65100"
+                                          }}>
+                                            ⚖️ {ejercicio.peso}
+                                          </span>
+                                        )}
+                                        {ejercicio.tiempo && (
+                                          <span style={{ 
+                                            backgroundColor: "#f3e5f5", 
+                                            padding: "3px 8px", 
+                                            borderRadius: "4px", 
+                                            fontSize: "11px",
+                                            fontWeight: "500",
+                                            border: "1px solid #9c27b0",
+                                            color: "#6a1b9a"
+                                          }}>
+                                            ⏱️ {ejercicio.tiempo}
+                                          </span>
+                                        )}
+                                        {ejercicio.intervalo && (
+                                          <span style={{ 
+                                            backgroundColor: "#fce4ec", 
+                                            padding: "3px 8px", 
+                                            borderRadius: "4px", 
+                                            fontSize: "11px",
+                                            fontWeight: "500",
+                                            border: "1px solid #e91e63",
+                                            color: "#c2185b"
+                                          }}>
+                                            ⏸️ {ejercicio.intervalo}
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                    
+                                    {/* Video preview si existe */}
+                                    {ejercicio.videoUrl && (
+                                      <div style={{ marginTop: "6px" }}>
+                                        <video 
+                                          controls 
+                                          style={{
+                                            width: "100%",
+                                            maxHeight: "150px",
+                                            borderRadius: "6px",
+                                            backgroundColor: "#000"
+                                          }}
+                                        >
+                                          <source src={ejercicio.videoUrl} type="video/mp4" />
+                                          Tu navegador no soporta el elemento de video.
+                                        </video>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : userData?.tablaGym && userData.tablaGym.length > 0 ? (
+                  /* Backward compatibility: mostrar tablaGym antigua si existe */
                   <div style={{ marginTop: "8px" }}>
                     <div style={{
                       display: "flex",
@@ -7226,6 +9075,422 @@ Ruiz Nutrición
                 {enviandoSolicitud ? '⏳ Enviando...' : '✨ Solicitar tabla'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Galería de Fotos */}
+      {showFotosModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: isMobile ? '10px' : '20px',
+            overflow: 'auto'
+          }}
+          onClick={closeFotosModal}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '15px',
+              padding: isMobile ? '16px' : '24px',
+              maxWidth: '900px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflow: 'auto',
+              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)',
+              animation: 'fadeIn 0.3s ease-out'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div>
+                <h2 style={{ margin: '0 0 4px 0', color: '#2c3e50', fontSize: isMobile ? '20px' : '24px', fontWeight: '700' }}>
+                  📸 {adminMode ? 'Gestionar Fotos' : 'Fotos de Alimentos'}
+                </h2>
+                <p style={{ margin: 0, color: '#7f8c8d', fontSize: '14px' }}>
+                  {adminMode ? 'Sube fotos de productos y alimentos para el usuario' : 'Fotos de referencia de alimentos'}
+                </p>
+              </div>
+              <button
+                onClick={closeFotosModal}
+                style={{
+                  backgroundColor: '#f1f5f9',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '36px',
+                  height: '36px',
+                  cursor: 'pointer',
+                  fontSize: '20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#64748b',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#e2e8f0'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = '#f1f5f9'}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Zona de subida (solo admin) */}
+            {adminMode && (
+              <div
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDragOver={handleDragOverFotos}
+                onDrop={handleDropFotos}
+                style={{
+                  border: isDragging ? '3px dashed #3b82f6' : '2px dashed #cbd5e1',
+                  borderRadius: '12px',
+                  padding: isMobile ? '20px' : '30px',
+                  marginBottom: '24px',
+                  backgroundColor: isDragging ? '#eff6ff' : '#f8fafc',
+                  textAlign: 'center',
+                  transition: 'all 0.3s'
+                }}
+              >
+                <div style={{ fontSize: '48px', marginBottom: '12px' }}>📤</div>
+                <h3 style={{ margin: '0 0 8px 0', color: '#334155', fontSize: '16px', fontWeight: '600' }}>
+                  Subir fotos
+                </h3>
+                <p style={{ margin: '0 0 16px 0', color: '#64748b', fontSize: '13px' }}>
+                  Arrastra imágenes aquí, pega desde el portapapeles (Ctrl+V) o haz clic para seleccionar
+                </p>
+                
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleFileSelect}
+                  style={{ display: 'none' }}
+                />
+                
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingFoto}
+                    style={{
+                      padding: '10px 20px',
+                      backgroundColor: '#3b82f6',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      cursor: uploadingFoto ? 'not-allowed' : 'pointer',
+                      opacity: uploadingFoto ? 0.5 : 1,
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => !uploadingFoto && (e.target.style.backgroundColor = '#2563eb')}
+                    onMouseLeave={(e) => !uploadingFoto && (e.target.style.backgroundColor = '#3b82f6')}
+                  >
+                    📂 Seleccionar archivos
+                  </button>
+                </div>
+                
+                {uploadingFoto && (
+                  <div style={{ marginTop: '16px', color: '#3b82f6', fontSize: '14px', fontWeight: '600' }}>
+                    ⏳ Subiendo foto...
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Galería de fotos */}
+            {loadingFotos ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                <div style={{ fontSize: '48px', marginBottom: '12px' }}>⏳</div>
+                <p>Cargando fotos...</p>
+              </div>
+            ) : fotosGaleria.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                <div style={{ fontSize: '48px', marginBottom: '12px' }}>📸</div>
+                <p>{adminMode ? 'No hay fotos aún. Sube la primera!' : 'No hay fotos disponibles'}</p>
+              </div>
+            ) : (
+              <div>
+                <h3 style={{ margin: '0 0 16px 0', color: '#334155', fontSize: '16px', fontWeight: '600' }}>
+                  Galería ({fotosGaleria.length} {fotosGaleria.length === 1 ? 'foto' : 'fotos'})
+                </h3>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(200px, 1fr))',
+                    gap: '12px'
+                  }}
+                >
+                  {fotosGaleria.map((foto, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        position: 'relative',
+                        borderRadius: '8px',
+                        overflow: 'visible',
+                        backgroundColor: '#f1f5f9',
+                        transition: 'transform 0.2s',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                        display: 'flex',
+                        flexDirection: 'column'
+                      }}
+                    >
+                      <div
+                        style={{
+                          position: 'relative',
+                          aspectRatio: '1',
+                          cursor: 'pointer',
+                          overflow: 'hidden',
+                          borderRadius: '8px 8px 0 0'
+                        }}
+                        onClick={() => setSelectedFoto(foto)}
+                        onMouseEnter={(e) => e.currentTarget.parentElement.style.transform = 'scale(1.05)'}
+                        onMouseLeave={(e) => e.currentTarget.parentElement.style.transform = 'scale(1)'}
+                      >
+                        <img
+                          src={foto.url}
+                          alt={foto.caption || `Foto ${idx + 1}`}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover'
+                          }}
+                        />
+                        {adminMode && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteFoto(foto);
+                            }}
+                            style={{
+                              position: 'absolute',
+                              top: '8px',
+                              right: '8px',
+                              backgroundColor: 'rgba(239, 68, 68, 0.9)',
+                              border: 'none',
+                              borderRadius: '6px',
+                              width: '32px',
+                              height: '32px',
+                              cursor: 'pointer',
+                              fontSize: '16px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: 'white',
+                              transition: 'all 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.stopPropagation();
+                              e.target.style.backgroundColor = 'rgba(220, 38, 38, 1)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.stopPropagation();
+                              e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.9)';
+                            }}
+                          >
+                            🗑️
+                          </button>
+                        )}
+                      </div>
+                      
+                      {/* Pie de foto */}
+                      <div style={{
+                        padding: '8px',
+                        backgroundColor: 'white',
+                        borderRadius: '0 0 8px 8px',
+                        minHeight: '40px'
+                      }}>
+                        {adminMode && editingCaption === idx ? (
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            <input
+                              type="text"
+                              value={tempCaption}
+                              onChange={(e) => setTempCaption(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  updateCaption(foto, tempCaption);
+                                  setEditingCaption(null);
+                                } else if (e.key === 'Escape') {
+                                  setEditingCaption(null);
+                                }
+                              }}
+                              autoFocus
+                              style={{
+                                flex: 1,
+                                padding: '4px 8px',
+                                fontSize: '12px',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '4px',
+                                outline: 'none'
+                              }}
+                              placeholder="Pie de foto..."
+                            />
+                            <button
+                              onClick={() => {
+                                updateCaption(foto, tempCaption);
+                                setEditingCaption(null);
+                              }}
+                              style={{
+                                padding: '4px 8px',
+                                fontSize: '12px',
+                                backgroundColor: '#16a34a',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={() => setEditingCaption(null)}
+                              style={{
+                                padding: '4px 8px',
+                                fontSize: '12px',
+                                backgroundColor: '#dc2626',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <div
+                            onClick={(e) => {
+                              if (adminMode) {
+                                e.stopPropagation();
+                                setEditingCaption(idx);
+                                setTempCaption(foto.caption || '');
+                              }
+                            }}
+                            style={{
+                              fontSize: '12px',
+                              color: foto.caption ? '#334155' : '#94a3b8',
+                              fontStyle: foto.caption ? 'normal' : 'italic',
+                              cursor: adminMode ? 'pointer' : 'default',
+                              padding: '4px',
+                              borderRadius: '4px',
+                              transition: 'background-color 0.2s',
+                              wordBreak: 'break-word'
+                            }}
+                            onMouseEnter={(e) => adminMode && (e.target.style.backgroundColor = '#f1f5f9')}
+                            onMouseLeave={(e) => adminMode && (e.target.style.backgroundColor = 'transparent')}
+                          >
+                            {foto.caption || (adminMode ? 'Haz clic para añadir pie de foto' : 'Sin descripción')}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div
+                style={{
+                  marginTop: '16px',
+                  padding: '12px 16px',
+                  backgroundColor: '#fee2e2',
+                  borderLeft: '4px solid #ef4444',
+                  borderRadius: '8px',
+                  color: '#991b1b',
+                  fontSize: '14px'
+                }}
+              >
+                ⚠️ {error}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de visualización de foto ampliada */}
+      {selectedFoto && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.95)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+            padding: '20px'
+          }}
+          onClick={() => setSelectedFoto(null)}
+        >
+          <button
+            onClick={() => setSelectedFoto(null)}
+            style={{
+              position: 'absolute',
+              top: '20px',
+              right: '20px',
+              backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              border: 'none',
+              borderRadius: '50%',
+              width: '48px',
+              height: '48px',
+              cursor: 'pointer',
+              fontSize: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              transition: 'all 0.2s',
+              zIndex: 10001
+            }}
+            onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.3)'}
+            onMouseLeave={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.2)'}
+          >
+            ✕
+          </button>
+          <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: '90%', maxHeight: '90%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <img
+              src={selectedFoto.url}
+              alt={selectedFoto.caption || "Foto ampliada"}
+              style={{
+                maxWidth: '100%',
+                maxHeight: 'calc(90vh - 80px)',
+                objectFit: 'contain',
+                borderRadius: '8px 8px 0 0',
+                boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)'
+              }}
+            />
+            {selectedFoto.caption && (
+              <div style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                padding: '16px 24px',
+                borderRadius: '0 0 8px 8px',
+                color: '#1f2937',
+                fontSize: '16px',
+                fontWeight: '500',
+                textAlign: 'center',
+                maxWidth: '100%',
+                boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)'
+              }}>
+                {selectedFoto.caption}
+              </div>
+            )}
           </div>
         </div>
       )}

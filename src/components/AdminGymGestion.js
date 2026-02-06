@@ -111,14 +111,28 @@ export default function AdminGymGestion() {
           id: doc.id,
           ...doc.data()
         }))
-        .filter(u => u.nombre && u.apellidos && u.email) // Filtrar usuarios sin datos válidos
+        .filter(u => {
+          // Filtrar usuarios sin datos válidos
+          if (!u.nombre || !u.apellidos || !u.email) return false;
+          // Filtrar usuarios con datos inválidos (solo "0" o vacíos)
+          if (u.nombre === "0" || u.apellidos === "0") return false;
+          // Filtrar admins
+          if (u.role === "admin" || u.rol === "admin") return false;
+          return true;
+        })
         .sort((a, b) => {
           const nombreA = `${a.apellidos || ""} ${a.nombre || ""}`.toLowerCase();
           const nombreB = `${b.apellidos || ""} ${b.nombre || ""}`.toLowerCase();
           return nombreA.localeCompare(nombreB);
         });
-      console.log("📋 Usuarios cargados:", usersList.length, usersList);
-      setUsuarios(usersList);
+      
+      // Eliminar duplicados por email
+      const usuariosUnicos = usersList.filter((user, index, self) => 
+        index === self.findIndex((u) => u.email === user.email)
+      );
+      
+      console.log("📋 Usuarios cargados:", usuariosUnicos.length, usuariosUnicos);
+      setUsuarios(usuariosUnicos);
       
     } catch (err) {
       console.error("Error al cargar datos:", err);

@@ -92,8 +92,7 @@ export default function FileManager({ userId, type, isAdmin }) {
     setError(null);
 
     try {
-      const timestamp = Date.now();
-      const fileName = `${timestamp}_${file.name}`;
+      const fileName = file.name;
       const storageRef = ref(storage, `${folderPath}/${fileName}`);
 
       const uploadTask = uploadBytesResumable(storageRef, file);
@@ -117,7 +116,6 @@ export default function FileManager({ userId, type, isAdmin }) {
           await updateDoc(userRef, {
             [`${type}Files`]: arrayUnion({
               name: fileName,
-              originalName: file.name,
               url: downloadURL,
               uploadedAt: new Date().toISOString(),
               path: uploadTask.snapshot.ref.fullPath,
@@ -174,6 +172,12 @@ export default function FileManager({ userId, type, isAdmin }) {
   const getFileSize = (url) => {
     // En una implementación real, deberías almacenar el tamaño en Firestore
     return "- KB";
+  };
+
+  // Función para limpiar el nombre del archivo (quitar prefijos numéricos)
+  const cleanFileName = (fileName) => {
+    // Quitar patrones como "1-", "01-", "123-", etc. al inicio del nombre
+    return fileName.replace(/^\d+[-_\s]*/, '');
   };
 
   return (
@@ -280,20 +284,18 @@ export default function FileManager({ userId, type, isAdmin }) {
             <div
               key={index}
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
                 padding: "16px",
                 backgroundColor: "#f7fafc",
                 borderRadius: "8px",
                 border: "1px solid #e2e8f0",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1 }}>
+              {/* Información del archivo */}
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px" }}>
                 <span style={{ fontSize: "24px" }}>{getFileIcon(file.name)}</span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: "500", color: "#2d3748", marginBottom: "4px" }}>
-                    {file.name}
+                  <div style={{ fontWeight: "500", color: "#2d3748", marginBottom: "4px", wordBreak: "break-word" }}>
+                    {cleanFileName(file.name)}
                   </div>
                   <div style={{ fontSize: "12px", color: "#718096" }}>
                     {getFileSize(file.url)}
@@ -301,19 +303,23 @@ export default function FileManager({ userId, type, isAdmin }) {
                 </div>
               </div>
 
-              <div style={{ display: "flex", gap: "8px" }}>
+              {/* Botones debajo del nombre */}
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 <a
                   href={file.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
-                    padding: "8px 16px",
+                    flex: "1 1 auto",
+                    minWidth: "120px",
+                    padding: "10px 16px",
                     backgroundColor: "#48bb78",
                     color: "white",
                     borderRadius: "6px",
                     textDecoration: "none",
                     fontSize: "14px",
                     fontWeight: "500",
+                    textAlign: "center",
                   }}
                 >
                   👁️ Ver
@@ -322,7 +328,9 @@ export default function FileManager({ userId, type, isAdmin }) {
                   <button
                     onClick={() => handleDelete(file)}
                     style={{
-                      padding: "8px 16px",
+                      flex: "1 1 auto",
+                      minWidth: "120px",
+                      padding: "10px 16px",
                       backgroundColor: "#f56565",
                       color: "white",
                       border: "none",
