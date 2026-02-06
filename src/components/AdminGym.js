@@ -79,6 +79,8 @@ export default function AdminGym() {
           if (!u.nombre || !u.apellidos || !u.email) return false;
           // Filtrar usuarios con datos inválidos (solo "0" o vacíos)
           if (u.nombre === "0" || u.apellidos === "0") return false;
+          // Filtrar solo usuarios activos (activo !== false permite que usuarios sin el campo se muestren)
+          if (u.activo === false) return false;
           return true;
         })
         .sort((a, b) => {
@@ -96,7 +98,7 @@ export default function AdminGym() {
 
       // Cargar ejercicios
       try {
-        const q = query(collection(db, "gym_ejercicios"), orderBy("nombre", "asc"));
+        const q = query(collection(db, "ejercicios"), orderBy("nombre", "asc"));
         const ejSnapshot = await getDocs(q);
         const ejList = ejSnapshot.docs.map((doc) => ({
           id: doc.id,
@@ -105,7 +107,7 @@ export default function AdminGym() {
         setEjercicios(ejList);
       } catch (err) {
         // Fallback sin orderBy
-        const ejSnapshot = await getDocs(collection(db, "gym_ejercicios"));
+        const ejSnapshot = await getDocs(collection(db, "ejercicios"));
         const ejList = ejSnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
