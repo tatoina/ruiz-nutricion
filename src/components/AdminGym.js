@@ -60,6 +60,9 @@ export default function AdminGym() {
 
   // Vista activa: "asignacion" o "gestion"
   const [vistaActiva, setVistaActiva] = useState("asignacion");
+  
+  // Estado para colapsar categorías
+  const [categoriasColapsadas, setCategoriasColapsadas] = useState(true);
 
   // Días de la semana
   const diasSemana = ["Día 1", "Día 2", "Día 3", "Día 4", "Día 5", "Día 6", "Día 7"];
@@ -685,32 +688,27 @@ export default function AdminGym() {
     <div style={styles.container}>
       <div style={styles.header}>
         <button
-          onClick={() => navigate("/admin")}
+          onClick={() => vistaActiva === "gestion" ? setVistaActiva("asignacion") : navigate("/admin")}
           style={styles.btnVolver}
         >
           ← Volver
         </button>
-        <h2 style={styles.title}>🏋️ GYM</h2>
-        <div style={styles.viewTabs}>
-          <button
-            onClick={() => setVistaActiva("asignacion")}
-            style={{
-              ...styles.tabButton,
-              ...(vistaActiva === "asignacion" ? styles.tabButtonActive : {})
-            }}
-          >
-            📋 Asignar Tablas
-          </button>
-          <button
-            onClick={() => setVistaActiva("gestion")}
-            style={{
-              ...styles.tabButton,
-              ...(vistaActiva === "gestion" ? styles.tabButtonActive : {})
-            }}
-          >
-            ⚙️ Gestión
-          </button>
-        </div>
+        <h2 style={styles.title}>
+          {vistaActiva === "gestion" ? "🏋️ GYM - Gestión ejercicios" : "🏋️ GYM - Asignación de tablas"}
+        </h2>
+        {vistaActiva === "asignacion" && (
+          <div style={styles.viewTabs}>
+            <button
+              onClick={() => setVistaActiva("gestion")}
+              style={{
+                ...styles.tabButton,
+                ...(vistaActiva === "gestion" ? styles.tabButtonActive : {})
+              }}
+            >
+              ⚙️ Gestión Ejercicios
+            </button>
+          </div>
+        )}
       </div>
 
       {/* VISTA ASIGNACIÓN */}
@@ -719,11 +717,11 @@ export default function AdminGym() {
           {/* Selector de usuario */}
           <div style={styles.section}>
         <label style={styles.labelBig}>Asignar a:</label>
-        <div style={styles.userSelectRow}>
+        <div style={{display: "flex", alignItems: "center", gap: "12px", marginBottom: "12px"}}>
           <select
             value={selectedUser}
             onChange={(e) => setSelectedUser(e.target.value)}
-            style={styles.selectUser}
+            style={{...styles.selectUser, flex: "1"}}
           >
             <option value="">-- Seleccionar Usuario --</option>
             {usuarios.map((u) => (
@@ -734,7 +732,7 @@ export default function AdminGym() {
           </select>
           
           {selectedUser && (
-            <div style={styles.actionButtons}>
+            <>
               <button
                 onClick={handleAsignarYEnviarEmail}
                 disabled={saving || getTotalEjercicios() === 0}
@@ -755,7 +753,7 @@ export default function AdminGym() {
               >
                 🗑️ Limpiar Tabla
               </button>
-            </div>
+            </>
           )}
         </div>
         
@@ -946,67 +944,127 @@ export default function AdminGym() {
       {/* VISTA GESTIÓN */}
       {vistaActiva === "gestion" && (
         <>
-          {/* Sección de Categorías */}
-          <div style={styles.section}>
-            <div style={styles.sectionHeader}>
-              <h3 style={styles.subtitle}>📁 Categorías</h3>
-              <div style={{ display: "flex", gap: "10px" }}>
-                {categorias.length === 0 && (
-                  <button 
-                    onClick={handleRestaurarCategoriasDefault} 
-                    style={{ ...styles.btnPrimary, backgroundColor: "#ff9800" }}
-                    title="Restaurar las 10 categorías por defecto"
-                  >
-                    🔄 Restaurar Categorías
+
+      {/* Sección de Categorías */}
+      <div style={styles.section}>
+            <div 
+              style={{...styles.sectionHeader, cursor: "pointer"}}
+              onClick={() => setCategoriasColapsadas(!categoriasColapsadas)}
+            >
+              <h3 style={styles.subtitle}>
+                {categoriasColapsadas ? "▶" : "▼"} 📁 Categorías
+              </h3>
+            </div>
+            {!categoriasColapsadas && (
+              <>
+                <div style={{ display: "flex", gap: "10px", marginBottom: "16px" }}>
+                  {categorias.length === 0 && (
+                    <button 
+                      onClick={handleRestaurarCategoriasDefault} 
+                      style={{ ...styles.btnPrimary, backgroundColor: "#ff9800" }}
+                      title="Restaurar las 10 categorías por defecto"
+                    >
+                      🔄 Restaurar Categorías
+                    </button>
+                  )}
+                  <button onClick={handleNuevaCategoria} style={styles.btnPrimary}>
+                    ➕ Nueva Categoría
                   </button>
-                )}
-                <button onClick={handleNuevaCategoria} style={styles.btnPrimary}>
-                  ➕ Nueva Categoría
-                </button>
-              </div>
-            </div>
-            <div style={styles.categoriasList}>
-              {categorias.length === 0 ? (
-                <p style={styles.noData}>No hay categorías. Crea una nueva o restaura las por defecto.</p>
-              ) : (
-                categorias.map(cat => (
-                  <div key={cat.id} style={styles.categoriaChip}>
-                    <span>{cat.nombre}</span>
-                    <div style={{ display: "flex", gap: "4px" }}>
-                      <button 
-                        onClick={() => handleEditarCategoria(cat)}
-                        style={styles.btnChipEdit}
-                        title="Editar"
-                      >
-                        ✏️
-                      </button>
-                      <button 
-                        onClick={() => handleEliminarCategoria(cat.id, cat.nombre)}
-                        style={styles.btnChipDelete}
-                        title="Eliminar"
-                      >
-                        ❌
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+                </div>
+                <div style={styles.categoriasList}>
+                  {categorias.length === 0 ? (
+                    <p style={styles.noData}>No hay categorías. Crea una nueva o restaura las por defecto.</p>
+                  ) : (
+                    categorias.map(cat => (
+                      <div key={cat.id} style={styles.categoriaChip}>
+                        <span>{cat.nombre}</span>
+                        <div style={{ display: "flex", gap: "4px" }}>
+                          <button 
+                            onClick={() => handleEditarCategoria(cat)}
+                            style={styles.btnChipEdit}
+                            title="Editar"
+                          >
+                            ✏️
+                          </button>
+                          <button 
+                            onClick={() => handleEliminarCategoria(cat.id, cat.nombre)}
+                            style={styles.btnChipDelete}
+                            title="Eliminar"
+                          >
+                            ❌
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Sección de Ejercicios */}
           <div style={styles.section}>
-            <div style={styles.sectionHeader}>
+            <div style={{display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px"}}>
               <h3 style={styles.subtitle}>🏋️ Ejercicios</h3>
               <button onClick={handleNuevoEjercicio} style={styles.btnPrimary}>
                 ➕ Nuevo Ejercicio
               </button>
             </div>
+            
+            {/* Filtros */}
+            <div style={styles.filtrosContainer}>
+              <div style={styles.filtroGroup}>
+                <label style={styles.filtroLabel}>📁 Categoría:</label>
+                <select
+                  value={filtroCategoria}
+                  onChange={(e) => setFiltroCategoria(e.target.value)}
+                  style={styles.filtroSelect}
+                >
+                  <option value="">Todas las categorías</option>
+                  {categorias.map((cat) => (
+                    <option key={cat.id || cat.nombre} value={typeof cat === 'string' ? cat : cat.nombre}>
+                      {typeof cat === 'string' ? cat : cat.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div style={styles.filtroGroup}>
+                <label style={styles.filtroLabel}>🔍 Nombre:</label>
+                <input
+                  type="text"
+                  value={filtroNombre}
+                  onChange={(e) => setFiltroNombre(e.target.value)}
+                  placeholder="Buscar ejercicio..."
+                  style={styles.filtroInput}
+                />
+              </div>
+              
+              {(filtroCategoria || filtroNombre) && (
+                <button
+                  onClick={() => {
+                    setFiltroCategoria("");
+                    setFiltroNombre("");
+                  }}
+                  style={styles.btnLimpiarFiltros}
+                >
+                  🗑️ Limpiar filtros
+                </button>
+              )}
+            </div>
+            
             <div style={styles.ejerciciosTable}>
               {ejercicios.length === 0 ? (
                 <p style={styles.noData}>No hay ejercicios. Crea uno nuevo.</p>
               ) : (
-                ejercicios.map(ej => (
+                ejercicios
+                  .filter(ej => {
+                    const cumpleFiltroCategoria = !filtroCategoria || ej.categoria === filtroCategoria;
+                    const cumpleFiltroNombre = !filtroNombre || 
+                      ej.nombre.toLowerCase().includes(filtroNombre.toLowerCase());
+                    return cumpleFiltroCategoria && cumpleFiltroNombre;
+                  })
+                  .map(ej => (
                   <div key={ej.id} style={styles.ejercicioRow}>
                     <div style={styles.ejercicioRowInfo}>
                       <div style={styles.ejercicioRowNombre}>{ej.nombre}</div>
@@ -1415,7 +1473,12 @@ const styles = {
     color: "#555",
   },
   select: {
-    userSelect: "none",
+    width: "100%",
+    padding: "8px 12px",
+    fontSize: "14px",
+    border: "1px solid #ddd",
+    borderRadius: "6px",
+    backgroundColor: "white",
   },
   dragHandle: {
     fontSize: "18px",
@@ -1424,12 +1487,6 @@ const styles = {
     padding: "0 4px",
     fontWeight: "700",
     letterSpacing: "-2px",
-    width: "100%",
-    padding: "8px 12px",
-    fontSize: "14px",
-    border: "1px solid #ddd",
-    borderRadius: "6px",
-    backgroundColor: "white",
   },
   input: {
     width: "100%",
@@ -1747,5 +1804,55 @@ const styles = {
     fontSize: "14px",
     fontWeight: "600",
     cursor: "pointer",
+  },
+  // Estilos para filtros
+  filtrosContainer: {
+    display: "flex",
+    gap: "16px",
+    marginBottom: "20px",
+    padding: "16px",
+    backgroundColor: "#f8f9fa",
+    borderRadius: "8px",
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+  filtroGroup: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    flex: "1 1 250px",
+  },
+  filtroLabel: {
+    fontSize: "14px",
+    fontWeight: "600",
+    color: "#555",
+    whiteSpace: "nowrap",
+  },
+  filtroSelect: {
+    flex: 1,
+    padding: "8px 12px",
+    fontSize: "14px",
+    border: "1px solid #ddd",
+    borderRadius: "6px",
+    backgroundColor: "white",
+    cursor: "pointer",
+  },
+  filtroInput: {
+    flex: 1,
+    padding: "8px 12px",
+    fontSize: "14px",
+    border: "1px solid #ddd",
+    borderRadius: "6px",
+  },
+  btnLimpiarFiltros: {
+    padding: "8px 16px",
+    backgroundColor: "#ff9800",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    fontSize: "14px",
+    fontWeight: "600",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
   },
 };
