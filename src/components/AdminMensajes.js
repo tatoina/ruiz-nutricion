@@ -259,17 +259,17 @@ export default function AdminMensajes() {
         );
         await Promise.all(promises);
         
-        // Enviar notificación push a cada usuario seleccionado
-        const functions = getFunctions();
-        const sendPush = httpsCallable(functions, 'sendPushToUser');
-        const pushPromises = selectedUserIds.map(userId => 
-          sendPush({ 
-            userId, 
-            title: 'TIENE UN MENSAJE DE SU NUTRICIONISTA', 
-            body: mensaje.trim().substring(0, 150) + (mensaje.trim().length > 150 ? '...' : '')
-          }).catch(err => console.error('Error enviando push a', userId, err))
-        );
-        await Promise.all(pushPromises);
+        // DESACTIVADO - Notificaciones push desactivadas, solo se usan notificaciones por email
+        // const functions = getFunctions();
+        // const sendPush = httpsCallable(functions, 'sendPushToUser');
+        // const pushPromises = selectedUserIds.map(userId => 
+        //   sendPush({ 
+        //     userId, 
+        //     title: 'TIENE UN MENSAJE DE SU NUTRICIONISTA', 
+        //     body: mensaje.trim().substring(0, 150) + (mensaje.trim().length > 150 ? '...' : '')
+        //   }).catch(err => console.error('Error enviando push a', userId, err))
+        // );
+        // await Promise.all(pushPromises);
         
         setSuccess(`Mensaje enviado a ${selectedUserIds.length} usuarios seleccionados`);
       } else if (tipo === 'admin') {
@@ -283,17 +283,17 @@ export default function AdminMensajes() {
         );
         await Promise.all(promises);
         
-        // Enviar notificación push a todos los usuarios
-        const functions = getFunctions();
-        const sendPush = httpsCallable(functions, 'sendPushToUser');
-        const pushPromises = usuarios.map(user => 
-          sendPush({ 
-            userId: user.id, 
-            title: 'TIENE UN MENSAJE DE SU NUTRICIONISTA', 
-            body: mensaje.trim().substring(0, 150) + (mensaje.trim().length > 150 ? '...' : '')
-          }).catch(err => console.error('Error enviando push a', user.id, err))
-        );
-        await Promise.all(pushPromises);
+        // DESACTIVADO - Notificaciones push desactivadas, solo se usan notificaciones por email
+        // const functions = getFunctions();
+        // const sendPush = httpsCallable(functions, 'sendPushToUser');
+        // const pushPromises = usuarios.map(user => 
+        //   sendPush({ 
+        //     userId: user.id, 
+        //     title: 'TIENE UN MENSAJE DE SU NUTRICIONISTA', 
+        //     body: mensaje.trim().substring(0, 150) + (mensaje.trim().length > 150 ? '...' : '')
+        //   }).catch(err => console.error('Error enviando push a', user.id, err))
+        // );
+        // await Promise.all(pushPromises);
         
         setSuccess(`Mensaje enviado a ${usuarios.length} usuarios`);
       }

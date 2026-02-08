@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { requestNotificationPermissionAndSaveToken } from "../fcm-setup";
+// import { requestNotificationPermissionAndSaveToken } from "../fcm-setup"; // DESACTIVADO - Solo notificaciones por email
 import "./estilos.css";
 import { signInWithEmailAndPassword, updatePassword, sendPasswordResetEmail } from "firebase/auth";
 import logger from "../utils/logger";
@@ -109,12 +109,12 @@ export default function Login({ onLogin /* onShowRegister no usado ahora */ }) {
         }
       }
 
-      // Solicitar y guardar token FCM tras login exitoso
-      try {
-        await requestNotificationPermissionAndSaveToken(user.uid);
-      } catch (fcmErr) {
-        logger.error("[LOGIN] Error FCM:", fcmErr);
-      }
+      // DESACTIVADO - Notificaciones push desactivadas, solo se usan notificaciones por email
+      // try {
+      //   await requestNotificationPermissionAndSaveToken(user.uid);
+      // } catch (fcmErr) {
+      //   logger.error("[LOGIN] Error FCM:", fcmErr);
+      // }
 
       if (onLogin && typeof onLogin === "function") {
         try {

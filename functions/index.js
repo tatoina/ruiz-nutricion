@@ -8,12 +8,10 @@ const {getAuth} = require("firebase-admin/auth");
 
 initializeApp();
 
-// Exportar función para enviar notificaciones push
-exports.sendPushToUser = require("./sendPushToUser").sendPushToUser;
-exports.sendPushToAdmin = require("./sendPushToAdmin").sendPushToAdmin;
-
-// Exportar función para guardar token FCM
-exports.saveFcmToken = require("./saveFcmToken").saveFcmToken;
+// DESACTIVADO - Notificaciones push desactivadas, solo se usan notificaciones por email
+// exports.sendPushToUser = require("./sendPushToUser").sendPushToUser;
+// exports.sendPushToAdmin = require("./sendPushToAdmin").sendPushToAdmin;
+// exports.saveFcmToken = require("./saveFcmToken").saveFcmToken;
 
 // Exportar función para LEER tokens (debug)
 exports.readAdminTokens = require("./readAdminTokens").readAdminTokens;

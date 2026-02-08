@@ -92,7 +92,7 @@ export default function FichaUsuario(props) {
   const [newAppointmentDate, setNewAppointmentDate] = useState("");
   const [newAppointmentTime, setNewAppointmentTime] = useState("");
   const [newAppointmentNotes, setNewAppointmentNotes] = useState("");
-  const [printOptions, setPrintOptions] = useState({ dietaMensual: true, datosPesaje: true });
+  const [printOptions, setPrintOptions] = useState({ dietaMensual: true, datosPesaje: true, tablaGym: false });
 
   const [showProfile, setShowProfile] = useState(false);
   const [showSnacksModal, setShowSnacksModal] = useState(false);
@@ -101,6 +101,9 @@ export default function FichaUsuario(props) {
   const [showTarifasModal, setShowTarifasModal] = useState(false);
   const [tarifasUrl, setTarifasUrl] = useState("");
   const [loadingTarifas, setLoadingTarifas] = useState(false);
+  const [showVideoModal, setShowVideoModal] = useState(false);
+  const [currentVideoUrl, setCurrentVideoUrl] = useState("");
+  const [currentVideoTitle, setCurrentVideoTitle] = useState("");
 
   const [peso, setPeso] = useState("");
   const [altura, setAltura] = useState("");
@@ -1864,21 +1867,21 @@ export default function FichaUsuario(props) {
         }
       });
 
-      // Enviar notificación push al admin
-      try {
-        console.log('📱 Intentando enviar push al admin...');
-        const functions = getFunctions();
-        const sendPushToAdmin = httpsCallable(functions, 'sendPushToAdmin');
-        const result = await sendPushToAdmin({
-          title: '🏋️ SOLICITUD DE CAMBIO DE TABLA GYM',
-          body: `${nombreCompleto} ha solicitado un cambio en su tabla de ejercicios`
-        });
-        console.log('✅ Push al admin enviado:', result);
-      } catch (pushError) {
-        console.error('❌ Error enviando push al admin:', pushError);
-        console.error('Detalles del error:', pushError.message, pushError.code);
-        // No interrumpir el flujo si falla el push
-      }
+      // DESACTIVADO - Notificaciones push desactivadas, solo se usan notificaciones por email
+      // try {
+      //   console.log('📱 Intentando enviar push al admin...');
+      //   const functions = getFunctions();
+      //   const sendPushToAdmin = httpsCallable(functions, 'sendPushToAdmin');
+      //   const result = await sendPushToAdmin({
+      //     title: '🏋️ SOLICITUD DE CAMBIO DE TABLA GYM',
+      //     body: `${nombreCompleto} ha solicitado un cambio en su tabla de ejercicios`
+      //   });
+      //   console.log('✅ Push al admin enviado:', result);
+      // } catch (pushError) {
+      //   console.error('❌ Error enviando push al admin:', pushError);
+      //   console.error('Detalles del error:', pushError.message, pushError.code);
+      //   // No interrumpir el flujo si falla el push
+      // }
 
       alert('✓ Solicitud enviada correctamente al nutricionista');
       setShowSolicitudTabla(false);
@@ -1948,21 +1951,21 @@ export default function FichaUsuario(props) {
         }
       });
 
-      // Enviar notificación push al admin
-      try {
-        console.log('📱 Intentando enviar push al admin...');
-        const functions = getFunctions();
-        const sendPushToAdmin = httpsCallable(functions, 'sendPushToAdmin');
-        const result = await sendPushToAdmin({
-          title: '🍽️ SOLICITUD DE CAMBIO DE DIETA',
-          body: `${nombreCompleto} ha solicitado un cambio en su dieta`
-        });
-        console.log('✅ Push al admin enviado:', result);
-      } catch (pushError) {
-        console.error('❌ Error enviando push al admin:', pushError);
-        console.error('Detalles del error:', pushError.message, pushError.code);
-        // No interrumpir el flujo si falla el push
-      }
+      // DESACTIVADO - Notificaciones push desactivadas, solo se usan notificaciones por email
+      // try {
+      //   console.log('📱 Intentando enviar push al admin...');
+      //   const functions = getFunctions();
+      //   const sendPushToAdmin = httpsCallable(functions, 'sendPushToAdmin');
+      //   const result = await sendPushToAdmin({
+      //     title: '🍽️ SOLICITUD DE CAMBIO DE DIETA',
+      //     body: `${nombreCompleto} ha solicitado un cambio en su dieta`
+      //   });
+      //   console.log('✅ Push al admin enviado:', result);
+      // } catch (pushError) {
+      //   console.error('❌ Error enviando push al admin:', pushError);
+      //   console.error('Detalles del error:', pushError.message, pushError.code);
+      //   // No interrumpir el flujo si falla el push
+      // }
 
       alert('✓ Solicitud enviada correctamente al nutricionista');
       setShowSolicitudDieta(false);
@@ -2033,21 +2036,21 @@ export default function FichaUsuario(props) {
         }
       });
 
-      // Enviar notificación push al admin
-      try {
-        console.log('📱 Intentando enviar push al admin...');
-        const functions = getFunctions();
-        const sendPushToAdmin = httpsCallable(functions, 'sendPushToAdmin');
-        const result = await sendPushToAdmin({
-          title: 'SOLICITUD DE NUEVA TABLA GYM',
-          body: `${nombreCompleto} ha solicitado una nueva tabla de ejercicios`
-        });
-        console.log('✅ Push al admin enviado:', result);
-      } catch (pushError) {
-        console.error('❌ Error enviando push al admin:', pushError);
-        console.error('Detalles del error:', pushError.message, pushError.code);
-        // No interrumpir el flujo si falla el push
-      }
+      // DESACTIVADO - Notificaciones push desactivadas, solo se usan notificaciones por email
+      // try {
+      //   console.log('📱 Intentando enviar push al admin...');
+      //   const functions = getFunctions();
+      //   const sendPushToAdmin = httpsCallable(functions, 'sendPushToAdmin');
+      //   const result = await sendPushToAdmin({
+      //     title: 'SOLICITUD DE NUEVA TABLA GYM',
+      //     body: `${nombreCompleto} ha solicitado una nueva tabla de ejercicios`
+      //   });
+      //   console.log('✅ Push al admin enviado:', result);
+      // } catch (pushError) {
+      //   console.error('❌ Error enviando push al admin:', pushError);
+      //   console.error('Detalles del error:', pushError.message, pushError.code);
+      //   // No interrumpir el flujo si falla el push
+      // }
 
       alert('✓ Solicitud enviada correctamente.\n\nEl nutricionista recibirá tu solicitud y se pondrá en contacto contigo para informarte sobre la tarifa y los siguientes pasos.');
       setShowSolicitudNuevaTabla(false);
@@ -2056,6 +2059,209 @@ export default function FichaUsuario(props) {
       alert('Error al enviar la solicitud. Por favor, inténtalo de nuevo.');
     } finally {
       setEnviandoSolicitud(false);
+    }
+  };
+
+  // Función para generar PDF de la tabla GYM
+  const generarPDFTablaGym = async () => {
+    try {
+      await ensureHtml2Pdf();
+      
+      const nombreCompleto = userData?.nombre && userData?.apellidos 
+        ? `${userData.apellidos}, ${userData.nombre}`
+        : userData?.email || 'Usuario';
+      
+      const fechaActual = new Date().toLocaleDateString('es-ES', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+      
+      // Construir HTML para el PDF
+      let contenidoHTML = '';
+      
+      // Determinar si usar ejerciciosPorDia o tablaGym
+      const tieneEjerciciosPorDia = userData?.ejerciciosPorDia && 
+        Object.keys(userData.ejerciciosPorDia).some(dia => userData.ejerciciosPorDia[dia]?.length > 0);
+      
+      if (tieneEjerciciosPorDia) {
+        // Nueva estructura: ejercicios organizados por días
+        ["Día 1", "Día 2", "Día 3", "Día 4", "Día 5", "Día 6", "Día 7"].forEach((dia) => {
+          const ejerciciosDelDia = userData.ejerciciosPorDia[dia] || [];
+          if (ejerciciosDelDia.length === 0) return;
+          
+          contenidoHTML += `
+            <div style="margin-bottom: 20px; page-break-inside: avoid;">
+              <h3 style="background: #2196F3; color: white; padding: 8px; margin: 0 0 10px 0; font-size: 14px; border-radius: 4px;">
+                📅 ${dia} (${ejerciciosDelDia.length} ejercicio${ejerciciosDelDia.length !== 1 ? 's' : ''})
+              </h3>
+              <table style="width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 15px;">
+                <thead>
+                  <tr style="background: #e3f2fd;">
+                    <th style="border: 1px solid #ddd; padding: 6px; text-align: center; width: 30px;">#</th>
+                    <th style="border: 1px solid #ddd; padding: 6px; text-align: left;">Ejercicio</th>
+                    <th style="border: 1px solid #ddd; padding: 6px; text-align: left; width: 120px;">Categoría</th>
+                    <th style="border: 1px solid #ddd; padding: 6px; text-align: left;">Detalles</th>
+                  </tr>
+                </thead>
+                <tbody>
+          `;
+          
+          ejerciciosDelDia.forEach((ej, idx) => {
+            const detalles = [];
+            if (ej.series) detalles.push(`<strong>Series:</strong> ${ej.series}`);
+            if (ej.repeticiones) detalles.push(`<strong>Reps:</strong> ${ej.repeticiones}`);
+            if (ej.peso) detalles.push(`<strong>Peso:</strong> ${ej.peso}`);
+            if (ej.tiempo) detalles.push(`<strong>Tiempo:</strong> ${ej.tiempo}`);
+            if (ej.intervalo) detalles.push(`<strong>Intervalo:</strong> ${ej.intervalo}`);
+            
+            contenidoHTML += `
+              <tr>
+                <td style="border: 1px solid #ddd; padding: 6px; text-align: center; font-weight: bold;">${idx + 1}</td>
+                <td style="border: 1px solid #ddd; padding: 6px;">${escapeHtmlForInject(ej.nombre || '')}</td>
+                <td style="border: 1px solid #ddd; padding: 6px; font-size: 10px;">${escapeHtmlForInject(ej.categoria || '')}</td>
+                <td style="border: 1px solid #ddd; padding: 6px; font-size: 10px;">${detalles.join(' • ') || '-'}</td>
+              </tr>
+            `;
+          });
+          
+          contenidoHTML += `
+                </tbody>
+              </table>
+            </div>
+          `;
+        });
+      } else if (userData?.tablaGym && userData.tablaGym.length > 0) {
+        // Estructura antigua: tabla simple sin días
+        contenidoHTML += `
+          <div style="margin-bottom: 15px;">
+            <p style="font-weight: bold; font-size: 12px;">Total de ejercicios: ${userData.tablaGym.length}</p>
+          </div>
+          <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+            <thead>
+              <tr style="background: #e3f2fd;">
+                <th style="border: 1px solid #ddd; padding: 6px; text-align: center; width: 30px;">#</th>
+                <th style="border: 1px solid #ddd; padding: 6px; text-align: left;">Ejercicio</th>
+                <th style="border: 1px solid #ddd; padding: 6px; text-align: left; width: 120px;">Categoría</th>
+                <th style="border: 1px solid #ddd; padding: 6px; text-align: left;">Detalles</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+        
+        userData.tablaGym.forEach((ej, idx) => {
+          const detalles = [];
+          if (ej.series) detalles.push(`<strong>Series:</strong> ${ej.series}`);
+          if (ej.repeticiones) detalles.push(`<strong>Reps:</strong> ${ej.repeticiones}`);
+          if (ej.peso) detalles.push(`<strong>Peso:</strong> ${ej.peso}`);
+          if (ej.tiempo) detalles.push(`<strong>Tiempo:</strong> ${ej.tiempo}`);
+          if (ej.intervalo) detalles.push(`<strong>Intervalo:</strong> ${ej.intervalo}`);
+          
+          contenidoHTML += `
+            <tr>
+              <td style="border: 1px solid #ddd; padding: 6px; text-align: center; font-weight: bold;">${idx + 1}</td>
+              <td style="border: 1px solid #ddd; padding: 6px;">${escapeHtmlForInject(ej.nombre || '')}</td>
+              <td style="border: 1px solid #ddd; padding: 6px; font-size: 10px;">${escapeHtmlForInject(ej.categoria || '')}</td>
+              <td style="border: 1px solid #ddd; padding: 6px; font-size: 10px;">${detalles.join(' • ') || '-'}</td>
+            </tr>
+          `;
+        });
+        
+        contenidoHTML += `
+            </tbody>
+          </table>
+        `;
+      }
+      
+      // CSS para el PDF
+      const pdfCSS = `
+        @page { size: A4 portrait; margin: 15mm; }
+        body { 
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial; 
+          color: #333; 
+          background: #fff; 
+          margin: 0; 
+          font-size: 11px; 
+        }
+        #pdf-root { padding: 10px; }
+        h1 { 
+          font-size: 18px; 
+          color: #1976d2; 
+          margin: 0 0 5px 0; 
+          text-align: center;
+          border-bottom: 3px solid #2196F3;
+          padding-bottom: 8px;
+        }
+        .pdf-meta { 
+          font-size: 11px; 
+          text-align: center; 
+          margin-bottom: 20px; 
+          color: #666;
+        }
+        table { page-break-inside: auto; }
+        tr { page-break-inside: avoid; page-break-after: auto; }
+      `;
+      
+      // Logo
+      const logoUrl = DEFAULT_CLINIC_LOGO;
+      let logoData = null;
+      try { 
+        logoData = await imgUrlToDataUrl(logoUrl); 
+      } catch (e) { 
+        logoData = null; 
+      }
+      
+      const logoHtml = logoData 
+        ? `<img src="${logoData}" alt="Logo" style="width:50px;height:50px;object-fit:contain;border-radius:6px;display:block;margin:0 auto 10px;" />` 
+        : '';
+      
+      // HTML completo
+      const pdfInner = `
+        <div id="pdf-root">
+          ${logoHtml}
+          <h1>🏋️ TABLA DE EJERCICIOS GYM</h1>
+          <div class="pdf-meta">
+            <div style="font-weight: bold; margin-bottom: 3px;">${escapeHtmlForInject(nombreCompleto)}</div>
+            <div>Generado: ${fechaActual}</div>
+          </div>
+          ${contenidoHTML}
+        </div>
+      `;
+      
+      // Crear contenedor temporal
+      const container = document.createElement("div");
+      container.id = "pdf-temp-gym";
+      container.style.position = "fixed";
+      container.style.left = "-9999px";
+      container.style.top = "0";
+      container.style.width = "210mm";
+      container.style.minHeight = "297mm";
+      container.innerHTML = `<style>${pdfCSS}</style>${pdfInner}`;
+      document.body.appendChild(container);
+      
+      const element = container.querySelector("#pdf-root");
+      const filenameSafe = `tabla_gym_${nombreCompleto.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      
+      const opt = {
+        margin: [10, 10, 10, 10],
+        filename: filenameSafe,
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+      };
+      
+      await window.html2pdf().set(opt).from(element).save();
+      
+      // Limpiar contenedor temporal
+      setTimeout(() => {
+        try { 
+          document.body.removeChild(container); 
+        } catch (e) {}
+      }, 600);
+      
+    } catch (error) {
+      console.error('Error generando PDF:', error);
+      alert('Error al generar el PDF. Por favor, inténtalo de nuevo.');
     }
   };
 
@@ -3478,31 +3684,178 @@ Ruiz Nutrición
   };
 
   const buildDietaWeeklyHTML = () => {
-    const menuTemplate = Array.isArray(editable.menu) ? editable.menu : Array.from({ length: 7 }, () => ({ ...emptyDayMenu() }));
-    const dayNames = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
-    const esc = (s) => escapeHtmlForInject(s || "");
-
-    let html = `<div class="print-section dieta-week">
-      <h2 style="margin:0 0 6px 0;color:#064e3b;font-size:14px;font-weight:700">Dieta semanal — Plantilla</h2>
-      <table class="print-calendar" border="0" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:10px;">
-        <thead>
-          <tr>
-            <th style="text-align:left;padding:5px 3px;background:#f7fff9;border:1px solid #d1d5db;font-size:10px;font-weight:700">Comida / Día</th>`;
-    for (let d = 0; d < 7; d++) html += `<th style="text-align:center;padding:5px 3px;background:#f7fff9;border:1px solid #d1d5db;font-size:10px;font-weight:700">${dayNames[d]}</th>`;
-    html += `</tr></thead><tbody>`;
-
-    for (let r = 0; r < ALL_SECTIONS.length; r++) {
-      const sec = ALL_SECTIONS[r];
-      html += `<tr>
-        <td style="vertical-align:top;padding:6px 3px;border:1px solid #e5e7eb;font-weight:700;width:12%;background:#f9fafb;font-size:10px">${escapeHtmlForInject(sec.label)}</td>`;
-      for (let d = 0; d < 7; d++) {
-        const m = (menuTemplate[d] && menuTemplate[d][sec.key]) ? menuTemplate[d][sec.key] : "";
-        html += `<td style="vertical-align:top;padding:6px 3px;border:1px solid #e5e7eb;min-height:70px;word-break:break-word;font-size:10px;line-height:1.4">${esc(m)}</td>`;
+    // Usar userData directamente para asegurar que tenemos los datos correctos
+    const esMenuVertical = userData?.tipoMenu === "vertical";
+    const esModoManual = userData?.modoManual === true;
+    
+    if (esModoManual) {
+      // Modo manual: mostrar contenido HTML generado directamente
+      const esc = (s) => escapeHtmlForInject(s || "");
+      return `<div class="print-section dieta-week">
+        <h2 style="margin:0 0 6px 0;color:#064e3b;font-size:14px;font-weight:700">Dieta semanal</h2>
+        <div style="padding:10px;border:1px solid #e5e7eb;border-radius:4px;font-size:11px;line-height:1.6">
+          ${userData?.contenidoManual || '<p style="color:#6b7280;font-style:italic;">No hay contenido de dieta</p>'}
+        </div>
+      </div>`;
+    }
+    
+    if (esMenuVertical) {
+      // Construir HTML desde menuVertical (formato con items seleccionables)
+      const dayNames = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
+      const esc = (s) => escapeHtmlForInject(s || "");
+      
+      let html = `<div class="print-section dieta-week">
+        <h2 style="margin:0 0 6px 0;color:#064e3b;font-size:14px;font-weight:700">Dieta semanal</h2>
+        <table class="print-calendar" border="0" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:10px;">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:5px 3px;background:#f7fff9;border:1px solid #d1d5db;font-size:10px;font-weight:700">Comida</th>`;
+      for (let d = 0; d < 7; d++) html += `<th style="text-align:center;padding:5px 3px;background:#f7fff9;border:1px solid #d1d5db;font-size:10px;font-weight:700">${dayNames[d]}</th>`;
+      html += `</tr></thead><tbody>`;
+      
+      const secciones = ["desayuno", "almuerzo", "comida", "merienda", "cena", "consejos"];
+      const labels = {
+        desayuno: "Desayuno",
+        almuerzo: "Almuerzo",
+        comida: "Comida",
+        merienda: "Merienda",
+        cena: "Cena",
+        consejos: "Consejos"
+      };
+      
+      const menuVerticalData = userData?.menuVertical || {};
+      
+      for (const seccion of secciones) {
+        html += `<tr>
+          <td style="vertical-align:top;padding:6px 3px;border:1px solid #e5e7eb;font-weight:700;width:12%;background:#f9fafb;font-size:10px">${labels[seccion]}</td>`;
+        
+        // Para menú vertical, el contenido es el mismo todos los días
+        const itemIds = menuVerticalData[seccion] || [];
+        const itemsDisponibles = menuItemsDisponibles[seccion] || [];
+        
+        let contenido = "";
+        if (seccion === "consejos") {
+          // Consejos puede ser texto libre
+          contenido = typeof itemIds === 'string' ? itemIds : (Array.isArray(itemIds) && itemIds.length > 0 ? itemIds[0] : '');
+        } else {
+          // Otras secciones: convertir IDs a nombres
+          if (Array.isArray(itemIds) && itemIds.length > 0) {
+            const itemsSeleccionados = itemIds
+              .map(id => itemsDisponibles.find(item => item.id === id))
+              .filter(item => item);
+            contenido = itemsSeleccionados.map(item => item.nombre).join(', ');
+          }
+        }
+        
+        // Repetir el mismo contenido para todos los días
+        for (let d = 0; d < 7; d++) {
+          html += `<td style="vertical-align:top;padding:6px 3px;border:1px solid #e5e7eb;min-height:70px;word-break:break-word;font-size:10px;line-height:1.4">${esc(contenido)}</td>`;
+        }
+        html += `</tr>`;
       }
-      html += `</tr>`;
+      
+      html += `</tbody></table></div>`;
+      return html;
+    } else {
+      // Formato tabla original (diferente por día)
+      const menuFromData = userData?.menu || editable.menu;
+      const menuTemplate = Array.isArray(menuFromData) ? menuFromData : Array.from({ length: 7 }, () => ({ ...emptyDayMenu() }));
+      const dayNames = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
+      const esc = (s) => escapeHtmlForInject(s || "");
+
+      let html = `<div class="print-section dieta-week">
+        <h2 style="margin:0 0 6px 0;color:#064e3b;font-size:14px;font-weight:700">Dieta semanal</h2>
+        <table class="print-calendar" border="0" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:10px;">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:5px 3px;background:#f7fff9;border:1px solid #d1d5db;font-size:10px;font-weight:700">Comida / Día</th>`;
+      for (let d = 0; d < 7; d++) html += `<th style="text-align:center;padding:5px 3px;background:#f7fff9;border:1px solid #d1d5db;font-size:10px;font-weight:700">${dayNames[d]}</th>`;
+      html += `</tr></thead><tbody>`;
+
+      for (let r = 0; r < ALL_SECTIONS.length; r++) {
+        const sec = ALL_SECTIONS[r];
+        html += `<tr>
+          <td style="vertical-align:top;padding:6px 3px;border:1px solid #e5e7eb;font-weight:700;width:12%;background:#f9fafb;font-size:10px">${escapeHtmlForInject(sec.label)}</td>`;
+        for (let d = 0; d < 7; d++) {
+          const m = (menuTemplate[d] && menuTemplate[d][sec.key]) ? menuTemplate[d][sec.key] : "";
+          html += `<td style="vertical-align:top;padding:6px 3px;border:1px solid #e5e7eb;min-height:70px;word-break:break-word;font-size:10px;line-height:1.4">${esc(m)}</td>`;
+        }
+        html += `</tr>`;
+      }
+
+      html += `</tbody></table></div>`;
+      return html;
+    }
+  };
+
+  const buildTablaGymHTML = () => {
+    // Usar userData directamente para asegurar que tenemos los datos correctos
+    const ejerciciosPorDia = userData?.ejerciciosPorDia || editable.ejerciciosPorDia;
+    const tablaGym = userData?.tablaGym || editable.tablaGym;
+    
+    if (!ejerciciosPorDia && (!tablaGym || tablaGym.length === 0)) {
+      return "<div class='print-section'><p style='color:#6b7280;font-style:italic;'>No hay tabla de ejercicios asignada</p></div>";
     }
 
-    html += `</tbody></table></div>`;
+    const esc = (s) => escapeHtmlForInject(s || "");
+    let html = `<div class="print-section tabla-gym">
+      <h2 style="margin:0 0 10px 0;color:#064e3b;font-size:14px;font-weight:700">💪 Tabla de Ejercicios GYM</h2>`;
+
+    if (ejerciciosPorDia) {
+      const diasSemana = ["Día 1", "Día 2", "Día 3", "Día 4", "Día 5", "Día 6", "Día 7"];
+      for (const dia of diasSemana) {
+        const ejercicios = ejerciciosPorDia[dia] || [];
+        if (ejercicios.length === 0) continue;
+        
+        html += `<div style="margin-bottom:16px;page-break-inside:avoid">
+          <h3 style="margin:0 0 8px 0;color:#059669;font-size:13px;font-weight:700;border-bottom:2px solid #10b981;padding-bottom:4px">${dia}</h3>
+          <table style="width:100%;border-collapse:collapse;font-size:10px;margin-bottom:8px">
+            <thead>
+              <tr style="background:#f0fdf4">
+                <th style="text-align:left;padding:6px 4px;border:1px solid #d1d5db;font-weight:700">Ejercicio</th>
+                <th style="text-align:center;padding:6px 4px;border:1px solid #d1d5db;font-weight:700;width:15%">Series</th>
+                <th style="text-align:center;padding:6px 4px;border:1px solid #d1d5db;font-weight:700;width:15%">Repeticiones</th>
+                <th style="text-align:center;padding:6px 4px;border:1px solid #d1d5db;font-weight:700;width:15%">Descanso</th>
+              </tr>
+            </thead>
+            <tbody>`;
+        
+        for (const ej of ejercicios) {
+          html += `<tr>
+              <td style="padding:6px 4px;border:1px solid #e5e7eb;vertical-align:top">${esc(ej.nombre)}</td>
+              <td style="padding:6px 4px;border:1px solid #e5e7eb;text-align:center;vertical-align:top">${esc(ej.series)}</td>
+              <td style="padding:6px 4px;border:1px solid #e5e7eb;text-align:center;vertical-align:top">${esc(ej.repeticiones)}</td>
+              <td style="padding:6px 4px;border:1px solid #e5e7eb;text-align:center;vertical-align:top">${esc(ej.descanso)}</td>
+            </tr>`;
+        }
+        
+        html += `</tbody></table></div>`;
+      }
+    } else if (tablaGym && tablaGym.length > 0) {
+      html += `<table style="width:100%;border-collapse:collapse;font-size:10px;margin-top:8px">
+        <thead>
+          <tr style="background:#f0fdf4">
+            <th style="text-align:left;padding:6px 4px;border:1px solid #d1d5db;font-weight:700">Ejercicio</th>
+            <th style="text-align:center;padding:6px 4px;border:1px solid #d1d5db;font-weight:700;width:15%">Series</th>
+            <th style="text-align:center;padding:6px 4px;border:1px solid #d1d5db;font-weight:700;width:15%">Repeticiones</th>
+            <th style="text-align:center;padding:6px 4px;border:1px solid #d1d5db;font-weight:700;width:15%">Descanso</th>
+          </tr>
+        </thead>
+        <tbody>`;
+      
+      for (const ej of tablaGym) {
+        html += `<tr>
+            <td style="padding:6px 4px;border:1px solid #e5e7eb;vertical-align:top">${esc(ej.nombre)}</td>
+            <td style="padding:6px 4px;border:1px solid #e5e7eb;text-align:center;vertical-align:top">${esc(ej.series)}</td>
+            <td style="padding:6px 4px;border:1px solid #e5e7eb;text-align:center;vertical-align:top">${esc(ej.repeticiones)}</td>
+            <td style="padding:6px 4px;border:1px solid #e5e7eb;text-align:center;vertical-align:top">${esc(ej.descanso)}</td>
+          </tr>`;
+      }
+      
+      html += `</tbody></table>`;
+    }
+    
+    html += `</div>`;
     return html;
   };
 
@@ -3603,6 +3956,7 @@ Ruiz Nutrición
         parts.push(tableHtml);
         if (chartHtml) chartContent = chartHtml;
       }
+      if (printOptions.tablaGym) parts.push(buildTablaGymHTML());
 
       const headerName = escapeHtmlForInject(userData ? (userData.nombre ? `${userData.nombre} ${userData.apellidos || ""}` : userData.email || "Usuario") : "Usuario");
       const headerDate = new Date().toLocaleString();
@@ -4178,35 +4532,52 @@ Ruiz Nutrición
                   <line x1="6" y1="6" x2="18" y2="18" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </button>
-                {/* Botón de ayuda para admin en header (desktop y móvil) */}
-                {adminMode && (
-                  <button 
-                    className="btn-icon-header" 
-                    onClick={() => setShowHelpModal(true)}
-                    title="Ayuda"
-                    style={{
-                      background: "rgba(33,150,243,0.9)",
-                      border: "none",
-                      borderRadius: "8px",
-                      width: "36px",
-                      height: "36px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      cursor: "pointer",
-                      marginLeft: 8,
-                      transition: "background 0.2s"
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = "rgba(25,118,210,1)"}
-                    onMouseLeave={e => e.currentTarget.style.background = "rgba(33,150,243,0.9)"}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-                      <circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M12 16v-2" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M12 8a2 2 0 1 1 0 4" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </button>
-			  )}
+            </div>
+
+            <p style={{ color: "#374151", fontSize: "14px", marginBottom: "20px" }}>
+              Selecciona los elementos que deseas incluir en el PDF:
+            </p>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px" }}>
+              <label 
+                style={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  gap: "12px",
+                  padding: "14px 16px",
+                  background: printOptions.dietaMensual ? "rgba(59,130,246,0.08)" : "#f8fafc",
+                  border: `2px solid ${printOptions.dietaMensual ? "#3b82f6" : "#e2e8f0"}`,
+                  borderRadius: "10px",
+                  cursor: "pointer",
+                  transition: "all 0.2s"
+                }}
+                onMouseEnter={(e) => {
+                  if (!printOptions.dietaMensual) {
+                    e.currentTarget.style.borderColor = "#cbd5e1";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!printOptions.dietaMensual) {
+                    e.currentTarget.style.borderColor = "#e2e8f0";
+                  }
+                }}
+              >
+                <input 
+                  type="checkbox" 
+                  checked={printOptions.dietaMensual} 
+                  onChange={(e) => setPrintOptions((s) => ({ ...s, dietaMensual: e.target.checked }))}
+                  style={{ 
+                    width: "20px", 
+                    height: "20px", 
+                    cursor: "pointer",
+                    accentColor: "#3b82f6"
+                  }}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: "600", color: "#0f172a", fontSize: "15px", marginBottom: "2px" }}>🍽️ Dieta Semanal</div>
+                  <div style={{ fontSize: "13px", color: "#64748b" }}>Menú semanal completo organizado por días y comidas</div>
+                </div>
+              </label>
 
               <label 
                 style={{ 
@@ -4247,6 +4618,46 @@ Ruiz Nutrición
                   <div style={{ fontSize: "13px", color: "#64748b" }}>Histórico de medidas, composición corporal y gráfico de evolución</div>
                 </div>
               </label>
+
+              <label 
+                style={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  gap: "12px",
+                  padding: "14px 16px",
+                  background: printOptions.tablaGym ? "rgba(234,88,12,0.08)" : "#f8fafc",
+                  border: `2px solid ${printOptions.tablaGym ? "#ea580c" : "#e2e8f0"}`,
+                  borderRadius: "10px",
+                  cursor: "pointer",
+                  transition: "all 0.2s"
+                }}
+                onMouseEnter={(e) => {
+                  if (!printOptions.tablaGym) {
+                    e.currentTarget.style.borderColor = "#cbd5e1";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!printOptions.tablaGym) {
+                    e.currentTarget.style.borderColor = "#e2e8f0";
+                  }
+                }}
+              >
+                <input 
+                  type="checkbox" 
+                  checked={printOptions.tablaGym} 
+                  onChange={(e) => setPrintOptions((s) => ({ ...s, tablaGym: e.target.checked }))}
+                  style={{ 
+                    width: "20px", 
+                    height: "20px", 
+                    cursor: "pointer",
+                    accentColor: "#ea580c"
+                  }}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: "600", color: "#0f172a", fontSize: "15px", marginBottom: "2px" }}>💪 Tabla de Ejercicios</div>
+                  <div style={{ fontSize: "13px", color: "#64748b" }}>Rutina de gimnasio organizada por días con series y repeticiones</div>
+                </div>
+              </label>
             </div>
 
             <div style={{ display: "flex", gap: "10px", marginTop: "24px", justifyContent: "flex-end" }}>
@@ -4260,11 +4671,11 @@ Ruiz Nutrición
               <button 
                 className="btn primary" 
                 onClick={handlePrint} 
-                disabled={!printOptions.dietaMensual && !printOptions.datosPesaje}
+                disabled={!printOptions.dietaMensual && !printOptions.datosPesaje && !printOptions.tablaGym}
                 style={{ 
                   padding: "10px 24px",
-                  opacity: (!printOptions.dietaMensual && !printOptions.datosPesaje) ? 0.5 : 1,
-                  cursor: (!printOptions.dietaMensual && !printOptions.datosPesaje) ? "not-allowed" : "pointer"
+                  opacity: (!printOptions.dietaMensual && !printOptions.datosPesaje && !printOptions.tablaGym) ? 0.5 : 1,
+                  cursor: (!printOptions.dietaMensual && !printOptions.datosPesaje && !printOptions.tablaGym) ? "not-allowed" : "pointer"
                 }}
               >
                 📥 Generar PDF
@@ -7690,27 +8101,57 @@ Ruiz Nutrición
               <div className="card" style={{ padding: adminMode ? "16px 20px" : "8px", width: "100%", maxWidth: "none" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
                   <h3 style={{ fontSize: "18px", margin: 0 }}>🏋️ Mi Tabla GYM</h3>
-                  {!adminMode && (
-                    <button
-                      onClick={() => setShowSolicitudTabla(true)}
-                      style={{
-                        padding: "8px 16px",
-                        fontSize: "13px",
-                        fontWeight: "600",
-                        color: "white",
-                        backgroundColor: "#2196F3",
-                        border: "none",
-                        borderRadius: "8px",
-                        cursor: "pointer",
-                        transition: "background 0.2s",
-                        boxShadow: "0 2px 4px rgba(33,150,243,0.3)"
-                      }}
-                      onMouseEnter={(e) => e.target.style.backgroundColor = "#1976d2"}
-                      onMouseLeave={(e) => e.target.style.backgroundColor = "#2196F3"}
-                    >
-                      📝 Solicitar cambio de tabla
-                    </button>
-                  )}
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    {/* Botón de descarga PDF - visible para usuario y admin si hay ejercicios */}
+                    {(() => {
+                      const tieneEjerciciosPorDia = userData?.ejerciciosPorDia && 
+                        Object.keys(userData.ejerciciosPorDia).some(dia => userData.ejerciciosPorDia[dia]?.length > 0);
+                      const tieneTablaGym = userData?.tablaGym && userData.tablaGym.length > 0;
+                      return (tieneEjerciciosPorDia || tieneTablaGym) && (
+                        <button
+                          onClick={generarPDFTablaGym}
+                          style={{
+                            padding: "8px 16px",
+                            fontSize: "13px",
+                            fontWeight: "600",
+                            color: "white",
+                            backgroundColor: "#4CAF50",
+                            border: "none",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            transition: "background 0.2s",
+                            boxShadow: "0 2px 4px rgba(76,175,80,0.3)"
+                          }}
+                          onMouseEnter={(e) => e.target.style.backgroundColor = "#45a049"}
+                          onMouseLeave={(e) => e.target.style.backgroundColor = "#4CAF50"}
+                        >
+                          📄 Descargar PDF
+                        </button>
+                      );
+                    })()}
+                    {/* Botón de solicitud de cambio - solo para usuario */}
+                    {!adminMode && (
+                      <button
+                        onClick={() => setShowSolicitudTabla(true)}
+                        style={{
+                          padding: "8px 16px",
+                          fontSize: "13px",
+                          fontWeight: "600",
+                          color: "white",
+                          backgroundColor: "#2196F3",
+                          border: "none",
+                          borderRadius: "8px",
+                          cursor: "pointer",
+                          transition: "background 0.2s",
+                          boxShadow: "0 2px 4px rgba(33,150,243,0.3)"
+                        }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = "#1976d2"}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = "#2196F3"}
+                      >
+                        📝 Solicitar cambio de tabla
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {userData?.ejerciciosPorDia && Object.keys(userData.ejerciciosPorDia).some(dia => userData.ejerciciosPorDia[dia]?.length > 0) ? (
                   <div style={{ marginTop: "8px" }}>
@@ -7796,9 +8237,48 @@ Ruiz Nutrición
                                       fontSize: "15px",
                                       fontWeight: "600",
                                       color: "#333",
-                                      marginBottom: "3px"
+                                      marginBottom: "3px",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "8px"
                                     }}>
-                                      {ejercicio.nombre}
+                                      <span>{ejercicio.nombre}</span>
+                                      {ejercicio.videoUrl && (
+                                        <button
+                                          onClick={() => {
+                                            setCurrentVideoUrl(ejercicio.videoUrl);
+                                            setCurrentVideoTitle(ejercicio.nombre);
+                                            setShowVideoModal(true);
+                                          }}
+                                          style={{
+                                            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                                            border: "none",
+                                            borderRadius: "50%",
+                                            width: "32px",
+                                            height: "32px",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            cursor: "pointer",
+                                            boxShadow: "0 2px 8px rgba(102,126,234,0.3)",
+                                            transition: "all 0.2s",
+                                            flexShrink: 0
+                                          }}
+                                          onMouseEnter={(e) => {
+                                            e.currentTarget.style.transform = "scale(1.1)";
+                                            e.currentTarget.style.boxShadow = "0 4px 12px rgba(102,126,234,0.5)";
+                                          }}
+                                          onMouseLeave={(e) => {
+                                            e.currentTarget.style.transform = "scale(1)";
+                                            e.currentTarget.style.boxShadow = "0 2px 8px rgba(102,126,234,0.3)";
+                                          }}
+                                          title="Ver video demostrativo"
+                                        >
+                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+                                            <path d="M8 5v14l11-7z"/>
+                                          </svg>
+                                        </button>
+                                      )}
                                     </div>
                                     <div style={{
                                       fontSize: "12px",
@@ -7884,24 +8364,6 @@ Ruiz Nutrición
                                         )}
                                       </div>
                                     )}
-                                    
-                                    {/* Video preview si existe */}
-                                    {ejercicio.videoUrl && (
-                                      <div style={{ marginTop: "6px" }}>
-                                        <video 
-                                          controls 
-                                          style={{
-                                            width: "100%",
-                                            maxHeight: "150px",
-                                            borderRadius: "6px",
-                                            backgroundColor: "#000"
-                                          }}
-                                        >
-                                          <source src={ejercicio.videoUrl} type="video/mp4" />
-                                          Tu navegador no soporta el elemento de video.
-                                        </video>
-                                      </div>
-                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -7956,9 +8418,48 @@ Ruiz Nutrición
                                 fontSize: "15px",
                                 fontWeight: "600",
                                 color: "#333",
-                                marginBottom: "3px"
+                                marginBottom: "3px",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px"
                               }}>
-                                {ejercicio.nombre}
+                                <span>{ejercicio.nombre}</span>
+                                {ejercicio.videoUrl && (
+                                  <button
+                                    onClick={() => {
+                                      setCurrentVideoUrl(ejercicio.videoUrl);
+                                      setCurrentVideoTitle(ejercicio.nombre);
+                                      setShowVideoModal(true);
+                                    }}
+                                    style={{
+                                      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                                      border: "none",
+                                      borderRadius: "50%",
+                                      width: "32px",
+                                      height: "32px",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      cursor: "pointer",
+                                      boxShadow: "0 2px 8px rgba(102,126,234,0.3)",
+                                      transition: "all 0.2s",
+                                      flexShrink: 0
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.transform = "scale(1.1)";
+                                      e.currentTarget.style.boxShadow = "0 4px 12px rgba(102,126,234,0.5)";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.transform = "scale(1)";
+                                      e.currentTarget.style.boxShadow = "0 2px 8px rgba(102,126,234,0.3)";
+                                    }}
+                                    title="Ver video demostrativo"
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+                                      <path d="M8 5v14l11-7z"/>
+                                    </svg>
+                                  </button>
+                                )}
                               </div>
                               <div style={{
                                 fontSize: "12px",
@@ -8037,24 +8538,6 @@ Ruiz Nutrición
                                       ⏸️ {ejercicio.intervalo}
                                     </span>
                                   )}
-                                </div>
-                              )}
-                              
-                              {/* Video preview si existe */}
-                              {ejercicio.videoUrl && (
-                                <div style={{ marginTop: "6px" }}>
-                                  <video 
-                                    controls 
-                                    style={{
-                                      width: "100%",
-                                      maxHeight: "150px",
-                                      borderRadius: "6px",
-                                      backgroundColor: "#000"
-                                    }}
-                                  >
-                                    <source src={ejercicio.videoUrl} type="video/mp4" />
-                                    Tu navegador no soporta el elemento de video.
-                                  </video>
                                 </div>
                               )}
                             </div>
@@ -8439,13 +8922,13 @@ Ruiz Nutrición
       )}
 
       {/* Modal de Snacks */}
-      {showPrintDialog && (
-        <div className="print-modal-backdrop" role="dialog" aria-modal="true" onClick={() => setShowPrintDialog(false)}>
+      {showSnacksModal && (
+        <div className="print-modal-backdrop" role="dialog" aria-modal="true" onClick={() => setShowSnacksModal(false)}>
           <div className="print-modal" onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <h3 style={{ margin: 0, fontSize: "20px", color: "#064e3b", fontWeight: "600" }}>📄 Generar PDF</h3>
+              <h3 style={{ margin: 0, fontSize: "20px", color: "#064e3b", fontWeight: "600" }}>🍎 Snacks Disponibles</h3>
               <button 
-                onClick={() => setShowPrintDialog(false)}
+                onClick={() => setShowSnacksModal(false)}
                 className="btn-icon-header"
                 title="Cerrar"
                 style={{
@@ -9581,6 +10064,125 @@ Ruiz Nutrición
                 {selectedFoto.caption}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Video */}
+      {showVideoModal && (
+        <div 
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.85)",
+            zIndex: 10000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px"
+          }}
+          onClick={() => {
+            setShowVideoModal(false);
+            setCurrentVideoUrl("");
+            setCurrentVideoTitle("");
+          }}
+        >
+          <div 
+            style={{
+              backgroundColor: "white",
+              borderRadius: "16px",
+              maxWidth: "800px",
+              width: "100%",
+              overflow: "hidden",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.5)"
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header del modal */}
+            <div style={{
+              padding: "16px 20px",
+              borderBottom: "2px solid #e5e7eb",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: "18px",
+                color: "white",
+                fontWeight: "600"
+              }}>
+                🎥 {currentVideoTitle}
+              </h3>
+              <button
+                onClick={() => {
+                  setShowVideoModal(false);
+                  setCurrentVideoUrl("");
+                  setCurrentVideoTitle("");
+                }}
+                style={{
+                  background: "rgba(255,255,255,0.2)",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: "32px",
+                  height: "32px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  transition: "all 0.2s"
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(255,255,255,0.3)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(255,255,255,0.2)";
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" strokeLinecap="round" strokeLinejoin="round"/>
+                  <line x1="6" y1="6" x2="18" y2="18" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Video */}
+            <div style={{
+              backgroundColor: "#000",
+              position: "relative",
+              paddingTop: "56.25%" /* 16:9 Aspect Ratio */
+            }}>
+              <video
+                controls
+                autoPlay
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain"
+                }}
+              >
+                <source src={currentVideoUrl} type="video/mp4" />
+                Tu navegador no soporta el elemento de video.
+              </video>
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: "12px 20px",
+              backgroundColor: "#f9fafb",
+              textAlign: "center",
+              fontSize: "13px",
+              color: "#6b7280"
+            }}>
+              Video demostrativo del ejercicio
+            </div>
           </div>
         </div>
       )}

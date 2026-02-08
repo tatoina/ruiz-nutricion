@@ -1,4 +1,7 @@
-# Sistema de Notificaciones de Citas
+# Sistema de Notificaciones
+
+## ⚠️ IMPORTANTE: Notificaciones Push DESACTIVADAS
+Las notificaciones push han sido desactivadas. **Solo se usan notificaciones por email**.
 
 ## Funcionalidad Implementada
 
@@ -11,12 +14,10 @@
   - Logo de la clínica
   - Diseño profesional en HTML
 
-### 🔔 Push Notification - 1 hora antes
-- **Cuándo**: Se envía automáticamente 1 hora antes de la cita (entre 55-65 minutos)
-- **Contenido**:
-  - Título: "🔔 Recordatorio de Cita"
-  - Mensaje: Hora de la cita
-  - Se muestra en el navegador si el usuario ha dado permisos
+### ~~🔔 Push Notification - 1 hora antes~~ (DESACTIVADO)
+- **Estado**: ❌ DESACTIVADO
+- Las notificaciones push han sido eliminadas del sistema
+- Solo se utilizan notificaciones por correo electrónico
 
 ## Componentes del Sistema
 
@@ -27,17 +28,13 @@
   1. Revisa todas las citas de todos los usuarios
   2. Calcula el tiempo hasta cada cita
   3. Envía email si faltan ~24 horas y no se ha enviado
-  4. Crea notificación push si falta ~1 hora y no se ha enviado
+  4. ~~Crea notificación push si falta ~1 hora y no se ha enviado~~ (DESACTIVADO)
   5. Marca cada notificación como enviada para no duplicar
 
-### 2. Listener de Notificaciones en App
-- **Ubicación**: `FichaUsuario.js` líneas 650-688
-- **Función**: Escucha notificaciones nuevas en tiempo real
-- **Proceso**:
-  1. Se conecta a Firestore collection `notifications`
-  2. Filtra por usuario actual y notificaciones no leídas
-  3. Muestra notificación del navegador automáticamente
-  4. Marca la notificación como leída
+### 2. ~~Listener de Notificaciones en App~~ (DESACTIVADO)
+- **Estado**: ❌ DESACTIVADO
+- Las notificaciones push han sido eliminadas
+- El código relacionado ha sido comentado
 
 ### 3. Estructura de Datos
 
@@ -48,27 +45,16 @@
   hora: "10:00",
   notas: "Revisión mensual",
   emailSent: false,    // Se marca true cuando se envía email
-  pushSent: false,     // Se marca true cuando se envía push
+  // pushSent: false,  // ELIMINADO - Ya no se usan push notifications
   createdAt: "...",
   createdBy: "admin"
 }
 ```
 
-#### Notificación Push en Firestore
+#### ~~Notificación Push en Firestore~~ (DESACTIVADO)
 ```javascript
-{
-  userId: "user123",
-  type: "appointment_reminder",
-  title: "🔔 Recordatorio de Cita",
-  body: "Tu cita es en 1 hora - 10:00",
-  data: {
-    citaFecha: "2025-12-15T10:00:00",
-    citaNotas: "Revisión mensual"
-  },
-  createdAt: timestamp,
-  read: false,
-  readAt: null  // Se actualiza cuando el usuario ve la notificación
-}
+// Las notificaciones push han sido desactivadas
+// Ya no se crean documentos en la colección 'notifications'
 ```
 
 ## Configuración Requerida
@@ -93,22 +79,17 @@
   - read (ASC)  
   - createdAt (DESC)
 
-## Testing
+## T~~Permisos de Notificación~~ (DESACTIVADO)
+- **Estado**: ❌ Ya no son necesarios
+- Las notificaciones push han sido eliminadas
+- Solo se usan notificaciones por email
 
-### Para probar emails
-1. Crear una cita para mañana a cualquier hora
-2. Esperar a que la función se ejecute (cada hora)
-3. Verificar que `emailSent: true` se añade a la cita
-4. Revisar el email en la bandeja de entrada
-
-### Para probar push notifications
-1. Activar permisos de notificación en la app
-2. Crear una cita dentro de 1 hora
-3. Esperar a que la función se ejecute
-4. Verificar notificación del navegador
-5. Verificar que `pushSent: true` se añade a la cita
-
-## Logs y Debugging
+## ~~Índices de Firestore~~ (YA NO NECESARIOS)
+- Los índices para la colección `notifications` ya no son necesarios
+- Se pueden eliminar si se deseade notificación en la app
+2. C~~Para probar push notifications~~ (DESACTIVADO)
+- Las notificaciones push han sido desactivadas
+- Ya no es posible probar esta funcionalidad
 
 ### Ver logs de Cloud Functions
 ```bash
@@ -129,4 +110,12 @@ firebase functions:log --only checkAppointmentReminders
 1. **No duplicación**: Las flags `emailSent` y `pushSent` previenen envíos duplicados
 2. **Ventana de tiempo**: Los rangos de tiempo (23-25h para email, 55-65min para push) aseguran que se envíen aunque la función no se ejecute exactamente a la hora
 3. **Marcado automático**: Las notificaciones se marcan como leídas automáticamente al mostrarse
-4. **Permisos**: Los usuarios deben dar permiso para recibir notificaciones del navegador
+4. **Permisos**: Los usua flag `emailSent` previene envíos duplicados
+2. **Ventana de tiempo**: El rango de tiempo (23-25h para email) asegura que se envíe aunque la función no se ejecute exactamente a la hora
+3. **Solo Email**: Las notificaciones push han sido completamente desactivadas
+4. **Archivos desactivados**: 
+   - `src/fcm-setup.js` - No se importa
+   - `public/firebase-messaging-sw.js` - Código comentado
+   - `functions/sendPushToUser.js` - No exportado
+   - `functions/sendPushToAdmin.js` - No exportado
+   - `functions/saveFcmToken.js` - No exportado
