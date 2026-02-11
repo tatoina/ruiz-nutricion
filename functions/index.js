@@ -293,7 +293,6 @@ exports.createUser = onCall(async (request) => {
       pesoHistorico: [],
       medidas: {},
       ejercicios: false,
-      recetas: false,
       mustChangePassword: true,
     });
 

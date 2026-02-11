@@ -89,6 +89,18 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
     
+    // Colección de recetas - usuarios autenticados pueden leer, solo admins pueden escribir
+    match /recetas/{recetaId} {
+      allow read: if request.auth != null; // Todos los autenticados pueden leer recetas
+      allow write: if isAdmin(); // Solo admins pueden crear/editar/eliminar
+    }
+    
+    // Colección de categorías de recetas - usuarios autenticados pueden leer, solo admins pueden escribir
+    match /recetasCategorias/{categoriaId} {
+      allow read: if request.auth != null; // Todos los autenticados pueden leer categorías
+      allow write: if isAdmin(); // Solo admins pueden crear/editar/eliminar
+    }
+    
     // Otras colecciones - solo admins
     match /{document=**} {
       allow read, write: if isAdmin();

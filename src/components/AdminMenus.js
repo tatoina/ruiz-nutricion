@@ -194,6 +194,33 @@ export default function AdminMenus() {
               {cat.label}
             </button>
           ))}
+          
+          {/* Botón especial de Recetas */}
+          <button
+            onClick={() => navigate("/admin/recetas")}
+            style={{
+              padding: isMobile ? "8px 12px" : "12px 24px",
+              borderRadius: "10px",
+              border: "2px solid #f59e0b",
+              background: "white",
+              color: "#f59e0b",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: isMobile ? "13px" : "16px",
+              transition: "all 0.2s",
+              boxShadow: "0 2px 4px rgba(0,0,0,0.05)"
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = "#f59e0b";
+              e.target.style.color = "white";
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = "white";
+              e.target.style.color = "#f59e0b";
+            }}
+          >
+            👨‍🍳 Recetas
+          </button>
         </div>
 
         {/* Contenido principal */}

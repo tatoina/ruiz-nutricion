@@ -98,6 +98,9 @@ export default function FichaUsuario(props) {
   const [showSnacksModal, setShowSnacksModal] = useState(false);
   const [snacksList, setSnacksList] = useState([]);
   const [loadingSnacks, setLoadingSnacks] = useState(false);
+  const [showRecetasModal, setShowRecetasModal] = useState(false);
+  const [recetasList, setRecetasList] = useState([]);
+  const [loadingRecetas, setLoadingRecetas] = useState(false);
   const [showTarifasModal, setShowTarifasModal] = useState(false);
   const [tarifasUrl, setTarifasUrl] = useState("");
   const [loadingTarifas, setLoadingTarifas] = useState(false);
@@ -304,6 +307,9 @@ export default function FichaUsuario(props) {
       } else if (planUsuario === "Basico") {
         // Plan Básico: sin Ejercicios ni GYM
         tabsFiltradas = baseTabs.filter(tab => tab.id !== "ejercicios" && tab.id !== "gym");
+      } else if (planUsuario === "GYM") {
+        // Plan GYM: solo GYM
+        tabsFiltradas = baseTabs.filter(tab => tab.id === "gym");
       }
       // Plan "Basico + Ejercicios" y cualquier otro: todas las pestañas
     }
@@ -2545,6 +2551,36 @@ Ruiz Nutrición
       setLoadingSnacks(false);
     }
   };
+
+  // Función para cargar recetas desde Firestore
+  const loadRecetas = async () => {
+    setLoadingRecetas(true);
+    try {
+      const recetasRef = collection(db, "recetas");
+      const snapshot = await getDocs(recetasRef);
+      const recetasData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setRecetasList(recetasData.sort((a, b) => (a.nombre || "").localeCompare(b.nombre || "")));
+    } catch (err) {
+      console.error("Error cargando recetas:", err);
+    } finally {
+      setLoadingRecetas(false);
+    }
+  };
+
+  // Función para obtener color según categoría de receta
+  const getCategoryColor = (categoria) => {
+    const colors = {
+      'desayuno': '#f59e0b',
+      'almuerzo': '#3b82f6',
+      'comida': '#10b981',
+      'cena': '#8b5cf6',
+      'infusion': '#ec4899'
+    };
+    return colors[categoria?.toLowerCase()] || '#6b7280';
+  };
   
   // Función para cargar opciones de menú disponibles desde BD
   const loadMenuItems = async () => {
@@ -3692,11 +3728,11 @@ Ruiz Nutrición
       // Modo manual: mostrar contenido HTML generado directamente
       const esc = (s) => escapeHtmlForInject(s || "");
       return `<div class="print-section dieta-week">
-        <h2 style="margin:0 0 6px 0;color:#064e3b;font-size:14px;font-weight:700">Dieta semanal</h2>
-        <div style="padding:10px;border:1px solid #e5e7eb;border-radius:4px;font-size:11px;line-height:1.6">
+        <h2 style="margin:0 0 5px 0;color:#064e3b;font-size:13px;font-weight:700">Dieta semanal</h2>
+        <div style="padding:8px;border:1px solid #e5e7eb;border-radius:4px;font-size:9px;line-height:1.3">
           ${userData?.contenidoManual || '<p style="color:#6b7280;font-style:italic;">No hay contenido de dieta</p>'}
         </div>
-      </div>`;
+      </div><div style="page-break-after:always;"></div>`;
     }
     
     if (esMenuVertical) {
@@ -3705,12 +3741,12 @@ Ruiz Nutrición
       const esc = (s) => escapeHtmlForInject(s || "");
       
       let html = `<div class="print-section dieta-week">
-        <h2 style="margin:0 0 6px 0;color:#064e3b;font-size:14px;font-weight:700">Dieta semanal</h2>
-        <table class="print-calendar" border="0" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:10px;">
+        <h2 style="margin:0 0 5px 0;color:#064e3b;font-size:13px;font-weight:700">Dieta semanal</h2>
+        <table class="print-calendar" border="0" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed;">
           <thead>
             <tr>
-              <th style="text-align:left;padding:5px 3px;background:#f7fff9;border:1px solid #d1d5db;font-size:10px;font-weight:700">Comida</th>`;
-      for (let d = 0; d < 7; d++) html += `<th style="text-align:center;padding:5px 3px;background:#f7fff9;border:1px solid #d1d5db;font-size:10px;font-weight:700">${dayNames[d]}</th>`;
+              <th style="text-align:left;padding:4px 3px;background:#f7fff9;border:1px solid #d1d5db;font-size:9px;font-weight:700">Comida</th>`;
+      for (let d = 0; d < 7; d++) html += `<th style="text-align:center;padding:4px 3px;background:#f7fff9;border:1px solid #d1d5db;font-size:9px;font-weight:700">${dayNames[d]}</th>`;
       html += `</tr></thead><tbody>`;
       
       const secciones = ["desayuno", "almuerzo", "comida", "merienda", "cena", "consejos"];
@@ -3727,7 +3763,7 @@ Ruiz Nutrición
       
       for (const seccion of secciones) {
         html += `<tr>
-          <td style="vertical-align:top;padding:6px 3px;border:1px solid #e5e7eb;font-weight:700;width:12%;background:#f9fafb;font-size:10px">${labels[seccion]}</td>`;
+          <td style="vertical-align:top;padding:4px 3px;border:1px solid #e5e7eb;font-weight:700;width:12%;background:#f9fafb;font-size:9px">${labels[seccion]}</td>`;
         
         // Para menú vertical, el contenido es el mismo todos los días
         const itemIds = menuVerticalData[seccion] || [];
@@ -3749,12 +3785,12 @@ Ruiz Nutrición
         
         // Repetir el mismo contenido para todos los días
         for (let d = 0; d < 7; d++) {
-          html += `<td style="vertical-align:top;padding:6px 3px;border:1px solid #e5e7eb;min-height:70px;word-break:break-word;font-size:10px;line-height:1.4">${esc(contenido)}</td>`;
+          html += `<td style="vertical-align:top;padding:4px 3px;border:1px solid #e5e7eb;word-break:break-word;font-size:8.5px;line-height:1.3">${esc(contenido)}</td>`;
         }
         html += `</tr>`;
       }
       
-      html += `</tbody></table></div>`;
+      html += `</tbody></table></div><div style="page-break-after:always;"></div>`;
       return html;
     } else {
       // Formato tabla original (diferente por día)
@@ -3764,26 +3800,26 @@ Ruiz Nutrición
       const esc = (s) => escapeHtmlForInject(s || "");
 
       let html = `<div class="print-section dieta-week">
-        <h2 style="margin:0 0 6px 0;color:#064e3b;font-size:14px;font-weight:700">Dieta semanal</h2>
-        <table class="print-calendar" border="0" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:10px;">
+        <h2 style="margin:0 0 5px 0;color:#064e3b;font-size:13px;font-weight:700">Dieta semanal</h2>
+        <table class="print-calendar" border="0" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:9px;table-layout:fixed;">
           <thead>
             <tr>
-              <th style="text-align:left;padding:5px 3px;background:#f7fff9;border:1px solid #d1d5db;font-size:10px;font-weight:700">Comida / Día</th>`;
-      for (let d = 0; d < 7; d++) html += `<th style="text-align:center;padding:5px 3px;background:#f7fff9;border:1px solid #d1d5db;font-size:10px;font-weight:700">${dayNames[d]}</th>`;
+              <th style="text-align:left;padding:4px 3px;background:#f7fff9;border:1px solid #d1d5db;font-size:9px;font-weight:700">Comida / Día</th>`;
+      for (let d = 0; d < 7; d++) html += `<th style="text-align:center;padding:4px 3px;background:#f7fff9;border:1px solid #d1d5db;font-size:9px;font-weight:700">${dayNames[d]}</th>`;
       html += `</tr></thead><tbody>`;
 
       for (let r = 0; r < ALL_SECTIONS.length; r++) {
         const sec = ALL_SECTIONS[r];
         html += `<tr>
-          <td style="vertical-align:top;padding:6px 3px;border:1px solid #e5e7eb;font-weight:700;width:12%;background:#f9fafb;font-size:10px">${escapeHtmlForInject(sec.label)}</td>`;
+          <td style="vertical-align:top;padding:4px 3px;border:1px solid #e5e7eb;font-weight:700;width:12%;background:#f9fafb;font-size:9px">${escapeHtmlForInject(sec.label)}</td>`;
         for (let d = 0; d < 7; d++) {
           const m = (menuTemplate[d] && menuTemplate[d][sec.key]) ? menuTemplate[d][sec.key] : "";
-          html += `<td style="vertical-align:top;padding:6px 3px;border:1px solid #e5e7eb;min-height:70px;word-break:break-word;font-size:10px;line-height:1.4">${esc(m)}</td>`;
+          html += `<td style="vertical-align:top;padding:4px 3px;border:1px solid #e5e7eb;word-break:break-word;font-size:8.5px;line-height:1.3">${esc(m)}</td>`;
         }
         html += `</tr>`;
       }
 
-      html += `</tbody></table></div>`;
+      html += `</tbody></table></div><div style="page-break-after:always;"></div>`;
       return html;
     }
   };
@@ -3964,41 +4000,30 @@ Ruiz Nutrición
 
       const printCSS = `
         @page { size: A4 landscape; margin: 8mm; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial; color:#062017; background: #fff; margin:0; font-size:11px; }
-        #pdf-root { padding: 4px; max-width: 100%; }
-        .pdf-header { display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+        * { box-sizing: border-box; margin:0; padding:0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial; color:#062017; background: #fff; font-size:10px; line-height:1.3; }
+        #pdf-root { padding: 6px; width: 100%; }
+        .pdf-header { display:flex; align-items:center; gap:6px; margin-bottom:8px; }
         .pdf-logo { width:35px; height:35px; flex:0 0 35px; display:flex; align-items:center; justify-content:center; background:#064e3b; border-radius:4px; color:#fff; font-weight:700; font-size:14px; }
-        h1 { margin:0; font-size:15px; color:#064e3b; font-weight:700; }
-        .pdf-meta { font-size:10px; color:#374151; }
-        h2 { font-size:14px; margin:0 0 6px 0; color:#064e3b; font-weight:700; }
-        .print-calendar { font-size:10px; width:100%; }
-        .print-calendar th { padding:5px 3px; background:#f7fff9; border:1px solid #d1d5db; font-size:10px; font-weight:700; }
-        .print-calendar td { padding:6px 3px; vertical-align:top; word-break:break-word; border:1px solid #e5e7eb; min-height:70px; font-size:10px; line-height:1.4; }
+        h1 { margin:0; font-size:14px; color:#064e3b; font-weight:700; }
+        .pdf-meta { font-size:9px; color:#374151; margin:0; }
+        h2 { font-size:13px; margin:0 0 5px 0; color:#064e3b; font-weight:700; }
+        .print-section { margin:0; padding:0; }
+        .print-calendar { font-size:9px; width:100%; table-layout: fixed; border-collapse:collapse; margin:0; }
+        .print-calendar th { padding:4px 3px; background:#f7fff9; border:1px solid #d1d5db; font-size:9px; font-weight:700; line-height:1.2; }
+        .print-calendar td { padding:4px 3px; vertical-align:top; word-break:break-word; border:1px solid #e5e7eb; font-size:8.5px; line-height:1.3; }
         .print-calendar td:first-child { font-weight:700; width:12%; background:#f9fafb; }
-        .print-hist-table { font-size:9px; width:100%; }
-        .print-hist-table th, .print-hist-table td { padding:3px 2px; font-size:9px; vertical-align:top; border:1px solid #d1d5db; }
-        .print-hist-table th { background:#f3f4f6; font-weight:700; }
-        table { page-break-inside:auto; border-collapse:collapse; width:100%; }
-        tr { page-break-inside:avoid; page-break-after:auto; }
-        .page { page-break-after: always; break-after: page; }
-        .page:last-child { page-break-after: auto; break-after: auto; }
-        .chart-page { page-break-before: always; break-before: page; padding-top:20px; }
-        .chart-print { margin:20px auto; text-align:center; }
-        .chart-print img { max-width:95%; height:auto; border:2px solid #e5e7eb; padding:10px; background:#fff; border-radius:4px; }
-        @media print { 
-          #pdf-root { padding: 3mm; }
-          body { font-size:10px; }
-        }
+        table { border-collapse:collapse; width:100%; margin:0; }
+        .chart-page { page-break-before: always; margin-top:15px; }
+        .chart-print { margin:15px auto; text-align:center; }
+        .chart-print img { max-width:95%; height:auto; border:2px solid #e5e7eb; padding:8px; background:#fff; border-radius:4px; }
       `;
 
       const logoUrl = DEFAULT_CLINIC_LOGO;
       let logoData = null;
       try { logoData = await imgUrlToDataUrl(logoUrl); } catch (e) { logoData = null; }
 
-      const logoHtml = logoData ? `<img src="${logoData}" alt="Logo" style="width:40px;height:40px;object-fit:contain;border-radius:6px" />` : `<img src="${escapeHtmlForInject(logoUrl)}" alt="Logo" style="width:40px;height:40px;object-fit:contain;border-radius:6px" onerror="this.style.display='none'" />`;
-
-      const firstPart = parts[0] || "";
-      const secondPart = parts.slice(1).join("<hr style='margin:12px 0;border:none;border-top:1px solid #eee'/>") || "";
+      const logoHtml = logoData ? `<img src="${logoData}" alt="Logo" style="width:35px;height:35px;object-fit:contain;border-radius:4px" />` : `<img src="${escapeHtmlForInject(logoUrl)}" alt="Logo" style="width:35px;height:35px;object-fit:contain;border-radius:4px" onerror="this.style.display='none'" />`;
 
       const pdfInner = `
         <div id="pdf-root">
@@ -4010,13 +4035,7 @@ Ruiz Nutrición
             </div>
             <div style="text-align:right;font-size:10px;color:#374151">Ficha imprimible</div>
           </div>
-
-          <div class="page">
-            ${firstPart}
-          </div>
-
-          ${secondPart ? `<div class="page">${secondPart}</div>` : ""}
-          
+          ${parts.join("")}
           ${chartContent}
         </div>
       `;
@@ -4027,8 +4046,7 @@ Ruiz Nutrición
       container.style.left = "-9999px";
       container.style.top = "0";
       container.style.width = "297mm";
-      container.style.height = "210mm";
-      container.style.overflow = "hidden";
+      container.style.overflow = "visible";
       container.innerHTML = `<style>${printCSS}</style>${pdfInner}`;
       document.body.appendChild(container);
 
@@ -4036,11 +4054,18 @@ Ruiz Nutrición
 
       const element = container.querySelector("#pdf-root");
       const opt = {
-        margin: [10, 10, 10, 10],
+        margin: [8, 8, 8, 8],
         filename: `${filenameSafe}.pdf`,
         image: { type: "jpeg", quality: 0.95 },
-        html2canvas: { scale: 2, useCORS: true, logging: false, width: 1122, height: 793 },
+        html2canvas: { 
+          scale: 1.5, 
+          useCORS: true, 
+          logging: false,
+          windowWidth: 1122,
+          windowHeight: 794
+        },
         jsPDF: { unit: "mm", format: "a4", orientation: "landscape" },
+        pagebreak: { mode: 'avoid-all', before: '.chart-page' }
       };
 
       try {
@@ -4117,22 +4142,24 @@ Ruiz Nutrición
       
       const printCSS = `
         @page { size: A4 landscape; margin: 8mm; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial; color:#062017; background: #fff; margin:0; font-size:11px; }
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial; color:#062017; background: #fff; margin:0; font-size:10px; line-height:1.3; }
         #pdf-root { padding: 4px; max-width: 100%; }
         .pdf-header { display:flex; align-items:center; gap:6px; margin-bottom:6px; }
         .pdf-logo { width:35px; height:35px; flex:0 0 35px; display:flex; align-items:center; justify-content:center; background:#064e3b; border-radius:4px; color:#fff; font-weight:700; font-size:14px; }
-        h1 { margin:0; font-size:15px; color:#064e3b; font-weight:700; }
-        .pdf-meta { font-size:10px; color:#374151; }
-        h2 { font-size:14px; margin:0 0 6px 0; color:#064e3b; font-weight:700; }
-        .print-calendar { font-size:10px; width:100%; }
-        .print-calendar th { padding:5px 3px; background:#f7fff9; border:1px solid #d1d5db; font-size:10px; font-weight:700; }
-        .print-calendar td { padding:6px 3px; vertical-align:top; word-break:break-word; border:1px solid #e5e7eb; min-height:70px; font-size:10px; line-height:1.4; }
+        h1 { margin:0; font-size:14px; color:#064e3b; font-weight:700; }
+        .pdf-meta { font-size:9px; color:#374151; }
+        h2 { font-size:13px; margin:0 0 5px 0; color:#064e3b; font-weight:700; }
+        .print-section { margin:0; padding:0; }
+        .print-calendar { font-size:9px; width:100%; table-layout: fixed; border-collapse:collapse; margin:0; }
+        .print-calendar th { padding:4px 3px; background:#f7fff9; border:1px solid #d1d5db; font-size:9px; font-weight:700; line-height:1.2; }
+        .print-calendar td { padding:4px 3px; vertical-align:top; word-break:break-word; border:1px solid #e5e7eb; font-size:8.5px; line-height:1.3; overflow:hidden; height:auto; max-height:none; }
         .print-calendar td:first-child { font-weight:700; width:12%; background:#f9fafb; }
-        table { page-break-inside:auto; border-collapse:collapse; width:100%; }
+        table { page-break-inside:auto; border-collapse:collapse; width:100%; margin:0; }
         tr { page-break-inside:avoid; page-break-after:auto; }
         @media print { 
           #pdf-root { padding: 3mm; }
-          body { font-size:10px; }
+          body { font-size:9px; }
         }
       `;
       
@@ -4140,17 +4167,17 @@ Ruiz Nutrición
       let logoData = null;
       try { logoData = await imgUrlToDataUrl(logoUrl); } catch (e) { logoData = null; }
       
-      const logoHtml = logoData ? `<img src="${logoData}" alt="Logo" style="width:40px;height:40px;object-fit:contain;border-radius:6px" />` : `<img src="${escapeHtmlForInject(logoUrl)}" alt="Logo" style="width:40px;height:40px;object-fit:contain;border-radius:6px" onerror="this.style.display='none'" />`;
+      const logoHtml = logoData ? `<img src="${logoData}" alt="Logo" style="width:35px;height:35px;object-fit:contain;border-radius:4px" />` : `<img src="${escapeHtmlForInject(logoUrl)}" alt="Logo" style="width:35px;height:35px;object-fit:contain;border-radius:4px" onerror="this.style.display='none'" />`;
       
       const pdfInner = `
         <div id="pdf-root">
           <div class="pdf-header">
             ${logoHtml}
             <div style="flex:1">
-              <h1 style="font-size:15px;margin:0;font-weight:700">${headerName}</h1>
-              <div class="pdf-meta" style="font-size:10px">Generado: ${headerDate}</div>
+              <h1 style="font-size:12px;margin:0;font-weight:700">${headerName}</h1>
+              <div class="pdf-meta" style="font-size:8px">Generado: ${headerDate}</div>
             </div>
-            <div style="text-align:right;font-size:10px;color:#374151">Dieta #${dietaVersion.numero}</div>
+            <div style="text-align:right;font-size:8px;color:#374151">Dieta #${dietaVersion.numero}</div>
           </div>
           
           ${dietaHTML}
@@ -4172,11 +4199,12 @@ Ruiz Nutrición
       
       const element = container.querySelector("#pdf-root");
       const opt = {
-        margin: [10, 10, 10, 10],
+        margin: [3, 3, 3, 3],
         filename: `${filenameSafe}.pdf`,
-        image: { type: "jpeg", quality: 0.95 },
-        html2canvas: { scale: 2, useCORS: true, logging: false, width: 1122, height: 793 },
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: { scale: 2.5, useCORS: true, logging: false, width: 1400, height: 900 },
         jsPDF: { unit: "mm", format: "a4", orientation: "landscape" },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
       };
       
       try {
@@ -7485,6 +7513,34 @@ Ruiz Nutrición
                         🍎
                       </button>
                       
+                      {userData?.anamnesis?.preferenciaPlan === "Menú completo (Con recetas)" && (
+                        <button
+                          onClick={() => {
+                            setShowRecetasModal(true);
+                            loadRecetas();
+                          }}
+                          style={{
+                            padding: "6px 10px",
+                            borderRadius: "16px",
+                            backgroundColor: "#f59e0b",
+                            color: "white",
+                            border: "none",
+                            cursor: "pointer",
+                            fontSize: "18px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            boxShadow: "0 2px 8px rgba(245, 158, 11, 0.3)",
+                            width: "40px",
+                            height: "32px",
+                            flex: "0 0 auto"
+                          }}
+                          title="Ver Recetas disponibles"
+                        >
+                          👨‍🍳
+                        </button>
+                      )}
+                      
                       <button
                         onClick={() => setShowSolicitudDieta(true)}
                         style={{
@@ -9017,6 +9073,188 @@ Ruiz Nutrición
               fontSize: "14px"
             }}>
               {snacksList.length > 0 && `${snacksList.length} snack${snacksList.length !== 1 ? 's' : ''} disponible${snacksList.length !== 1 ? 's' : ''}`}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Recetas */}
+      {showRecetasModal && (
+        <div className="print-modal-backdrop" role="dialog" aria-modal="true" onClick={() => setShowRecetasModal(false)}>
+          <div className="print-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "800px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h3 style={{ margin: 0, fontSize: "20px", color: "#92400e", fontWeight: "600" }}>👨‍🍳 Recetas Disponibles</h3>
+              <button 
+                onClick={() => setShowRecetasModal(false)}
+                className="btn-icon-header"
+                title="Cerrar"
+                style={{
+                  background: "rgba(239,68,68,0.9)",
+                  border: "none",
+                  borderRadius: "8px",
+                  width: "36px",
+                  height: "36px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  transition: "background 0.2s"
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(220,38,38,1)"}
+                onMouseLeave={e => e.currentTarget.style.background = "rgba(239,68,68,0.9)"}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" strokeLinecap="round" strokeLinejoin="round"/>
+                  <line x1="6" y1="6" x2="18" y2="18" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Contenido del modal */}
+            <div style={{
+              padding: "24px",
+              overflowY: "auto",
+              flex: 1,
+              maxHeight: "70vh"
+            }}>
+              {loadingRecetas ? (
+                <div style={{ textAlign: "center", padding: "40px", color: "#6b7280" }}>
+                  <div style={{ fontSize: "18px" }}>Cargando recetas...</div>
+                </div>
+              ) : recetasList.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px", color: "#6b7280" }}>
+                  <div style={{ fontSize: "48px", marginBottom: "16px" }}>👨‍🍳</div>
+                  <div style={{ fontSize: "18px", fontWeight: "600", marginBottom: "8px" }}>
+                    No hay recetas disponibles
+                  </div>
+                  <div style={{ fontSize: "14px" }}>
+                    El administrador aún no ha añadido recetas
+                  </div>
+                </div>
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    fontSize: isMobile ? "13px" : "14px"
+                  }}>
+                    <thead>
+                      <tr style={{
+                        backgroundColor: "#f59e0b",
+                        color: "white"
+                      }}>
+                        <th style={{
+                          padding: isMobile ? "10px 8px" : "12px 16px",
+                          textAlign: "left",
+                          fontWeight: "600",
+                          borderBottom: "2px solid #d97706"
+                        }}>Categoría</th>
+                        <th style={{
+                          padding: isMobile ? "10px 8px" : "12px 16px",
+                          textAlign: "left",
+                          fontWeight: "600",
+                          borderBottom: "2px solid #d97706"
+                        }}>Nombre</th>
+                        <th style={{
+                          padding: isMobile ? "10px 8px" : "12px 16px",
+                          textAlign: "center",
+                          fontWeight: "600",
+                          borderBottom: "2px solid #d97706",
+                          width: "80px"
+                        }}>Tipo</th>
+                        <th style={{
+                          padding: isMobile ? "10px 8px" : "12px 16px",
+                          textAlign: "center",
+                          fontWeight: "600",
+                          borderBottom: "2px solid #d97706",
+                          width: "80px"
+                        }}>Ver</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recetasList.map((receta, index) => (
+                        <tr key={receta.id} style={{
+                          backgroundColor: index % 2 === 0 ? "white" : "#fafafa",
+                          transition: "background-color 0.2s"
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#fef3c7"}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = index % 2 === 0 ? "white" : "#fafafa"}
+                        >
+                          <td style={{
+                            padding: isMobile ? "10px 8px" : "12px 16px",
+                            borderBottom: "1px solid #e5e7eb"
+                          }}>
+                            <span style={{
+                              display: "inline-block",
+                              padding: "4px 10px",
+                              borderRadius: "12px",
+                              backgroundColor: getCategoryColor(receta.categoria),
+                              color: "white",
+                              fontSize: isMobile ? "11px" : "12px",
+                              fontWeight: "600",
+                              textTransform: "capitalize"
+                            }}>
+                              {receta.categoria || "General"}
+                            </span>
+                          </td>
+                          <td style={{
+                            padding: isMobile ? "10px 8px" : "12px 16px",
+                            borderBottom: "1px solid #e5e7eb",
+                            fontWeight: "500"
+                          }}>
+                            {receta.nombre}
+                          </td>
+                          <td style={{
+                            padding: isMobile ? "10px 8px" : "12px 16px",
+                            borderBottom: "1px solid #e5e7eb",
+                            textAlign: "center"
+                          }}>
+                            <span style={{ fontSize: isMobile ? "18px" : "20px" }}>
+                              {receta.tipoArchivo === 'video' ? '🎥' : '📄'}
+                            </span>
+                          </td>
+                          <td style={{
+                            padding: isMobile ? "10px 8px" : "12px 16px",
+                            borderBottom: "1px solid #e5e7eb",
+                            textAlign: "center"
+                          }}>
+                            <button
+                              onClick={() => window.open(receta.url, '_blank')}
+                              style={{
+                                padding: isMobile ? "6px 12px" : "8px 16px",
+                                backgroundColor: "#3b82f6",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "6px",
+                                cursor: "pointer",
+                                fontSize: isMobile ? "12px" : "13px",
+                                fontWeight: "500",
+                                transition: "background-color 0.2s"
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#2563eb"}
+                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#3b82f6"}
+                              title="Abrir receta"
+                            >
+                              Ver
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Footer del modal */}
+            <div style={{
+              padding: "16px 24px",
+              borderTop: "1px solid #e5e7eb",
+              textAlign: "center",
+              color: "#6b7280",
+              fontSize: "14px"
+            }}>
+              {recetasList.length > 0 && `${recetasList.length} receta${recetasList.length !== 1 ? 's' : ''} disponible${recetasList.length !== 1 ? 's' : ''}`}
             </div>
           </div>
         </div>

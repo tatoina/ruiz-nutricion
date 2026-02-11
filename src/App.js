@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from
 import AdminUsers from "./components/AdminUsers";
 import AdminAgenda from "./components/AdminAgenda";
 import AdminMenus from "./components/AdminMenus";
+import AdminRecetas from "./components/AdminRecetas";
 import AdminTipoDieta from "./components/AdminTipoDieta";
 import AdminTarifas from "./components/AdminTarifas";
 import AdminPagosGlobal from "./components/AdminPagosGlobal";
@@ -12,6 +13,7 @@ import AdminMensajes from "./components/AdminMensajes";
 import AdminRecursos from "./components/AdminRecursos";
 import AdminLayoutResponsive from "./components/Layouts/AdminLayoutResponsive";
 import FichaUsuario from "./components/FichaUsuario";
+import AnamnesisStandalone from "./components/AnamnesisStandalone";
 import Login from "./components/Login";
 import Register from "./components/Register";
 import ChangePassword from "./components/ChangePassword";
@@ -62,6 +64,17 @@ function LoginWrapper() {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) return;
       
+      // Verificar si debe cambiar la contraseña primero (excepto admin)
+      const normalizedEmail = String(u.email || "").trim().toLowerCase();
+      if (normalizedEmail !== "admin@admin.es") {
+        const userDocRef = doc(db, "users", u.uid);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists() && userDoc.data().mustChangePassword) {
+          navigate("/cambiar-password", { state: { firstLogin: true }, replace: true });
+          return;
+        }
+      }
+      
       const isAdmin = await checkIfAdmin(u);
       
       if (isAdmin) {
@@ -84,6 +97,17 @@ function LoginWrapper() {
     if (!user) {
       // fallback: rely on onAuthStateChanged
       return;
+    }
+    
+    // Verificar si debe cambiar la contraseña primero (excepto admin)
+    const normalizedEmail = String(user.email || "").trim().toLowerCase();
+    if (normalizedEmail !== "admin@admin.es") {
+      const userDocRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
+      if (userDoc.exists() && userDoc.data().mustChangePassword) {
+        navigate("/cambiar-password", { state: { firstLogin: true }, replace: true });
+        return;
+      }
     }
     
     const isAdmin = await checkIfAdmin(user);
@@ -170,6 +194,17 @@ export default function App() {
         />
 
         <Route
+          path="/admin/recetas"
+          element={
+            <PrivateRoute>
+              <AdminLayoutResponsive title="Recetas">
+                <AdminRecetas />
+              </AdminLayoutResponsive>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
           path="/admin/tarifas"
           element={
             <PrivateRoute>
@@ -240,6 +275,15 @@ export default function App() {
           element={
             <PrivateRoute>
               <ChangePassword />
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/anamnesis-popup/:userId"
+          element={
+            <PrivateRoute>
+              <AnamnesisStandalone />
             </PrivateRoute>
           }
         />

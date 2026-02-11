@@ -65,6 +65,14 @@ service firebase.storage {
       allow write, delete: if request.auth != null && isAdmin();
     }
     
+    // Reglas para carpeta Recetas con todas sus subcarpetas
+    match /recetas/{allPaths=**} {
+      // Todos los usuarios autenticados pueden leer
+      allow read: if request.auth != null;
+      // Solo los admins pueden escribir
+      allow write: if request.auth != null && isAdmin();
+    }
+    
     // Denegar acceso por defecto a otras rutas
     match /{allPaths=**} {
       allow read, write: if false;

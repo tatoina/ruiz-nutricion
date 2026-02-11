@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "../Firebase";
 import { useNavigate } from "react-router-dom";
@@ -9,7 +9,23 @@ import { useDevice } from "../hooks/useDevice";
 export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
   const navigate = useNavigate();
   const { isMobile } = useDevice();
-  const [formData, setFormData] = useState({
+  
+  // Clave única para localStorage basada en el usuario
+  const storageKey = `anamnesis_draft_${user.uid || user.id || user.email}`;
+  
+  // Cargar datos de localStorage si existen, sino usar datos del usuario
+  const getInitialFormData = () => {
+    try {
+      const savedDraft = localStorage.getItem(storageKey);
+      if (savedDraft) {
+        return JSON.parse(savedDraft);
+      }
+    } catch (error) {
+      console.error("Error al cargar borrador:", error);
+    }
+    
+    // Datos iniciales del usuario
+    return {
     // TIPO DE ATENCIÓN
     atencionOnline: user.anamnesis?.atencionOnline || false,
     notasEntrevista: user.anamnesis?.notasEntrevista || "",
@@ -110,10 +126,18 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
     motivoConfianza: user.anamnesis?.motivoConfianza || "",
     otrasConsultas: user.anamnesis?.otrasConsultas || "",
     analitica: user.anamnesis?.analitica || "",
-  });
+    };
+  };
 
+  const [formData, setFormData] = useState(getInitialFormData);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
+  const [autoSaveStatus, setAutoSaveStatus] = useState("");
+  
+  // Referencias para los temporizadores de debounce
+  const localStorageTimer = useRef(null);
+  const firebaseTimer = useRef(null);
+  const isInitialMount = useRef(true);
 
   // Estados para mostrar/ocultar secciones
   const [showTipoAtencion, setShowTipoAtencion] = useState(true);
@@ -195,6 +219,83 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // Efecto para guardar en localStorage (autoguardado local inmediato)
+  useEffect(() => {
+    // No guardar en el montaje inicial
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    // Limpiar timer anterior
+    if (localStorageTimer.current) {
+      clearTimeout(localStorageTimer.current);
+    }
+
+    // Guardar en localStorage después de 2 segundos de inactividad
+    localStorageTimer.current = setTimeout(() => {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(formData));
+      } catch (error) {
+        console.error("Error al guardar en localStorage:", error);
+      }
+    }, 2000);
+
+    return () => {
+      if (localStorageTimer.current) {
+        clearTimeout(localStorageTimer.current);
+      }
+    };
+  }, [formData, storageKey]);
+
+  // Efecto para autoguardar en Firebase
+  useEffect(() => {
+    // No guardar en el montaje inicial
+    if (isInitialMount.current) {
+      return;
+    }
+
+    // Solo autoguardar si es admin
+    if (!isAdmin) {
+      return;
+    }
+
+    // Limpiar timer anterior
+    if (firebaseTimer.current) {
+      clearTimeout(firebaseTimer.current);
+    }
+
+    // Autoguardar en Firebase después de 10 segundos de inactividad
+    firebaseTimer.current = setTimeout(async () => {
+      try {
+        const docId = user.uid || user.id || user.email;
+        if (!docId) {
+          throw new Error("No se pudo identificar al usuario");
+        }
+        
+        const userRef = doc(db, "users", docId);
+        await updateDoc(userRef, {
+          anamnesis: formData,
+        });
+        
+        // Limpiar localStorage después de guardar exitosamente
+        localStorage.removeItem(storageKey);
+        
+        if (onUpdateUser) {
+          onUpdateUser({ ...user, anamnesis: formData });
+        }
+      } catch (error) {
+        console.error("Error en autoguardado:", error);
+      }
+    }, 10000);
+
+    return () => {
+      if (firebaseTimer.current) {
+        clearTimeout(firebaseTimer.current);
+      }
+    };
+  }, [formData, isAdmin, user, onUpdateUser, storageKey]);
+
 
 
   const handleSave = async () => {
@@ -216,6 +317,10 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
       await updateDoc(userRef, {
         anamnesis: formData,
       });
+      
+      // Limpiar localStorage después de guardar exitosamente
+      localStorage.removeItem(storageKey);
+      
       setSaveStatus("✅ Guardado correctamente");
       if (onUpdateUser) {
         onUpdateUser({ ...user, anamnesis: formData });
@@ -243,26 +348,68 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
     <div className="anamnesis-container" style={{ padding: isMobile ? "12px 12px 80px 12px" : "20px 24px 80px 24px", width: "100%", boxSizing: "border-box", position: "relative" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? "16px" : "24px" }}>
         <h2 style={{ color: "#4a5568", fontSize: isMobile ? "18px" : "24px", fontWeight: "600", margin: 0 }}>ANAMNESIS</h2>
-        <button
-          type="button"
-          onClick={() => toggleAllSections(!allSectionsVisible)}
-          style={{
-            padding: isMobile ? "8px 12px" : "10px 20px",
-            borderRadius: "8px",
-            border: "2px solid #4299e1",
-            background: allSectionsVisible ? "#4299e1" : "white",
-            color: allSectionsVisible ? "white" : "#4299e1",
-            cursor: "pointer",
-            fontWeight: "600",
-            fontSize: isMobile ? "13px" : "14px",
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            transition: "all 0.2s"
-          }}
-        >
-          {allSectionsVisible ? (isMobile ? "➖" : "➖ Ocultar todo") : (isMobile ? "➕" : "➕ Mostrar todo")}
-        </button>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <button
+            type="button"
+            onClick={() => {
+              const userId = user.uid || user.id || user.email;
+              const popup = window.open(
+                `/anamnesis-popup/${userId}`,
+                'AnamnesisPopup',
+                'width=1200,height=800,scrollbars=yes,resizable=yes'
+              );
+              if (popup) {
+                popup.focus();
+              } else {
+                alert('Por favor, permite las ventanas emergentes para esta función');
+              }
+            }}
+            style={{
+              padding: isMobile ? "8px 12px" : "10px 20px",
+              borderRadius: "8px",
+              border: "2px solid #48bb78",
+              background: "white",
+              color: "#48bb78",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: isMobile ? "13px" : "14px",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              transition: "all 0.2s"
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = "#48bb78";
+              e.target.style.color = "white";
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = "white";
+              e.target.style.color = "#48bb78";
+            }}
+          >
+            {isMobile ? "🗗" : "🗗 Abrir en ventana nueva"}
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleAllSections(!allSectionsVisible)}
+            style={{
+              padding: isMobile ? "8px 12px" : "10px 20px",
+              borderRadius: "8px",
+              border: "2px solid #4299e1",
+              background: allSectionsVisible ? "#4299e1" : "white",
+              color: allSectionsVisible ? "white" : "#4299e1",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: isMobile ? "13px" : "14px",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              transition: "all 0.2s"
+            }}
+          >
+            {allSectionsVisible ? (isMobile ? "➖" : "➖ Ocultar todo") : (isMobile ? "➕" : "➕ Mostrar todo")}
+          </button>
+        </div>
       </div>
 
       {/* Botón flotante de guardar */}
@@ -706,7 +853,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
                 padding: "4px 8px"
               }}
             >
-              {showDatosClinicos ? "⟖ Ocultar" : "➕ Mostrar"}
+              {showDatosClinicos ? "➖ Ocultar" : "➕ Mostrar"}
             </button>
           </div>
           {showDatosClinicos && (
@@ -805,7 +952,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
                 padding: "4px 8px"
               }}
             >
-              {showTemasDigestivos ? "⟖ Ocultar" : "➕ Mostrar"}
+              {showTemasDigestivos ? "➖ Ocultar" : "➕ Mostrar"}
             </button>
           </div>
           {showTemasDigestivos && (
@@ -856,7 +1003,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
                 padding: "4px 8px"
               }}
             >
-              {showPreferenciasGustos ? "⟖ Ocultar" : "➕ Mostrar"}
+              {showPreferenciasGustos ? "➖ Ocultar" : "➕ Mostrar"}
             </button>
           </div>
           {showPreferenciasGustos && (
@@ -979,7 +1126,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
                 padding: "4px 8px"
               }}
             >
-              {showActividadFisica ? "⟖ Ocultar" : "➕ Mostrar"}
+              {showActividadFisica ? "➖ Ocultar" : "➕ Mostrar"}
             </button>
           </div>
           {showActividadFisica && (
@@ -1066,7 +1213,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
                 padding: "4px 8px"
               }}
             >
-              {showRevisionSeguimiento ? "⟖ Ocultar" : "➕ Mostrar"}
+              {showRevisionSeguimiento ? "➖ Ocultar" : "➕ Mostrar"}
             </button>
           </div>
           {showRevisionSeguimiento && (
@@ -1106,7 +1253,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
                 padding: "4px 8px"
               }}
             >
-              {showPreferenciaPlan ? "⟖ Ocultar" : "➕ Mostrar"}
+              {showPreferenciaPlan ? "➖ Ocultar" : "➕ Mostrar"}
             </button>
           </div>
           {showPreferenciaPlan && (
@@ -1114,13 +1261,17 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
             <label style={labelStyle}>
               ¿Prefiere un menú sencillo y práctico o un plan más elaborado con mayor variedad de recetas?
             </label>
-            <textarea
+            <select
               name="preferenciaPlan"
               value={formData.preferenciaPlan}
               onChange={handleChange}
-              rows="2"
               style={inputStyle}
-            />
+              required
+            >
+              <option value="">-- Seleccionar --</option>
+              <option value="Menú sencillo (Sin recetas)">Menú sencillo (Sin recetas)</option>
+              <option value="Menú completo (Con recetas)">Menú completo (Con recetas)</option>
+            </select>
           </div>
           )}
         </section>
@@ -1143,7 +1294,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
                 padding: "4px 8px"
               }}
             >
-              {showSuplementacion ? "⟖ Ocultar" : "➕ Mostrar"}
+              {showSuplementacion ? "➖ Ocultar" : "➕ Mostrar"}
             </button>
           </div>
           {showSuplementacion && (
@@ -1206,7 +1357,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
                 padding: "4px 8px"
               }}
             >
-              {showFarmacos ? "⟖ Ocultar" : "➕ Mostrar"}
+              {showFarmacos ? "➖ Ocultar" : "➕ Mostrar"}
             </button>
           </div>
           {showFarmacos && (
@@ -1243,7 +1394,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
                 padding: "4px 8px"
               }}
             >
-              {showSueno ? "⟖ Ocultar" : "➕ Mostrar"}
+              {showSueno ? "➖ Ocultar" : "➕ Mostrar"}
             </button>
           </div>
           {showSueno && (
@@ -1308,7 +1459,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
                 padding: "4px 8px"
               }}
             >
-              {showLesiones ? "⟖ Ocultar" : "➕ Mostrar"}
+              {showLesiones ? "➖ Ocultar" : "➕ Mostrar"}
             </button>
           </div>
           {showLesiones && (
@@ -1359,7 +1510,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
                 padding: "4px 8px"
               }}
             >
-              {showMenstruacion ? "⟖ Ocultar" : "➕ Mostrar"}
+              {showMenstruacion ? "➖ Ocultar" : "➕ Mostrar"}
             </button>
           </div>
           {showMenstruacion && (
@@ -1410,7 +1561,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
                 padding: "4px 8px"
               }}
             >
-              {showRutinaSemana ? "⟖ Ocultar" : "➕ Mostrar"}
+              {showRutinaSemana ? "➖ Ocultar" : "➕ Mostrar"}
             </button>
           </div>
           {showRutinaSemana && (
@@ -1461,7 +1612,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
                 padding: "4px 8px"
               }}
             >
-              {showFinSemana ? "⟖ Ocultar" : "➕ Mostrar"}
+              {showFinSemana ? "➖ Ocultar" : "➕ Mostrar"}
             </button>
           </div>
           {showFinSemana && (
@@ -1512,7 +1663,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
                 padding: "4px 8px"
               }}
             >
-              {showEligePlan ? "⟖ Ocultar" : "➕ Mostrar"}
+              {showEligePlan ? "➖ Ocultar" : "➕ Mostrar"}
             </button>
           </div>
           {showEligePlan && (
@@ -1599,11 +1750,13 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               value={formData.eligePlan}
               onChange={handleChange}
               style={inputStyle}
+              required
             >
               <option value="">Seleccionar...</option>
               <option value="Basico">Básico</option>
               <option value="Basico + Ejercicios">Básico + Ejercicios</option>
               <option value="Seguimiento">Seguimiento</option>
+              <option value="GYM">GYM</option>
             </select>
             
             {/* Eliminar campo de texto para "Otros" ya que se removió la opción */}
@@ -1644,7 +1797,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
                 padding: "4px 8px"
               }}
             >
-              {showTipoDieta ? "⟖ Ocultar" : "➕ Mostrar"}
+              {showTipoDieta ? "➖ Ocultar" : "➕ Mostrar"}
             </button>
           </div>
           {showTipoDieta && (
@@ -1705,7 +1858,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
                 padding: "4px 8px"
               }}
             >
-              {showOtros ? "⟖ Ocultar" : "➕ Mostrar"}
+              {showOtros ? "➖ Ocultar" : "➕ Mostrar"}
             </button>
           </div>
           {showOtros && (

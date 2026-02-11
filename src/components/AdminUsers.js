@@ -57,6 +57,7 @@ export default function AdminUsers() {
   
   // Estados para modal de crear/editar usuario
   const [showModal, setShowModal] = useState(false);
+  const [showInfoPermisos, setShowInfoPermisos] = useState(false);
   const [modalMode, setModalMode] = useState("create"); // "create" o "edit"
   const [editingUser, setEditingUser] = useState(null);
   const [formData, setFormData] = useState({
@@ -1734,6 +1735,38 @@ export default function AdminUsers() {
               )}
             </div>
             
+            <button
+              type="button"
+              onClick={() => setShowInfoPermisos(true)}
+              style={{
+                width: "100%",
+                padding: isMobile ? "12px" : "8px 12px",
+                backgroundColor: "#dbeafe",
+                border: "2px solid #3b82f6",
+                borderRadius: isMobile ? "8px" : "6px",
+                color: "#1e40af",
+                fontWeight: "600",
+                fontSize: isMobile ? "14px" : "13px",
+                cursor: "pointer",
+                marginBottom: "16px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                transition: "all 0.2s"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "#bfdbfe";
+                e.currentTarget.style.borderColor = "#2563eb";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "#dbeafe";
+                e.currentTarget.style.borderColor = "#3b82f6";
+              }}
+            >
+              ℹ️ INFO DE PERMISOS
+            </button>
+            
             {modalError && (
               <div style={{ color: "#dc2626", marginBottom: isMobile ? 12 : 2, padding: isMobile ? 12 : 3, backgroundColor: "#fee2e2", borderRadius: isMobile ? "8px" : "4px", fontSize: isMobile ? "14px" : "12px", border: "2px solid #dc2626" }}>
                 ⚠️ {modalError}
@@ -1872,9 +1905,6 @@ export default function AdminUsers() {
                   onChange={(e) => setFormData({ ...formData, pesoActual: e.target.value })}
                   style={{ width: "100%", padding: isMobile ? "12px" : "6px", fontSize: isMobile ? "16px" : "13px", border: "2px solid #e5e7eb", borderRadius: isMobile ? "8px" : "4px", boxSizing: "border-box" }}
                 />
-                <small style={{ color: "#64748b", fontSize: isMobile ? "13px" : "11px", marginTop: "4px", display: "block" }}>
-                  💡 El rol se puede cambiar desde el perfil del usuario después de crearlo
-                </small>
               </div>
               </div>
 
@@ -1913,6 +1943,172 @@ export default function AdminUsers() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Info de Permisos */}
+      {showInfoPermisos && (
+        <div 
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.7)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 10001,
+            padding: "20px"
+          }}
+          onClick={() => setShowInfoPermisos(false)}
+        >
+          <div 
+            style={{
+              backgroundColor: "white",
+              padding: isMobile ? "20px" : "30px",
+              borderRadius: "12px",
+              maxWidth: "600px",
+              width: "100%",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.3)"
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h3 style={{ margin: 0, fontSize: isMobile ? "20px" : "22px", color: "#1e40af", fontWeight: "700" }}>
+                ℹ️ Control de Permisos
+              </h3>
+              <button
+                onClick={() => setShowInfoPermisos(false)}
+                style={{
+                  background: "#fee2e2",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: "36px",
+                  height: "36px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  fontSize: "20px",
+                  color: "#dc2626"
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ 
+              backgroundColor: "#fef3c7", 
+              border: "2px solid #f59e0b", 
+              borderRadius: "8px", 
+              padding: "16px", 
+              marginBottom: "20px",
+              fontSize: isMobile ? "14px" : "15px"
+            }}>
+              <strong style={{ color: "#92400e" }}>⚠️ Importante:</strong>
+              <p style={{ margin: "8px 0 0 0", color: "#78350f" }}>
+                Los permisos se configuran en la <strong>ANAMNESIS</strong> del usuario después de crearlo.
+              </p>
+            </div>
+
+            <div style={{ marginBottom: "24px" }}>
+              <h4 style={{ 
+                fontSize: isMobile ? "16px" : "17px", 
+                color: "#0f172a", 
+                marginBottom: "12px",
+                fontWeight: "600",
+                borderBottom: "2px solid #e5e7eb",
+                paddingBottom: "8px"
+              }}>
+                1️⃣ ELIGE TU PLAN (eligePlan)
+              </h4>
+              <p style={{ fontSize: isMobile ? "13px" : "14px", color: "#475569", marginBottom: "12px" }}>
+                Controla qué pestañas puede ver el usuario:
+              </p>
+              <div style={{ paddingLeft: "16px" }}>
+                <div style={{ marginBottom: "10px", fontSize: isMobile ? "13px" : "14px" }}>
+                  <strong style={{ color: "#10b981" }}>✓ Básico + Ejercicios:</strong>
+                  <div style={{ color: "#64748b", marginLeft: "20px" }}>Acceso a TODAS las pestañas (Dieta, Ejercicios, GYM, Pesaje, Citas)</div>
+                </div>
+                <div style={{ marginBottom: "10px", fontSize: isMobile ? "13px" : "14px" }}>
+                  <strong style={{ color: "#f59e0b" }}>⚠️ Básico:</strong>
+                  <div style={{ color: "#64748b", marginLeft: "20px" }}>SIN Ejercicios ni GYM (solo Dieta, Pesaje, Citas)</div>
+                </div>
+                <div style={{ marginBottom: "10px", fontSize: isMobile ? "13px" : "14px" }}>
+                  <strong style={{ color: "#3b82f6" }}>📊 Seguimiento:</strong>
+                  <div style={{ color: "#64748b", marginLeft: "20px" }}>SOLO Pesaje y Citas</div>
+                </div>
+                <div style={{ marginBottom: "10px", fontSize: isMobile ? "13px" : "14px" }}>
+                  <strong style={{ color: "#8b5cf6" }}>🏋️ GYM:</strong>
+                  <div style={{ color: "#64748b", marginLeft: "20px" }}>SOLO GYM</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "20px" }}>
+              <h4 style={{ 
+                fontSize: isMobile ? "16px" : "17px", 
+                color: "#0f172a", 
+                marginBottom: "12px",
+                fontWeight: "600",
+                borderBottom: "2px solid #e5e7eb",
+                paddingBottom: "8px"
+              }}>
+                2️⃣ PREFERENCIA DE PLAN NUTRICIONAL (preferenciaPlan)
+              </h4>
+              <p style={{ fontSize: isMobile ? "13px" : "14px", color: "#475569", marginBottom: "12px" }}>
+                Controla si el usuario ve el botón de RECETAS:
+              </p>
+              <div style={{ paddingLeft: "16px" }}>
+                <div style={{ marginBottom: "10px", fontSize: isMobile ? "13px" : "14px" }}>
+                  <strong style={{ color: "#f59e0b" }}>👨‍🍳 Menú completo (Con recetas):</strong>
+                  <div style={{ color: "#64748b", marginLeft: "20px" }}>SÍ ve el botón de recetas</div>
+                </div>
+                <div style={{ marginBottom: "10px", fontSize: isMobile ? "13px" : "14px" }}>
+                  <strong style={{ color: "#64748b" }}>📋 Menú sencillo (Sin recetas):</strong>
+                  <div style={{ color: "#64748b", marginLeft: "20px" }}>NO ve recetas</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ 
+              backgroundColor: "#dbeafe", 
+              borderRadius: "8px", 
+              padding: "16px",
+              fontSize: isMobile ? "13px" : "14px",
+              color: "#1e40af"
+            }}>
+              <strong>💡 Recordatorio:</strong>
+              <ul style={{ margin: "8px 0 0 20px", padding: 0 }}>
+                <li style={{ marginBottom: "6px" }}>Crea el usuario primero</li>
+                <li style={{ marginBottom: "6px" }}>Luego edita su <strong>ANAMNESIS</strong></li>
+                <li style={{ marginBottom: "6px" }}>Los campos "ELIGE TU PLAN" y "PREFERENCIA DE PLAN NUTRICIONAL" son <strong>OBLIGATORIOS</strong></li>
+                <li>Sin estos campos configurados, el formulario no se puede guardar</li>
+              </ul>
+            </div>
+
+            <button
+              onClick={() => setShowInfoPermisos(false)}
+              style={{
+                width: "100%",
+                padding: isMobile ? "14px" : "12px",
+                backgroundColor: "#3b82f6",
+                color: "white",
+                border: "none",
+                borderRadius: "8px",
+                fontSize: isMobile ? "16px" : "15px",
+                fontWeight: "600",
+                cursor: "pointer",
+                marginTop: "20px"
+              }}
+            >
+              Entendido
+            </button>
           </div>
         </div>
       )}

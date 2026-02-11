@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { auth, db } from "../Firebase";
-import { updatePassword } from "firebase/auth";
-import { doc, updateDoc } from "firebase/firestore";
+import { updatePassword, signOut } from "firebase/auth";
+import { doc, updateDoc, getDoc } from "firebase/firestore";
 import "./estilos.css";
 import logo from "../assets/logo.png";
 
@@ -20,6 +20,34 @@ export default function ChangePassword() {
       navigate("/login");
     }
   }, [navigate]);
+
+  // Bloquear salida si es primer login
+  useEffect(() => {
+    if (!isFirstLogin) return;
+
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = "Debes cambiar tu contraseña antes de continuar";
+      return "Debes cambiar tu contraseña antes de continuar";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [isFirstLogin]);
+
+  const handleCancelFirstLogin = async () => {
+    if (isFirstLogin) {
+      if (window.confirm("Si no cambias tu contraseña, se cerrará tu sesión. ¿Deseas continuar?")) {
+        await signOut(auth);
+        navigate("/login");
+      }
+    } else {
+      navigate(-1); // Volver a la página anterior
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -52,8 +80,17 @@ export default function ChangePassword() {
         mustChangePassword: false
       });
 
-      // Redirigir a su ficha
-      navigate("/mi-ficha");
+      // Obtener datos del usuario para redirigir correctamente
+      const userDoc = await getDoc(doc(db, "users", user.uid));
+      const userData = userDoc.data();
+      const isAdmin = userData?.rol === "admin" || user.email === "admin@admin.es";
+
+      // Redirigir según el rol
+      if (isAdmin) {
+        navigate("/admin", { replace: true });
+      } else {
+        navigate("/mi-ficha", { replace: true });
+      }
     } catch (err) {
       console.error("Error al cambiar contraseña:", err);
       if (err.code === "auth/requires-recent-login") {
@@ -125,6 +162,41 @@ export default function ChangePassword() {
           >
             {loading ? "Cambiando..." : "Cambiar Contraseña"}
           </button>
+
+          {!isFirstLogin && (
+            <button
+              type="button"
+              onClick={handleCancelFirstLogin}
+              className="btn ghost"
+              disabled={loading}
+              style={{ 
+                width: "100%",
+                marginTop: "10px",
+                border: "1px solid #cbd5e0",
+                color: "#4a5568"
+              }}
+            >
+              Cancelar
+            </button>
+          )}
+
+          {isFirstLogin && (
+            <button
+              type="button"
+              onClick={handleCancelFirstLogin}
+              className="btn ghost"
+              disabled={loading}
+              style={{ 
+                width: "100%",
+                marginTop: "10px",
+                fontSize: "13px",
+                color: "#e53e3e",
+                textDecoration: "underline"
+              }}
+            >
+              Cerrar sesión
+            </button>
+          )}
         </form>
       </div>
     </div>

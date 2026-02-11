@@ -44,7 +44,16 @@ const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
                 // Separar por líneas y limpiar
                 const platos = dia[cat].split('\n')
                   .map(line => line.replace(/^[•\-*]\s*/, '').trim())
-                  .filter(line => line && line.length > 0);
+                  .filter(line => {
+                    if (!line || line.length === 0) return false;
+                    // Filtrar líneas muy cortas que probablemente sean fragmentos
+                    if (line.length < 3) return false;
+                    // Filtrar si empieza o termina con signos raros
+                    if (/^[+\-*.,;:\(\)\[\]{}]/.test(line) || /[+\-*,;:\(\)\[\]{}]$/.test(line)) return false;
+                    // Filtrar si solo contiene símbolos y espacios
+                    if (!/[a-záéíóúñA-ZÁÉÍÓÚÑ]{2,}/.test(line)) return false;
+                    return true;
+                  });
                 platos.forEach(plato => platosSet.add(plato));
               }
             });
@@ -57,7 +66,14 @@ const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
           if (menu[cat] && Array.isArray(menu[cat])) {
             menu[cat].forEach(plato => {
               if (plato && plato.trim()) {
-                platosSet.add(plato.trim());
+                const platoLimpio = plato.trim();
+                // Filtrar con las mismas reglas
+                if (platoLimpio.length >= 3 && 
+                    !/^[+\-*.,;:\(\)\[\]{}]/.test(platoLimpio) &&
+                    !/[+\-*,;:\(\)\[\]{}]$/.test(platoLimpio) &&
+                    /[a-záéíóúñA-ZÁÉÍÓÚÑ]{2,}/.test(platoLimpio)) {
+                  platosSet.add(platoLimpio);
+                }
               }
             });
           }
@@ -113,7 +129,8 @@ const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
         { palabras: ['nata'], nombre: 'Nata' },
         { palabras: ['mantequilla'], nombre: 'Mantequilla' },
         { palabras: ['requeson'], nombre: 'Requesón' },
-        { palabras: ['cuajada'], nombre: 'Cuajada' }
+        { palabras: ['cuajada'], nombre: 'Cuajada' },
+        { palabras: ['batido'], nombre: 'Batido' }
       ],
       carnes: [
         { palabras: ['pollo'], nombre: 'Pollo' },
@@ -125,7 +142,8 @@ const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
         { palabras: ['lomo'], nombre: 'Lomo' },
         { palabras: ['jamon'], nombre: 'Jamón' },
         { palabras: ['fiambre'], nombre: 'Fiambre' },
-        { palabras: ['salchicha'], nombre: 'Salchicha' }
+        { palabras: ['salchicha'], nombre: 'Salchicha' },
+        { palabras: ['carne'], nombre: 'Carne' }
       ],
       pescados: [
         { palabras: ['salmon'], nombre: 'Salmón' },
@@ -138,7 +156,11 @@ const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
         { palabras: ['langostino'], nombre: 'Langostinos' },
         { palabras: ['mejillon'], nombre: 'Mejillones' },
         { palabras: ['calamar'], nombre: 'Calamar' },
-        { palabras: ['pulpo'], nombre: 'Pulpo' }
+        { palabras: ['pulpo'], nombre: 'Pulpo' },
+        { palabras: ['caballa'], nombre: 'Caballa' },
+        { palabras: ['sardina'], nombre: 'Sardinas' },
+        { palabras: ['dorada'], nombre: 'Dorada' },
+        { palabras: ['lubina'], nombre: 'Lubina' }
       ],
       frutas: [
         { palabras: ['manzana'], nombre: 'Manzanas' },
@@ -159,7 +181,11 @@ const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
         { palabras: ['arandano'], nombre: 'Arándanos' },
         { palabras: ['mandarina'], nombre: 'Mandarinas' },
         { palabras: ['limon'], nombre: 'Limones' },
-        { palabras: ['pomelo'], nombre: 'Pomelos' }
+        { palabras: ['pomelo'], nombre: 'Pomelos' },
+        { palabras: ['mango'], nombre: 'Mango' },
+        { palabras: ['papaya'], nombre: 'Papaya' },
+        { palabras: ['aguacate'], nombre: 'Aguacate' },
+        { palabras: ['coco'], nombre: 'Coco' }
       ],
       verduras: [
         { palabras: ['lechuga'], nombre: 'Lechuga' },
@@ -185,14 +211,19 @@ const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
         { palabras: ['guisante'], nombre: 'Guisantes' },
         { palabras: ['alcachofa'], nombre: 'Alcachofas' },
         { palabras: ['champinon', 'seta'], nombre: 'Champiñones/Setas' },
-        { palabras: ['cogollo'], nombre: 'Cogollos' }
+        { palabras: ['cogollo'], nombre: 'Cogollos' },
+        { palabras: ['cherry', 'tomate cherry'], nombre: 'Tomates Cherry' },
+        { palabras: ['patata'], nombre: 'Patatas' },
+        { palabras: ['batata', 'boniato'], nombre: 'Batata/Boniato' }
       ],
       legumbres: [
         { palabras: ['lenteja'], nombre: 'Lentejas' },
         { palabras: ['garbanzo'], nombre: 'Garbanzos' },
         { palabras: ['alubia'], nombre: 'Alubias' },
         { palabras: ['judia'], nombre: 'Judías' },
-        { palabras: ['soja'], nombre: 'Soja' }
+        { palabras: ['soja'], nombre: 'Soja' },
+        { palabras: ['tofu'], nombre: 'Tofu' },
+        { palabras: ['hummus'], nombre: 'Hummus' }
       ],
       cereales: [
         { palabras: ['arroz'], nombre: 'Arroz' },
@@ -206,7 +237,9 @@ const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
         { palabras: ['maiz'], nombre: 'Maíz' },
         { palabras: ['cereal'], nombre: 'Cereales' },
         { palabras: ['tortita'], nombre: 'Tortitas' },
-        { palabras: ['integral'], nombre: 'Pan integral' }
+        { palabras: ['integral'], nombre: 'Pan integral' },
+        { palabras: ['muesli'], nombre: 'Muesli' },
+        { palabras: ['granola'], nombre: 'Granola' }
       ],
       frutos_secos: [
         { palabras: ['almendra'], nombre: 'Almendras' },
@@ -216,7 +249,9 @@ const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
         { palabras: ['anacardo'], nombre: 'Anacardos' },
         { palabras: ['cacahuete'], nombre: 'Cacahuetes' },
         { palabras: ['castana'], nombre: 'Castañas' },
-        { palabras: ['pinon'], nombre: 'Piñones' }
+        { palabras: ['pinon'], nombre: 'Piñones' },
+        { palabras: ['crema de cacahuete'], nombre: 'Crema de cacahuete' },
+        { palabras: ['mantequilla de almendra'], nombre: 'Mantequilla de almendra' }
       ],
       huevos: [
         { palabras: ['huevo'], nombre: 'Huevos' },
@@ -230,7 +265,16 @@ const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
         { palabras: ['girasol'], nombre: 'Aceite de girasol' },
         { palabras: ['vinagre'], nombre: 'Vinagre' },
         { palabras: ['salsa'], nombre: 'Salsa' },
-        { palabras: ['especia'], nombre: 'Especias' }
+        { palabras: ['especia'], nombre: 'Especias' },
+        { palabras: ['sal'], nombre: 'Sal' },
+        { palabras: ['pimienta'], nombre: 'Pimienta' },
+        { palabras: ['oregano'], nombre: 'Orégano' },
+        { palabras: ['curcuma'], nombre: 'Cúrcuma' },
+        { palabras: ['jengibre'], nombre: 'Jengibre' },
+        { palabras: ['chia'], nombre: 'Semillas de chía' },
+        { palabras: ['lino'], nombre: 'Semillas de lino' },
+        { palabras: ['sesamo'], nombre: 'Semillas de sésamo' },
+        { palabras: ['miel'], nombre: 'Miel' }
       ]
     };
 
@@ -255,9 +299,13 @@ const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
         });
       });
       
-      // Si no se clasificó, añadir a "otros"
+      // Si no se clasificó, verificar si es un ingrediente válido antes de añadir a "otros"
       if (!encontrado) {
-        resultado.otros.add(plato);
+        // Validaciones para asegurar que es un ingrediente válido
+        const esValido = validarIngrediente(plato);
+        if (esValido) {
+          resultado.otros.add(plato);
+        }
       }
     });
 
@@ -270,6 +318,58 @@ const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
     });
 
     return resultadoFinal;
+  };
+
+  // Función para validar si un texto es un ingrediente válido
+  const validarIngrediente = (texto) => {
+    // Longitud mínima
+    if (texto.length < 4) return false;
+    
+    // Debe contener al menos una palabra completa (3+ letras consecutivas)
+    if (!/[a-záéíóúñA-ZÁÉÍÓÚÑ]{3,}/.test(texto)) return false;
+    
+    // No debe empezar o terminar con símbolos raros
+    if (/^[+\-*.,;:\(\)\[\]{}]/.test(texto) || /[+\-*,;:\(\)\[\]{}]$/.test(texto)) return false;
+    
+    // No debe contener muchos símbolos (más del 20% del texto)
+    const simbolos = (texto.match(/[^a-záéíóúñA-ZÁÉÍÓÚÑ\s]/g) || []).length;
+    if (simbolos / texto.length > 0.2) return false;
+    
+    // No debe ser una frase muy larga (probablemente es descripción de plato completo)
+    const palabras = texto.split(/\s+/).length;
+    if (palabras > 6) return false;
+    
+    // No debe contener palabras que indican que es un plato preparado completo
+    const patronesPlatos = [
+      /^ensalada completa/i,
+      /^plato completo/i,
+      /con salsa de/i,
+      /acompañado de/i,
+      /al horno con/i,
+      /a la plancha con/i,
+      /salteado con/i,
+      /en salsa/i
+    ];
+    if (patronesPlatos.some(patron => patron.test(texto))) return false;
+    
+    // No debe contener palabras clave que indican preparación completa
+    const palabrasExcluir = [
+      'completa con', 
+      'acompañado', 
+      'junto con',
+      'batido juntos',
+      'todo junto',
+      'mezclado con'
+    ];
+    const textoLower = texto.toLowerCase();
+    if (palabrasExcluir.some(palabra => textoLower.includes(palabra))) return false;
+    
+    // Debe ser un nombre sustantivo (generalmente ingredientes son sustantivos)
+    // Rechazar si empieza con preposiciones o conectores
+    const iniciosInvalidos = /^(con|de|para|sin|y|o|el|la|los|las|un|una|unos|unas)\s/i;
+    if (iniciosInvalidos.test(texto)) return false;
+    
+    return true;
   };
 
   const imprimirLista = () => {
@@ -286,48 +386,6 @@ const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
       ...prev,
       [key]: !prev[key]
     }));
-  };
-
-  const exportarLista = () => {
-    let texto = `LISTA DE LA COMPRA\n`;
-    texto += `Generada el: ${new Date().toLocaleDateString('es-ES')}\n\n`;
-    texto += "=".repeat(60) + "\n\n";
-
-    const categoriaLabels = {
-      lacteos: "🥛 LÁCTEOS",
-      carnes: "🍖 CARNES",
-      pescados: "🐟 PESCADOS Y MARISCOS",
-      frutas: "🍎 FRUTAS",
-      verduras: "🥬 VERDURAS Y HORTALIZAS",
-      legumbres: "🫘 LEGUMBRES",
-      cereales: "🌾 CEREALES Y PANES",
-      frutos_secos: "🥜 FRUTOS SECOS",
-      huevos: "🥚 HUEVOS",
-      aceites: "🫒 ACEITES Y CONDIMENTOS",
-      otros: "📝 OTROS"
-    };
-
-    Object.entries(listaCompra).forEach(([categoria, platos]) => {
-      if (platos.length > 0) {
-        texto += `${categoriaLabels[categoria] || categoria.toUpperCase()}\n`;
-        texto += "-".repeat(60) + "\n";
-        platos.forEach(plato => {
-          texto += `  • ${plato}\n`;
-        });
-        texto += "\n";
-      }
-    });
-
-    // Crear y descargar archivo
-    const blob = new Blob([texto], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Lista_Compra_${new Date().toISOString().split('T')[0]}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
   const categoriaLabels = {
@@ -437,29 +495,12 @@ const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
           >
             🖨️ Imprimir
           </button>
-          <button
-            onClick={exportarLista}
-            style={{
-              padding: "10px 20px",
-              borderRadius: "8px",
-              border: "none",
-              background: "#16a34a",
-              color: "white",
-              fontWeight: "600",
-              fontSize: "14px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px"
-            }}
-          >
-            💾 Exportar
-          </button>
         </div>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
         {Object.entries(listaCompra).map(([categoria, platos]) => {
+          // No mostrar categorías vacías
           if (platos.length === 0) return null;
           
           const isCollapsed = seccionesColapsadas[categoria];
@@ -511,6 +552,22 @@ const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
                   ▼
                 </span>
               </div>
+              
+              {/* Mensaje informativo para la categoría "Otros" */}
+              {categoria === 'otros' && !isCollapsed && platos.length > 0 && (
+                <div style={{
+                  padding: "8px 12px",
+                  background: "#fef3c7",
+                  borderRadius: "4px",
+                  marginBottom: "10px",
+                  fontSize: "12px",
+                  color: "#92400e",
+                  border: "1px solid #fbbf24"
+                }}>
+                  ℹ️ Ingredientes que no se han podido clasificar automáticamente
+                </div>
+              )}
+              
               {!isCollapsed && (
                 <div style={{
                   display: "flex",
@@ -565,6 +622,21 @@ const ListaCompra = React.memo(function ListaCompra({ menu, tipoMenu }) {
             </div>
           );
         })}
+      </div>
+
+      {/* Mensaje informativo sobre el filtrado */}
+      <div className="no-print" style={{
+        marginTop: "20px",
+        padding: "12px 16px",
+        background: "#f0f9ff",
+        borderRadius: "6px",
+        border: "1px solid #bae6fd",
+        fontSize: "13px",
+        color: "#075985",
+        lineHeight: "1.6"
+      }}>
+        <strong>💡 Información:</strong> Esta lista muestra únicamente ingredientes individuales extraídos de tu menú. 
+        Los platos completos o descripciones no se incluyen para mantener la lista clara y profesional.
       </div>
 
       {/* Estilos para impresión */}
