@@ -72,7 +72,7 @@ export default function AdminUsers() {
     objetivoNutricional: "",
     pesoActual: "",
     rol: "paciente",
-    tipoPlan: "Básico + Ejercicios"
+    tipoPlan: ""
   });
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState("");
@@ -649,7 +649,7 @@ export default function AdminUsers() {
       objetivoNutricional: usuario.objetivoNutricional || "",
       pesoActual: usuario.pesoActual || "",
       rol: usuario.rol || "paciente",
-      tipoPlan: "Básico + Ejercicios"
+      tipoPlan: ""
     });
     setModalError("");
     setShowModal(true);
@@ -666,6 +666,13 @@ export default function AdminUsers() {
         // Validar que los emails coincidan
         if (formData.email !== formData.emailConfirmacion) {
           setModalError("Los emails no coinciden. Por favor, verifícalos.");
+          setModalLoading(false);
+          return;
+        }
+
+        // Validar que se haya seleccionado un plan
+        if (!formData.tipoPlan || formData.tipoPlan.trim() === "") {
+          setModalError("Debes seleccionar un tipo de plan para el usuario.");
           setModalLoading(false);
           return;
         }
@@ -1923,12 +1930,13 @@ export default function AdminUsers() {
                       width: "100%", 
                       padding: isMobile ? "12px" : "6px", 
                       fontSize: isMobile ? "16px" : "13px", 
-                      border: "2px solid #e5e7eb", 
+                      border: `2px solid ${!formData.tipoPlan ? '#dc2626' : '#e5e7eb'}`, 
                       borderRadius: isMobile ? "8px" : "4px",
                       boxSizing: "border-box",
                       backgroundColor: "white"
                     }}
                   >
+                    <option value="" disabled>Seleccionar...</option>
                     <option value="Básico">Básico</option>
                     <option value="Básico + Ejercicios">Básico + Ejercicios</option>
                     <option value="Seguimiento">Seguimiento</option>

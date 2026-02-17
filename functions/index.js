@@ -265,6 +265,10 @@ exports.createUser = onCall(async (request) => {
     throw new Error("Email y contraseña son requeridos");
   }
 
+  if (!tipoPlan || tipoPlan.trim() === "") {
+    throw new Error("Tipo de plan es requerido");
+  }
+
   try {
     // Crear usuario en Firebase Auth sin autenticarlo
     const userRecord = await getAuth().createUser({
