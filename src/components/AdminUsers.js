@@ -1712,12 +1712,12 @@ export default function AdminUsers() {
         }}>
           <div style={{
             backgroundColor: "white",
-            padding: isMobile ? "16px" : "20px",
+            padding: isMobile ? "16px" : "24px",
             borderRadius: isMobile ? "0" : "8px",
             width: isMobile ? "100%" : "95%",
-            maxWidth: isMobile ? "100%" : "900px",
+            maxWidth: isMobile ? "100%" : "1200px",
             minHeight: isMobile ? "100vh" : "auto",
-            maxHeight: isMobile ? "100vh" : "95vh",
+            maxHeight: isMobile ? "100vh" : "90vh",
             overflowY: "auto",
             boxSizing: "border-box"
           }}>
