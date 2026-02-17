@@ -44,8 +44,52 @@ import {
 // Registro obligatorio de elementos para Chart.js v3+
 ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement);
 
+// Función helper para asegurar que todas las celdas tengan contenteditable
+const ensureContentEditableInHTML = (htmlContent) => {
+  if (!htmlContent) return htmlContent;
+  
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = htmlContent;
+  
+  // Obtener todas las celdas de la tabla
+  const allCells = tempDiv.querySelectorAll('td, th');
+  
+  allCells.forEach(cell => {
+    // Las celdas de cabecera (th) y primera columna (td:first-child) no son editables
+    if (cell.tagName === 'TH') {
+      cell.setAttribute('contenteditable', 'false');
+    } else if (cell.parentElement && cell === cell.parentElement.firstElementChild) {
+      // Primera celda de cada fila (nombres de comidas)
+      cell.setAttribute('contenteditable', 'false');
+    } else {
+      // Resto de celdas son editables
+      cell.setAttribute('contenteditable', 'true');
+      
+      // IMPORTANTE: Limpiar contenido corrupto de las celdas editables
+      // Si la celda tiene elementos anidados complejos, simplificar a texto plano
+      const innerHTML = cell.innerHTML.trim();
+      
+      // Si la celda solo tiene <br>, dejarla así
+      if (innerHTML === '<br>' || innerHTML === '') {
+        cell.innerHTML = '<br>';
+      } else {
+        // Extraer solo el texto y dejarlo como texto plano
+        const textContent = cell.textContent || '';
+        if (textContent.trim()) {
+          // Mantener el texto pero sin elementos anidados complejos
+          cell.textContent = textContent;
+        } else {
+          cell.innerHTML = '<br>';
+        }
+      }
+    }
+  });
+  
+  return tempDiv.innerHTML;
+};
+
 export default function FichaUsuario(props) {
-  const { targetUid = null, adminMode = false } = props;
+  const { targetUid = null, adminMode = false, onUsuarioUpdated = null } = props;
   const [showHelpModal, setShowHelpModal] = useState(false);
   const navigate = useNavigate();
   const { isMobile } = useDevice();
@@ -134,6 +178,7 @@ export default function FichaUsuario(props) {
   const [modoManual, setModoManual] = useState(false);
   const [contenidoManual, setContenidoManual] = useState("");
   const editorManualRef = useRef(null);
+  const debounceTimerRef = useRef(null);
   
   // Estado para controlar qué comidas están activas en modo manual
   const [comidasActivas, setComidasActivas] = useState({
@@ -479,6 +524,16 @@ export default function FichaUsuario(props) {
               cena: data.comidasActivas.cena !== false,
               tips: data.comidasActivas.tips !== false
             });
+          } else {
+            // Resetear a valores por defecto si el usuario no tiene comidas activas guardadas
+            setComidasActivas({
+              desayuno: true,
+              almuerzo: true,
+              comida: true,
+              merienda: true,
+              cena: true,
+              tips: true
+            });
           }
           
           // Cargar orden de campos si existe
@@ -670,6 +725,15 @@ export default function FichaUsuario(props) {
   // Autoguardar contenido manual en localStorage mientras se edita
   const autoSaveManualTimerRef = useRef(null);
   
+  // Limpiar timer de debounce al desmontar
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
+  
   useEffect(() => {
     if (!adminMode || !modoManual || !uid || !contenidoManual) return;
     
@@ -814,63 +878,63 @@ export default function FichaUsuario(props) {
         <tbody>
           <tr>
             <td contenteditable="false">DESAYUNO</td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
           </tr>
           <tr>
             <td contenteditable="false">ALMUERZO</td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
           </tr>
           <tr>
             <td contenteditable="false">COMIDA</td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
           </tr>
           <tr>
             <td contenteditable="false">MERIENDA</td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
           </tr>
           <tr>
             <td contenteditable="false">CENA</td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
           </tr>
           <tr>
             <td style="background-color: #fff7ed;" contenteditable="false">TIPS</td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
           </tr>
         </tbody>
       </table>
@@ -878,6 +942,27 @@ export default function FichaUsuario(props) {
     
     const storageKey = `menu_manual_draft_${uid}`;
     const savedContent = localStorage.getItem(storageKey);
+    
+    // Función para validar que el contenido es una tabla válida
+    const isValidContent = (content) => {
+      if (!content) return false;
+      
+      // Verificar que tenga una tabla
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(content, 'text/html');
+      const table = doc.querySelector('table');
+      
+      if (!table) return false;
+      
+      // Verificar que tenga las filas principales
+      const tbody = table.querySelector('tbody');
+      if (!tbody) return false;
+      
+      const rows = tbody.querySelectorAll('tr');
+      if (rows.length < 5) return false; // Debe tener al menos 5 comidas
+      
+      return true;
+    };
     
     // Función para asegurar que el contenido tiene los estilos
     const ensureStyles = (content) => {
@@ -981,51 +1066,50 @@ export default function FichaUsuario(props) {
     };
     
     // Prioridad: localStorage > contenidoManual > default
-    if (savedContent) {
-      node.innerHTML = ensureStyles(savedContent);
-    } else if (contenidoManualRef.current) {
-      node.innerHTML = ensureStyles(contenidoManualRef.current);
+    // Validar y limpiar si está corrupto
+    if (savedContent && isValidContent(savedContent)) {
+      node.innerHTML = ensureContentEditableInHTML(ensureStyles(savedContent));
+    } else if (savedContent && !isValidContent(savedContent)) {
+      // Contenido corrupto en localStorage, limpiar y usar default
+      console.warn('⚠️ Contenido corrupto en localStorage, reseteando...');
+      localStorage.removeItem(storageKey);
+      node.innerHTML = defaultContent;
+    } else if (contenidoManualRef.current && isValidContent(contenidoManualRef.current)) {
+      node.innerHTML = ensureContentEditableInHTML(ensureStyles(contenidoManualRef.current));
+    } else if (contenidoManualRef.current && !isValidContent(contenidoManualRef.current)) {
+      // Contenido corrupto en memoria, usar default
+      console.warn('⚠️ Contenido corrupto en memoria, usando plantilla por defecto...');
+      node.innerHTML = defaultContent;
     } else {
       node.innerHTML = defaultContent;
     }
     
-    // Aplicar estado de comidas activas después de cargar el contenido
+    // Configurar celdas editables después de cargar
     setTimeout(() => {
-      const table = node.querySelector('table');
-      if (!table) return;
+      if (!node) return;
       
-      const tbody = table.querySelector('tbody');
-      if (!tbody) return;
+      const editableCells = node.querySelectorAll('td[contenteditable="true"]');
+      console.log('🔧 Celdas editables encontradas:', editableCells.length);
       
-      const rows = tbody.querySelectorAll('tr');
-      rows.forEach(row => {
-        const firstCell = row.querySelector('td:first-child');
-        if (!firstCell) return;
+      editableCells.forEach((cell) => {
+        // Forzar atributo contenteditable
+        cell.setAttribute('contenteditable', 'true');
+        cell.style.cursor = 'text';
+        cell.style.outline = 'none';
+        cell.style.userSelect = 'text';
+        cell.style.WebkitUserSelect = 'text';
         
-        const cellText = firstCell.textContent.trim().toUpperCase();
-        const mealKey = cellText.toLowerCase();
+        // Si la celda está vacía, asegurar que tiene un <br>
+        if (!cell.textContent.trim() && !cell.querySelector('br')) {
+          cell.innerHTML = '<br>';
+        }
         
-        // Verificar si esta comida está activa
-        const isActive = comidasActivas[mealKey];
-        
-        // Actualizar todas las celdas de esta fila (excepto la primera)
-        const cells = row.querySelectorAll('td:not(:first-child)');
-        cells.forEach(cell => {
-          if (isActive !== false) {
-            cell.removeAttribute('contenteditable');
-            cell.style.backgroundColor = '';
-            cell.style.opacity = '1';
-            cell.style.cursor = 'text';
-          } else {
-            cell.setAttribute('contenteditable', 'false');
-            cell.style.backgroundColor = '#f1f5f9';
-            cell.style.opacity = '0.6';
-            cell.style.cursor = 'not-allowed';
-          }
-        });
+        console.log('✅ Celda configurada:', cell.textContent.substring(0, 20));
       });
     }, 100);
-  }, [adminMode, modoManual, uid, comidasActivas]);
+    
+    // El estado de comidas activas se aplicará por el useEffect separado más abajo (no aquí para evitar re-renders)
+  }, [adminMode, modoManual, uid]);
 
   // Actualizar contenido cuando cambia el usuario
   const lastLoadedUidRef = useRef(null);
@@ -1086,63 +1170,63 @@ export default function FichaUsuario(props) {
         <tbody>
           <tr>
             <td contenteditable="false">DESAYUNO</td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
           </tr>
           <tr>
-            <td>ALMUERZO</td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
+            <td contenteditable="false">ALMUERZO</td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
           </tr>
           <tr>
-            <td>COMIDA</td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
+            <td contenteditable="false">COMIDA</td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
           </tr>
           <tr>
             <td contenteditable="false">MERIENDA</td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
           </tr>
           <tr>
             <td contenteditable="false">CENA</td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
           </tr>
           <tr>
             <td style="background-color: #fff7ed;" contenteditable="false">TIPS</td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
-            <td><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
+            <td contenteditable="true"><br></td>
           </tr>
         </tbody>
       </table>
@@ -1197,57 +1281,120 @@ export default function FichaUsuario(props) {
       
       // Cargar contenido del nuevo usuario
       if (savedContent) {
-        editorManualRef.current.innerHTML = ensureStyles(savedContent);
+        editorManualRef.current.innerHTML = ensureContentEditableInHTML(ensureStyles(savedContent));
       } else if (contenidoManual) {
-        editorManualRef.current.innerHTML = ensureStyles(contenidoManual);
+        editorManualRef.current.innerHTML = ensureContentEditableInHTML(ensureStyles(contenidoManual));
       } else {
         editorManualRef.current.innerHTML = defaultContent;
       }
+      
+      // Configurar celdas editables después de cargar
+      setTimeout(() => {
+        if (!editorManualRef.current) return;
+        
+        const editableCells = editorManualRef.current.querySelectorAll('td[contenteditable="true"]');
+        console.log('🔧 Configurando celdas al cambiar usuario:', editableCells.length);
+        
+        editableCells.forEach((cell) => {
+          cell.setAttribute('contenteditable', 'true');
+          cell.style.cursor = 'text';
+          cell.style.outline = 'none';
+          cell.style.userSelect = 'text';
+          cell.style.WebkitUserSelect = 'text';
+          
+          if (!cell.textContent.trim() && !cell.querySelector('br')) {
+            cell.innerHTML = '<br>';
+          }
+        });
+      }, 100);
     }
     
     lastLoadedUidRef.current = uid;
-  }, [uid, adminMode, modoManual, contenidoManual]);
+  }, [uid, adminMode, modoManual]);
 
-  // Aplicar estado de comidas activas al editor
+  // Aplicar estado de comidas activas al editor (solo cuando cambia comidasActivas, no contenidoManual)
   useEffect(() => {
     if (!editorManualRef.current || !adminMode || !modoManual) return;
     
-    const table = editorManualRef.current.querySelector('table');
-    if (!table) return;
-    
-    const tbody = table.querySelector('tbody');
-    if (!tbody) return;
-    
-    const rows = tbody.querySelectorAll('tr');
-    rows.forEach(row => {
-      const firstCell = row.querySelector('td:first-child');
-      if (!firstCell) return;
+    // Usar requestAnimationFrame para evitar conflictos con el foco del usuario
+    requestAnimationFrame(() => {
+      const table = editorManualRef.current?.querySelector('table');
+      if (!table) return;
       
-      const cellText = firstCell.textContent.trim().toUpperCase();
-      const mealKey = cellText.toLowerCase();
+      const tbody = table.querySelector('tbody');
+      if (!tbody) return;
       
-      // Verificar si esta comida está activa
-      const isActive = comidasActivas[mealKey];
+      // Guardar el elemento con foco y selección antes de modificar
+      const activeElement = document.activeElement;
+      const wasFocused = editorManualRef.current?.contains(activeElement);
+      let selection = null;
+      let range = null;
       
-      // Actualizar todas las celdas de esta fila (excepto la primera)
-      const cells = row.querySelectorAll('td:not(:first-child)');
-      cells.forEach(cell => {
-        if (isActive !== false) {
-          // Comida activa: permitir edición
-          cell.removeAttribute('contenteditable');
-          cell.style.backgroundColor = '';
-          cell.style.opacity = '1';
-          cell.style.cursor = 'text';
-        } else {
-          // Comida desactivada: bloquear edición
-          cell.setAttribute('contenteditable', 'false');
-          cell.style.backgroundColor = '#f1f5f9';
-          cell.style.opacity = '0.6';
-          cell.style.cursor = 'not-allowed';
+      if (wasFocused && activeElement.tagName === 'TD') {
+        try {
+          const sel = window.getSelection();
+          if (sel.rangeCount > 0) {
+            range = sel.getRangeAt(0);
+            selection = {
+              startContainer: range.startContainer,
+              startOffset: range.startOffset,
+              endContainer: range.endContainer,
+              endOffset: range.endOffset
+            };
+          }
+        } catch (e) {
+          // Ignorar errores de selección
         }
+      }
+      
+      const rows = tbody.querySelectorAll('tr');
+      rows.forEach(row => {
+        const firstCell = row.querySelector('td:first-child');
+        if (!firstCell) return;
+        
+        const cellText = firstCell.textContent.trim().toUpperCase();
+        const mealKey = cellText.toLowerCase();
+        
+        // Verificar si esta comida está activa
+        const isActive = comidasActivas[mealKey];
+        
+        // Actualizar todas las celdas de esta fila (excepto la primera)
+        const cells = row.querySelectorAll('td:not(:first-child)');
+        cells.forEach(cell => {
+          if (isActive !== false) {
+            // Comida activa: permitir edición
+            cell.setAttribute('contenteditable', 'true');
+            cell.style.backgroundColor = '';
+            cell.style.opacity = '1';
+            cell.style.cursor = 'text';
+          } else {
+            // Comida desactivada: bloquear edición
+            cell.setAttribute('contenteditable', 'false');
+            cell.style.backgroundColor = '#f1f5f9';
+            cell.style.opacity = '0.6';
+            cell.style.cursor = 'not-allowed';
+          }
+        });
       });
+      
+      // Restaurar foco y selección si estaba dentro del editor
+      if (wasFocused && activeElement && activeElement !== document.body) {
+        try {
+          activeElement.focus();
+          if (selection && range) {
+            const newRange = document.createRange();
+            newRange.setStart(selection.startContainer, selection.startOffset);
+            newRange.setEnd(selection.endContainer, selection.endOffset);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+          }
+        } catch (e) {
+          // Ignorar errores al restaurar selección
+        }
+      }
     });
-  }, [comidasActivas, adminMode, modoManual, contenidoManual]);
+  }, [comidasActivas, adminMode, modoManual, uid]);
 
   const saveSemana = useCallback(async () => {
     if (!uid) { setError("Usuario objetivo no disponible."); return; }
@@ -2528,6 +2675,11 @@ Ruiz Nutrición
       }));
       
       alert(`✅ Usuario ${accion}do correctamente`);
+      
+      // Notificar al componente padre para recargar usuarios
+      if (onUsuarioUpdated) {
+        onUsuarioUpdated();
+      }
     } catch (err) {
       console.error(`Error al ${accion} usuario:`, err);
       alert(`❌ Error al ${accion} usuario: ${err.message}`);
@@ -6480,7 +6632,7 @@ Ruiz Nutrición
                                             const cells = row.querySelectorAll('td:not(:first-child)');
                                             cells.forEach(cell => {
                                               if (newValue) {
-                                                cell.removeAttribute('contenteditable');
+                                                cell.setAttribute('contenteditable', 'true');
                                                 cell.style.backgroundColor = '';
                                                 cell.style.opacity = '1';
                                                 cell.style.cursor = 'text';
@@ -6523,88 +6675,19 @@ Ruiz Nutrición
                     
                     <div 
                       ref={setEditorManualRef}
-                      contentEditable
                       suppressContentEditableWarning
                       onInput={(e) => {
-                        // Proteger cabeceras de la tabla
-                        const editor = e.currentTarget;
-                        const table = editor.querySelector('table');
-                        
-                        if (table) {
-                          // Verificar que existan las cabeceras del thead
-                          const thead = table.querySelector('thead');
-                          if (!thead) {
-                            // Si se borró el thead, restaurar la tabla completa
-                            console.warn('⚠️ Cabecera de tabla eliminada - restaurando...');
-                            if (editorManualRef.current && contenidoManualRef.current) {
-                              editorManualRef.current.innerHTML = contenidoManualRef.current;
-                            }
-                            return;
-                          }
-                          
-                          // Verificar que existan todas las filas de comidas (primera celda de cada fila)
-                          const tbody = table.querySelector('tbody');
-                          if (tbody) {
-                            const requiredMeals = ['DESAYUNO', 'ALMUERZO', 'COMIDA', 'MERIENDA', 'CENA', 'TIPS'];
-                            const firstCells = Array.from(tbody.querySelectorAll('tr td:first-child'));
-                            const mealTexts = firstCells.map(td => td.textContent.trim().toUpperCase());
-                            
-                            // Verificar si falta alguna comida
-                            const missingMeals = requiredMeals.filter(meal => !mealTexts.includes(meal));
-                            
-                            if (missingMeals.length > 0) {
-                              console.warn('⚠️ Cabeceras de comidas eliminadas:', missingMeals, '- restaurando...');
-                              // Restaurar desde el contenido guardado
-                              if (editorManualRef.current && contenidoManualRef.current) {
-                                editorManualRef.current.innerHTML = contenidoManualRef.current;
-                              }
-                              return;
-                            }
-                            
-                            // Asegurar que todas las celdas de comidas tengan contenteditable="false"
-                            firstCells.forEach(td => {
-                              if (td.getAttribute('contenteditable') !== 'false') {
-                                td.setAttribute('contenteditable', 'false');
-                                td.style.userSelect = 'none';
-                                td.style.cursor = 'not-allowed';
-                              }
-                            });
-                            
-                            // Asegurar que todos los th tengan contenteditable="false"
-                            const headers = thead.querySelectorAll('th');
-                            headers.forEach(th => {
-                              if (th.getAttribute('contenteditable') !== 'false') {
-                                th.setAttribute('contenteditable', 'false');
-                                th.style.userSelect = 'none';
-                                th.style.cursor = 'not-allowed';
-                              }
-                            });
-                          }
-                        }
-                        
-                        // Actualizar el estado cuando el admin escribe
-                        setContenidoManual(e.currentTarget.innerHTML);
+                        // Guardar los cambios sin validaciones complejas
+                        // Solo cuando termine de editar (onBlur)
                       }}
-                      onKeyDown={(e) => {
-                        // Prevenir borrado de elementos protegidos
-                        const selection = window.getSelection();
-                        if (!selection || selection.rangeCount === 0) return;
-                        
-                        const range = selection.getRangeAt(0);
-                        const container = range.commonAncestorContainer;
-                        
-                        // Buscar si estamos dentro de un elemento con contenteditable="false"
-                        let node = container.nodeType === Node.TEXT_NODE ? container.parentElement : container;
-                        
-                        while (node && node !== e.currentTarget) {
-                          if (node.getAttribute && node.getAttribute('contenteditable') === 'false') {
-                            // Estamos dentro de un elemento protegido
-                            if (e.key === 'Backspace' || e.key === 'Delete') {
-                              e.preventDefault();
-                              return;
-                            }
-                          }
-                          node = node.parentElement;
+                      onBlur={(e) => {
+                        // Actualizar el estado cuando el usuario termine de editar
+                        if (editorManualRef.current) {
+                          setContenidoManual(editorManualRef.current.innerHTML);
+                          
+                          // Guardar en localStorage también
+                          const storageKey = `menu_manual_draft_${uid}`;
+                          localStorage.setItem(storageKey, editorManualRef.current.innerHTML);
                         }
                       }}
                       style={{

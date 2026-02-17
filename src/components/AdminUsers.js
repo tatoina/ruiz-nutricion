@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import HelpForm from "./HelpForm";
 import { auth, db, functions } from "../Firebase";
 import { onAuthStateChanged, signOut, getIdTokenResult, sendPasswordResetEmail } from "firebase/auth";
@@ -17,10 +17,11 @@ import logger from "../utils/logger";
  * - RESPONSIVE: Detecta móvil y muestra interfaz adaptada
  */
 
+const ADMIN_EMAILS = ["admin@admin.es"]; // ajusta si hace falta
+const DESKTOP_MIN_WIDTH = 900;
+
 export default function AdminUsers() {
     const [showHelpModal, setShowHelpModal] = useState(false);
-  const ADMIN_EMAILS = ["admin@admin.es"]; // ajusta si hace falta
-  const DESKTOP_MIN_WIDTH = 900;
 
   const navigate = useNavigate();
   const { isMobile } = useDevice(); // Detectar si es móvil
@@ -70,7 +71,8 @@ export default function AdminUsers() {
     telefono: "",
     objetivoNutricional: "",
     pesoActual: "",
-    rol: "paciente"
+    rol: "paciente",
+    tipoPlan: "Básico + Ejercicios"
   });
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState("");
@@ -147,117 +149,114 @@ export default function AdminUsers() {
   }, []);
 
   // Load users ordered by apellidos,nombre (fallback if index missing)
-  useEffect(() => {
-    let mounted = true;
-    const loadUsers = async () => {
-      if (!isAdmin) {
-        setUsers([]);
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
-      setError(null);
-      setIndexRequired(false);
-      try {
-        const q = query(collection(db, "users"), orderBy("apellidos", "asc"), orderBy("nombre", "asc"));
-        const snap = await getDocs(q);
-        if (!mounted) return;
-        const list = snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }))
-          .filter((u) => {
-            // Filtrar admins
-            if (ADMIN_EMAILS.includes((u.email || "").toLowerCase())) return false;
-            if (u.role === "admin" || u.rol === "admin") return false;
-            // Filtrar usuarios sin datos válidos
-            if (!u.nombre || !u.apellidos || !u.email) return false;
-            // Filtrar usuarios con datos inválidos (solo "0" o vacíos)
-            if (u.nombre === "0" || u.apellidos === "0") return false;
-            return true;
-          });
-        
-        // Eliminar duplicados por email
-        const usuariosUnicos = list.filter((user, index, self) => 
-          index === self.findIndex((u) => u.email === user.email)
-        );
-        
-        setUsers(usuariosUnicos);
-        // Restaurar usuario seleccionado por ID
-        const savedUserId = localStorage.getItem("adminSelectedUserId");
-        if (savedUserId) {
-          const userIndex = list.findIndex(u => u.id === savedUserId);
-          if (userIndex >= 0) {
-            setSelectedIndex(userIndex);
-          } else {
-            setSelectedIndex(list.length ? 0 : -1);
-          }
+  const loadUsers = useCallback(async () => {
+    if (!isAdmin) {
+      setUsers([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setIndexRequired(false);
+    try {
+      const q = query(collection(db, "users"), orderBy("apellidos", "asc"), orderBy("nombre", "asc"));
+      const snap = await getDocs(q);
+      const list = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((u) => {
+          // Filtrar admins
+          if (ADMIN_EMAILS.includes((u.email || "").toLowerCase())) return false;
+          if (u.role === "admin" || u.rol === "admin") return false;
+          // Filtrar usuarios sin datos válidos
+          if (!u.nombre || !u.apellidos || !u.email) return false;
+          // Filtrar usuarios con datos inválidos (solo "0" o vacíos)
+          if (u.nombre === "0" || u.apellidos === "0") return false;
+          return true;
+        });
+      
+      // Eliminar duplicados por email
+      const usuariosUnicos = list.filter((user, index, self) => 
+        index === self.findIndex((u) => u.email === user.email)
+      );
+      
+      setUsers(usuariosUnicos);
+      // Restaurar usuario seleccionado por ID
+      const savedUserId = localStorage.getItem("adminSelectedUserId");
+      if (savedUserId) {
+        const userIndex = list.findIndex(u => u.id === savedUserId);
+        if (userIndex >= 0) {
+          setSelectedIndex(userIndex);
         } else {
           setSelectedIndex(list.length ? 0 : -1);
         }
-      } catch (err) {
-        console.error("Error fetching users with composite index:", err);
-        const msg = err?.message || String(err);
-        if (err?.code === "failed-precondition" || /requires an index/i.test(msg) || /create an index/i.test(msg)) {
-          setIndexRequired(true);
-          try {
-            const snap = await getDocs(collection(db, "users")); // sin orderBy
-            if (!mounted) return;
-            const list = snap.docs
-              .map((d) => ({ id: d.id, ...d.data() }))
-              .filter((u) => {
-                // Filtrar admins
-                if (ADMIN_EMAILS.includes((u.email || "").toLowerCase())) return false;
-                if (u.role === "admin" || u.rol === "admin") return false;
-                // Filtrar usuarios sin datos válidos
-                if (!u.nombre || !u.apellidos || !u.email) return false;
-                // Filtrar usuarios con datos inválidos (solo "0" o vacíos)
-                if (u.nombre === "0" || u.apellidos === "0") return false;
-                return true;
-              });
-            
-            // Eliminar duplicados por email antes de ordenar
-            const usuariosUnicos = list.filter((user, index, self) => 
-              index === self.findIndex((u) => u.email === user.email)
-            );
-            
-            usuariosUnicos.sort((a, b) => {
-              const A = (a.apellidos || "").toString().trim().toLowerCase();
-              const B = (b.apellidos || "").toString().trim().toLowerCase();
-              if (A === B) {
-                return (a.nombre || "").toString().trim().toLowerCase().localeCompare((b.nombre || "").toString().trim().toLowerCase());
-              }
-              return A.localeCompare(B);
+      } else {
+        setSelectedIndex(list.length ? 0 : -1);
+      }
+    } catch (err) {
+      console.error("Error fetching users with composite index:", err);
+      const msg = err?.message || String(err);
+      if (err?.code === "failed-precondition" || /requires an index/i.test(msg) || /create an index/i.test(msg)) {
+        setIndexRequired(true);
+        try {
+          const snap = await getDocs(collection(db, "users")); // sin orderBy
+          const list = snap.docs
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .filter((u) => {
+              // Filtrar admins
+              if (ADMIN_EMAILS.includes((u.email || "").toLowerCase())) return false;
+              if (u.role === "admin" || u.rol === "admin") return false;
+              // Filtrar usuarios sin datos válidos
+              if (!u.nombre || !u.apellidos || !u.email) return false;
+              // Filtrar usuarios con datos inválidos (solo "0" o vacíos)
+              if (u.nombre === "0" || u.apellidos === "0") return false;
+              return true;
             });
-            setUsers(usuariosUnicos);
-            // Restaurar usuario seleccionado por ID
-            const savedUserId = localStorage.getItem("adminSelectedUserId");
-            if (savedUserId) {
-              const userIndex = list.findIndex(u => u.id === savedUserId);
-              if (userIndex >= 0) {
-                setSelectedIndex(userIndex);
-              } else {
-                setSelectedIndex(list.length ? 0 : -1);
-              }
+          
+          // Eliminar duplicados por email antes de ordenar
+          const usuariosUnicos = list.filter((user, index, self) => 
+            index === self.findIndex((u) => u.email === user.email)
+          );
+          
+          usuariosUnicos.sort((a, b) => {
+            const A = (a.apellidos || "").toString().trim().toLowerCase();
+            const B = (b.apellidos || "").toString().trim().toLowerCase();
+            if (A === B) {
+              return (a.nombre || "").toString().trim().toLowerCase().localeCompare((b.nombre || "").toString().trim().toLowerCase());
+            }
+            return A.localeCompare(B);
+          });
+          setUsers(usuariosUnicos);
+          // Restaurar usuario seleccionado por ID
+          const savedUserId = localStorage.getItem("adminSelectedUserId");
+          if (savedUserId) {
+            const userIndex = list.findIndex(u => u.id === savedUserId);
+            if (userIndex >= 0) {
+              setSelectedIndex(userIndex);
             } else {
               setSelectedIndex(list.length ? 0 : -1);
             }
-          } catch (err2) {
-            console.error("Fallback fetch users error:", err2);
-            const msg2 = err2?.code ? `${err2.code}: ${err2.message}` : (err2?.message || String(err2));
-            setError(`No se pudieron cargar los usuarios: ${msg2}`);
-            setUsers([]);
+          } else {
+            setSelectedIndex(list.length ? 0 : -1);
           }
-        } else {
-          const human = err?.code ? `${err.code}: ${err.message}` : msg;
-          setError(`No se pudieron cargar los usuarios: ${human}`);
+        } catch (err2) {
+          console.error("Fallback fetch users error:", err2);
+          const msg2 = err2?.code ? `${err2.code}: ${err2.message}` : (err2?.message || String(err2));
+          setError(`No se pudieron cargar los usuarios: ${msg2}`);
           setUsers([]);
         }
-      } finally {
-        if (mounted) setLoading(false);
+      } else {
+        const human = err?.code ? `${err.code}: ${err.message}` : msg;
+        setError(`No se pudieron cargar los usuarios: ${human}`);
+        setUsers([]);
       }
-    };
-    loadUsers();
-    return () => { mounted = false; };
+    } finally {
+      setLoading(false);
+    }
   }, [isAdmin]);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
 
   // Cargar contador de solicitudes pendientes
   useEffect(() => {
@@ -649,7 +648,8 @@ export default function AdminUsers() {
       telefono: usuario.telefono || "",
       objetivoNutricional: usuario.objetivoNutricional || "",
       pesoActual: usuario.pesoActual || "",
-      rol: usuario.rol || "paciente"
+      rol: usuario.rol || "paciente",
+      tipoPlan: "Básico + Ejercicios"
     });
     setModalError("");
     setShowModal(true);
@@ -681,7 +681,8 @@ export default function AdminUsers() {
           telefono: formData.telefono,
           objetivoNutricional: formData.objetivoNutricional,
           pesoActual: formData.pesoActual ? parseFloat(formData.pesoActual) : null,
-          rol: formData.rol
+          rol: formData.rol,
+          tipoPlan: formData.tipoPlan
         });
         alert("Cliente creado correctamente");
         
@@ -788,7 +789,7 @@ export default function AdminUsers() {
       }}>
         <div style={{ width: isMobile ? "100%" : "auto", textAlign: isMobile ? "center" : "left" }}>
           <div className="title" style={{ fontSize: isMobile ? "14px" : "16px", marginBottom: "2px" }}>
-            Panel administrativo <span style={{ color: '#666', fontWeight: '400', fontSize: isMobile ? '12px' : '14px' }}>({users.length} usuarios)</span>
+            Panel administrativo <span style={{ color: '#666', fontWeight: '400', fontSize: isMobile ? '12px' : '14px' }}>({filtered.length} usuarios)</span>
           </div>
           {!isMobile && (
             <>
@@ -1236,7 +1237,11 @@ export default function AdminUsers() {
               </div>
 
               <div style={{ marginTop: 8 }}>
-                <FichaUsuario targetUid={filtered[selectedIndex].id} adminMode={true} />
+                <FichaUsuario 
+                  targetUid={filtered[selectedIndex].id} 
+                  adminMode={true} 
+                  onUsuarioUpdated={loadUsers}
+                />
               </div>
             </div>
           ) : (
@@ -1906,6 +1911,32 @@ export default function AdminUsers() {
                   style={{ width: "100%", padding: isMobile ? "12px" : "6px", fontSize: isMobile ? "16px" : "13px", border: "2px solid #e5e7eb", borderRadius: isMobile ? "8px" : "4px", boxSizing: "border-box" }}
                 />
               </div>
+              
+              {modalMode === "create" && (
+                <div style={{ marginBottom: isMobile ? 0 : 6, gridColumn: isMobile ? "1" : "span 2" }}>
+                  <label style={{ display: "block", marginBottom: isMobile ? 6 : 2, fontWeight: "600", fontSize: isMobile ? "14px" : "13px", color: "#0f172a" }}>Tipo de Plan *</label>
+                  <select
+                    required
+                    value={formData.tipoPlan}
+                    onChange={(e) => setFormData({ ...formData, tipoPlan: e.target.value })}
+                    style={{ 
+                      width: "100%", 
+                      padding: isMobile ? "12px" : "6px", 
+                      fontSize: isMobile ? "16px" : "13px", 
+                      border: "2px solid #e5e7eb", 
+                      borderRadius: isMobile ? "8px" : "4px",
+                      boxSizing: "border-box",
+                      backgroundColor: "white"
+                    }}
+                  >
+                    <option value="Básico">Básico</option>
+                    <option value="Básico + Ejercicios">Básico + Ejercicios</option>
+                    <option value="Seguimiento">Seguimiento</option>
+                    <option value="GYM">GYM</option>
+                  </select>
+                  <small style={{ color: "#64748b", fontSize: isMobile ? "13px" : "11px", marginTop: "4px", display: "block" }}>Define qué módulos tendrá acceso el usuario en la aplicación</small>
+                </div>
+              )}
               </div>
 
               <div style={{ display: "flex", gap: isMobile ? 10 : 8, marginTop: isMobile ? 16 : 8, flexDirection: isMobile ? "column-reverse" : "row" }}>

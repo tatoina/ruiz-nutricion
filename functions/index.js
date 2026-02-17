@@ -259,7 +259,7 @@ exports.createUser = onCall(async (request) => {
     throw new Error("Permisos insuficientes");
   }
 
-  const { email, password, nombre, apellidos, nacimiento, telefono, rol, objetivoNutricional, pesoActual } = request.data;
+  const { email, password, nombre, apellidos, nacimiento, telefono, rol, objetivoNutricional, pesoActual, tipoPlan } = request.data;
 
   if (!email || !password) {
     throw new Error("Email y contraseña son requeridos");
@@ -294,6 +294,9 @@ exports.createUser = onCall(async (request) => {
       medidas: {},
       ejercicios: false,
       mustChangePassword: true,
+      anamnesis: {
+        eligePlan: tipoPlan || "Básico + Ejercicios",
+      }
     });
 
     return {

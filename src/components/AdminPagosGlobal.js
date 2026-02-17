@@ -32,6 +32,10 @@ export default function AdminPagosGlobal() {
   // Estado para el formulario de "otros"
   const [nuevoOtro, setNuevoOtro] = useState({ concepto: "", precio: 0 });
   
+  // Estado para controlar qué tarifa se está editando
+  const [editandoOtroIndex, setEditandoOtroIndex] = useState(null);
+  const [editandoOtroData, setEditandoOtroData] = useState({ concepto: "", precio: 0 });
+  
   // Todos los pagos de todos los usuarios
   const [todosLosPagos, setTodosLosPagos] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
@@ -138,6 +142,8 @@ export default function AdminPagosGlobal() {
       await setDoc(settingsRef, tarifas);
       setSuccess("✅ Tarifas globales actualizadas correctamente");
       setEditandoTarifas(false);
+      setEditandoOtroIndex(null);
+      setEditandoOtroData({ concepto: "", precio: 0 });
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       console.error("Error al guardar tarifas:", err);
@@ -165,6 +171,33 @@ export default function AdminPagosGlobal() {
   const handleEliminarOtro = (index) => {
     const nuevosOtros = tarifas.otros.filter((_, i) => i !== index);
     setTarifas({ ...tarifas, otros: nuevosOtros });
+  };
+  
+  // Iniciar edición de una tarifa existente
+  const handleIniciarEdicionOtro = (index) => {
+    setEditandoOtroIndex(index);
+    setEditandoOtroData({ ...tarifas.otros[index] });
+  };
+  
+  // Guardar edición de una tarifa existente
+  const handleGuardarEdicionOtro = () => {
+    if (!editandoOtroData.concepto.trim() || editandoOtroData.precio <= 0) {
+      setError("❌ Introduce un concepto y un precio válido");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+    
+    const nuevosOtros = [...tarifas.otros];
+    nuevosOtros[editandoOtroIndex] = { ...editandoOtroData };
+    setTarifas({ ...tarifas, otros: nuevosOtros });
+    setEditandoOtroIndex(null);
+    setEditandoOtroData({ concepto: "", precio: 0 });
+  };
+  
+  // Cancelar edición de una tarifa existente
+  const handleCancelarEdicionOtro = () => {
+    setEditandoOtroIndex(null);
+    setEditandoOtroData({ concepto: "", precio: 0 });
   };
   
   // Aplicar filtros
@@ -440,6 +473,8 @@ export default function AdminPagosGlobal() {
                     className="btn ghost"
                     onClick={async () => {
                       setEditandoTarifas(false);
+                      setEditandoOtroIndex(null);
+                      setEditandoOtroData({ concepto: "", precio: 0 });
                       // Recargar tarifas originales
                       const settingsRef = doc(db, "settings", "tarifas");
                       const settingsSnap = await getDoc(settingsRef);
@@ -554,25 +589,105 @@ export default function AdminPagosGlobal() {
                           borderRadius: "4px",
                           marginBottom: "6px",
                           border: "1px solid #e5e7eb",
+                          gap: "8px",
                         }}
                       >
-                        <span>
-                          <strong>{otro.concepto}</strong>: {otro.precio.toFixed(2)} €
-                        </span>
-                        {editandoTarifas && (
-                          <button
-                            onClick={() => handleEliminarOtro(index)}
-                            style={{
-                              background: "transparent",
-                              border: "none",
-                              color: "#dc2626",
-                              cursor: "pointer",
-                              fontSize: "18px",
-                            }}
-                            title="Eliminar"
-                          >
-                            🗑️
-                          </button>
+                        {editandoOtroIndex === index ? (
+                          // Modo edición
+                          <>
+                            <div style={{ display: "flex", gap: "8px", flex: 1, alignItems: "center" }}>
+                              <input
+                                type="text"
+                                className="input"
+                                value={editandoOtroData.concepto}
+                                onChange={(e) => setEditandoOtroData({ ...editandoOtroData, concepto: e.target.value })}
+                                placeholder="Concepto"
+                                style={{ flex: 1, padding: "4px 8px", fontSize: "14px" }}
+                              />
+                              <input
+                                type="text"
+                                className="input"
+                                value={editandoOtroData.precio}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val === "" || /^\d*\.?\d*$/.test(val)) {
+                                    setEditandoOtroData({ ...editandoOtroData, precio: val === "" ? 0 : parseFloat(val) });
+                                  }
+                                }}
+                                placeholder="Precio"
+                                style={{ width: "80px", padding: "4px 8px", fontSize: "14px" }}
+                              />
+                            </div>
+                            <div style={{ display: "flex", gap: "4px" }}>
+                              <button
+                                onClick={handleGuardarEdicionOtro}
+                                style={{
+                                  background: "#10b981",
+                                  border: "none",
+                                  color: "white",
+                                  cursor: "pointer",
+                                  fontSize: "14px",
+                                  padding: "4px 8px",
+                                  borderRadius: "4px",
+                                }}
+                                title="Guardar"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                onClick={handleCancelarEdicionOtro}
+                                style={{
+                                  background: "#6b7280",
+                                  border: "none",
+                                  color: "white",
+                                  cursor: "pointer",
+                                  fontSize: "14px",
+                                  padding: "4px 8px",
+                                  borderRadius: "4px",
+                                }}
+                                title="Cancelar"
+                              >
+                                ✖
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          // Modo visualización
+                          <>
+                            <span>
+                              <strong>{otro.concepto}</strong>: {otro.precio.toFixed(2)} €
+                            </span>
+                            {editandoTarifas && (
+                              <div style={{ display: "flex", gap: "4px" }}>
+                                <button
+                                  onClick={() => handleIniciarEdicionOtro(index)}
+                                  style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    color: "#3b82f6",
+                                    cursor: "pointer",
+                                    fontSize: "16px",
+                                  }}
+                                  title="Editar"
+                                >
+                                  ✏️
+                                </button>
+                                <button
+                                  onClick={() => handleEliminarOtro(index)}
+                                  style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    color: "#dc2626",
+                                    cursor: "pointer",
+                                    fontSize: "16px",
+                                  }}
+                                  title="Eliminar"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     ))}
