@@ -1514,10 +1514,10 @@ export default function AdminUsers() {
         }}>
           <div style={{
             backgroundColor: "white",
-            padding: isMobile ? "20px" : "24px",
+            padding: isMobile ? "20px" : "30px",
             borderRadius: "12px",
             width: "100%",
-            maxWidth: "900px",
+            maxWidth: "1400px",
             maxHeight: "90vh",
             overflowY: "auto",
             boxSizing: "border-box"
