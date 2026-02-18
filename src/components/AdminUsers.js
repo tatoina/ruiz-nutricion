@@ -34,6 +34,7 @@ export default function AdminUsers() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [filter, setFilter] = useState("");
   const [estadoFiltro, setEstadoFiltro] = useState("activos"); // "activos", "desactivados", "todos"
+  const [planFiltro, setPlanFiltro] = useState("todos"); // "todos", "basico", "basico_ejercicios", "seguimiento", "gym", "sin_plan"
   const listRef = useRef(null);
   const [indexRequired, setIndexRequired] = useState(false);
 
@@ -339,28 +340,17 @@ export default function AdminUsers() {
 
   // Resetear el índice seleccionado cuando cambie el filtro
   useEffect(() => {
-    const filtered = users.filter((u) => {
-      if (!filter) return true;
-      const s = filter.toLowerCase();
-      return (u.apellidos || "").toLowerCase().includes(s) || (u.nombre || "").toLowerCase().includes(s) || (u.email || "").toLowerCase().includes(s);
-    });
-    
     // Si el índice actual está fuera del rango del array filtrado, resetearlo
     if (selectedIndex >= filtered.length) {
       setSelectedIndex(filtered.length > 0 ? 0 : -1);
     }
-  }, [filter, users, selectedIndex]);
+  }, [filter, users, selectedIndex, estadoFiltro, planFiltro]);
 
   const prevUser = () => {
     setSelectedIndex((s) => Math.max(0, (s || 0) - 1));
     scrollListIntoView(Math.max(0, (selectedIndex || 0) - 1));
   };
   const nextUser = () => {
-    const filtered = users.filter((u) => {
-      if (!filter) return true;
-      const s = filter.toLowerCase();
-      return (u.apellidos || "").toLowerCase().includes(s) || (u.nombre || "").toLowerCase().includes(s) || (u.email || "").toLowerCase().includes(s);
-    });
     setSelectedIndex((s) => Math.min(filtered.length - 1, (s || 0) + 1));
     scrollListIntoView(Math.min(filtered.length - 1, (selectedIndex || 0) + 1));
   };
@@ -386,7 +376,56 @@ export default function AdminUsers() {
     }
   };
 
-  // Filtrar por estado activo/desactivado
+  // Función helper para normalizar el nombre del plan
+  const normalizarPlan = (usuario) => {
+    // Intentar obtener el plan de anamnesis.eligePlan o tipoPlan
+    const tipoPlan = usuario?.anamnesis?.eligePlan || usuario?.tipoPlan;
+    
+    if (!tipoPlan || tipoPlan === "undefined" || tipoPlan === "null") return null;
+    
+    const plan = (tipoPlan + "").toLowerCase().trim();
+    
+    // Casos específicos con coincidencia exacta o parcial
+    if (plan === "básico" || plan === "basico") return "basico";
+    if (plan.includes("básico + ejercicio") || plan.includes("basico + ejercicio")) return "basico_ejercicios";
+    if (plan === "seguimiento") return "seguimiento";
+    if (plan === "gym") return "gym";
+    
+    return null;
+  };
+
+  // Contar usuarios por plan
+  const contarPorPlan = () => {
+    const counts = {
+      basico: 0,
+      basico_ejercicios: 0,
+      seguimiento: 0,
+      gym: 0,
+      sin_plan: 0,
+      total: 0
+    };
+    
+    users.forEach(u => {
+      const isActivo = u.activo !== false;
+      if (estadoFiltro === "activos" && !isActivo) return;
+      if (estadoFiltro === "desactivados" && isActivo) return;
+      
+      counts.total++;
+      
+      const planNormalizado = normalizarPlan(u);
+      if (planNormalizado && counts.hasOwnProperty(planNormalizado)) {
+        counts[planNormalizado]++;
+      } else {
+        counts.sin_plan++;
+      }
+    });
+    
+    return counts;
+  };
+  
+  const planCounts = contarPorPlan();
+
+  // Filtrar por estado activo/desactivado y por plan
   const filtered = users.filter((u) => {
     // Filtro de texto
     if (filter) {
@@ -399,9 +438,23 @@ export default function AdminUsers() {
     
     // Filtro de estado activo (por defecto true si no existe)
     const isActivo = u.activo !== false;
-    if (estadoFiltro === "activos") return isActivo;
-    if (estadoFiltro === "desactivados") return !isActivo;
-    return true; // "todos"
+    if (estadoFiltro === "activos" && !isActivo) return false;
+    if (estadoFiltro === "desactivados" && isActivo) return false;
+    
+    // Filtro de plan
+    if (planFiltro !== "todos") {
+      const planNormalizado = normalizarPlan(u);
+      
+      if (planFiltro === "sin_plan") {
+        // Mostrar solo usuarios sin plan definido
+        if (planNormalizado !== null) return false;
+      } else {
+        // Si el plan es null (no definido) o no coincide con el filtro, excluir
+        if (!planNormalizado || planNormalizado !== planFiltro) return false;
+      }
+    }
+    
+    return true;
   });
 
   // Función para obtener la tendencia del peso (comparar con peso anterior)
@@ -958,6 +1011,197 @@ export default function AdminUsers() {
                   }}
                 >
                   📋 Todos
+                </button>
+              </div>
+              
+              {/* Filtro de planes */}
+              <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                <button
+                  onClick={() => setPlanFiltro("todos")}
+                  style={{
+                    padding: "5px 10px",
+                    fontSize: "11px",
+                    fontWeight: "600",
+                    backgroundColor: planFiltro === "todos" ? "#3b82f6" : "#f1f5f9",
+                    color: planFiltro === "todos" ? "white" : "#475569",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                    whiteSpace: "nowrap",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px"
+                  }}
+                >
+                  📋 Todos
+                  {planCounts.total > 0 && (
+                    <span style={{
+                      backgroundColor: planFiltro === "todos" ? "rgba(255,255,255,0.3)" : "#cbd5e1",
+                      padding: "1px 6px",
+                      borderRadius: "10px",
+                      fontSize: "10px",
+                      fontWeight: "700"
+                    }}>
+                      {planCounts.total}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setPlanFiltro("basico")}
+                  style={{
+                    padding: "5px 10px",
+                    fontSize: "11px",
+                    fontWeight: "600",
+                    backgroundColor: planFiltro === "basico" ? "#3b82f6" : "#f1f5f9",
+                    color: planFiltro === "basico" ? "white" : "#475569",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                    whiteSpace: "nowrap",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px"
+                  }}
+                >
+                  Básico
+                  {planCounts.basico > 0 && (
+                    <span style={{
+                      backgroundColor: planFiltro === "basico" ? "rgba(255,255,255,0.3)" : "#cbd5e1",
+                      padding: "1px 6px",
+                      borderRadius: "10px",
+                      fontSize: "10px",
+                      fontWeight: "700"
+                    }}>
+                      {planCounts.basico}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setPlanFiltro("basico_ejercicios")}
+                  style={{
+                    padding: "5px 10px",
+                    fontSize: "11px",
+                    fontWeight: "600",
+                    backgroundColor: planFiltro === "basico_ejercicios" ? "#3b82f6" : "#f1f5f9",
+                    color: planFiltro === "basico_ejercicios" ? "white" : "#475569",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                    whiteSpace: "nowrap",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px"
+                  }}
+                >
+                  Básico + Ejercicios
+                  {planCounts.basico_ejercicios > 0 && (
+                    <span style={{
+                      backgroundColor: planFiltro === "basico_ejercicios" ? "rgba(255,255,255,0.3)" : "#cbd5e1",
+                      padding: "1px 6px",
+                      borderRadius: "10px",
+                      fontSize: "10px",
+                      fontWeight: "700"
+                    }}>
+                      {planCounts.basico_ejercicios}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setPlanFiltro("seguimiento")}
+                  style={{
+                    padding: "5px 10px",
+                    fontSize: "11px",
+                    fontWeight: "600",
+                    backgroundColor: planFiltro === "seguimiento" ? "#3b82f6" : "#f1f5f9",
+                    color: planFiltro === "seguimiento" ? "white" : "#475569",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                    whiteSpace: "nowrap",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px"
+                  }}
+                >
+                  Seguimiento
+                  {planCounts.seguimiento > 0 && (
+                    <span style={{
+                      backgroundColor: planFiltro === "seguimiento" ? "rgba(255,255,255,0.3)" : "#cbd5e1",
+                      padding: "1px 6px",
+                      borderRadius: "10px",
+                      fontSize: "10px",
+                      fontWeight: "700"
+                    }}>
+                      {planCounts.seguimiento}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setPlanFiltro("gym")}
+                  style={{
+                    padding: "5px 10px",
+                    fontSize: "11px",
+                    fontWeight: "600",
+                    backgroundColor: planFiltro === "gym" ? "#3b82f6" : "#f1f5f9",
+                    color: planFiltro === "gym" ? "white" : "#475569",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                    whiteSpace: "nowrap",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px"
+                  }}
+                >
+                  GYM
+                  {planCounts.gym > 0 && (
+                    <span style={{
+                      backgroundColor: planFiltro === "gym" ? "rgba(255,255,255,0.3)" : "#cbd5e1",
+                      padding: "1px 6px",
+                      borderRadius: "10px",
+                      fontSize: "10px",
+                      fontWeight: "700"
+                    }}>
+                      {planCounts.gym}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setPlanFiltro("sin_plan")}
+                  style={{
+                    padding: "5px 10px",
+                    fontSize: "11px",
+                    fontWeight: "600",
+                    backgroundColor: planFiltro === "sin_plan" ? "#f59e0b" : "#f1f5f9",
+                    color: planFiltro === "sin_plan" ? "white" : "#475569",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    transition: "all 0.2s",
+                    whiteSpace: "nowrap",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px"
+                  }}
+                >
+                  ⚠️ Sin plan
+                  {planCounts.sin_plan > 0 && (
+                    <span style={{
+                      backgroundColor: planFiltro === "sin_plan" ? "rgba(255,255,255,0.3)" : "#fbbf24",
+                      padding: "1px 6px",
+                      borderRadius: "10px",
+                      fontSize: "10px",
+                      fontWeight: "700",
+                      color: planFiltro === "sin_plan" ? "white" : "#78350f"
+                    }}>
+                      {planCounts.sin_plan}
+                    </span>
+                  )}
                 </button>
               </div>
               

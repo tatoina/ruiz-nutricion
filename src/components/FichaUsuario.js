@@ -180,6 +180,9 @@ export default function FichaUsuario(props) {
   const editorManualRef = useRef(null);
   const debounceTimerRef = useRef(null);
   
+  // Estado para celdas seleccionadas (para combinar)
+  const [celdasSeleccionadas, setCeldasSeleccionadas] = useState([]);
+  
   // Estado para controlar qué comidas están activas en modo manual
   const [comidasActivas, setComidasActivas] = useState({
     desayuno: true,
@@ -1091,18 +1094,47 @@ export default function FichaUsuario(props) {
       const editableCells = node.querySelectorAll('td[contenteditable="true"]');
       console.log('🔧 Celdas editables encontradas:', editableCells.length);
       
-      editableCells.forEach((cell) => {
+      editableCells.forEach((cell, index) => {
         // Forzar atributo contenteditable
         cell.setAttribute('contenteditable', 'true');
         cell.style.cursor = 'text';
         cell.style.outline = 'none';
         cell.style.userSelect = 'text';
         cell.style.WebkitUserSelect = 'text';
+        cell.style.transition = 'background-color 0.2s, box-shadow 0.2s';
+        
+        // Agregar un ID único para identificar la celda
+        cell.dataset.cellId = `cell-${index}`;
         
         // Si la celda está vacía, asegurar que tiene un <br>
         if (!cell.textContent.trim() && !cell.querySelector('br')) {
           cell.innerHTML = '<br>';
         }
+        
+        // Event listener para seleccionar celdas (Ctrl+Click)
+        cell.addEventListener('click', (e) => {
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const cellId = cell.dataset.cellId;
+            const isSelected = cell.classList.contains('celda-seleccionada');
+            
+            if (isSelected) {
+              // Deseleccionar
+              cell.classList.remove('celda-seleccionada');
+              cell.style.backgroundColor = '';
+              cell.style.boxShadow = '';
+              setCeldasSeleccionadas(prev => prev.filter(c => c !== cell));
+            } else {
+              // Seleccionar
+              cell.classList.add('celda-seleccionada');
+              cell.style.backgroundColor = '#dbeafe';
+              cell.style.boxShadow = 'inset 0 0 0 2px #3b82f6';
+              setCeldasSeleccionadas(prev => [...prev, cell]);
+            }
+          }
+        });
         
         console.log('✅ Celda configurada:', cell.textContent.substring(0, 20));
       });
@@ -1110,6 +1142,20 @@ export default function FichaUsuario(props) {
     
     // El estado de comidas activas se aplicará por el useEffect separado más abajo (no aquí para evitar re-renders)
   }, [adminMode, modoManual, uid]);
+
+  // Limpiar selección de celdas cuando cambia el usuario o modo
+  useEffect(() => {
+    if (celdasSeleccionadas.length > 0) {
+      celdasSeleccionadas.forEach(cell => {
+        if (cell && cell.classList) {
+          cell.classList.remove('celda-seleccionada');
+          cell.style.backgroundColor = '';
+          cell.style.boxShadow = '';
+        }
+      });
+      setCeldasSeleccionadas([]);
+    }
+  }, [uid, modoManual]);
 
   // Actualizar contenido cuando cambia el usuario
   const lastLoadedUidRef = useRef(null);
@@ -6239,6 +6285,26 @@ Ruiz Nutrición
                   ) : (
                     <div style={{ marginTop: "20px" }}>
                       <>
+                    {/* Banner informativo para selección de celdas */}
+                    {celdasSeleccionadas.length > 0 && (
+                      <div style={{
+                        padding: "8px 12px",
+                        backgroundColor: "#dbeafe",
+                        border: "2px solid #3b82f6",
+                        borderRadius: "6px",
+                        marginBottom: "8px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        fontSize: "13px",
+                        color: "#1e40af"
+                      }}>
+                        <span>
+                          <strong>{celdasSeleccionadas.length} celda{celdasSeleccionadas.length > 1 ? 's' : ''} seleccionada{celdasSeleccionadas.length > 1 ? 's' : ''}</strong> - 
+                          {celdasSeleccionadas.length >= 2 ? ' Haz clic en "Combinar" para fusionarlas' : ' Selecciona más celdas con Ctrl+Click'}
+                        </span>
+                      </div>
+                    )}
                     {/* Barra de herramientas de formato */}
                     <div style={{
                       display: "flex",
@@ -6359,73 +6425,94 @@ Ruiz Nutrición
                       <div style={{ width: "1px", backgroundColor: "#cbd5e1", height: "24px", margin: "0 2px" }}></div>
                       <button
                         onClick={() => {
-                          const selection = window.getSelection();
-                          if (!selection.rangeCount) {
-                            alert('Por favor, selecciona las celdas que deseas combinar');
+                          if (!editorManualRef.current) {
+                            alert('Editor no disponible');
                             return;
                           }
                           
-                          // Obtener todas las celdas seleccionadas
-                          const range = selection.getRangeAt(0);
-                          const container = range.commonAncestorContainer;
-                          const table = container.nodeType === 1 ? container.closest('table') : container.parentElement?.closest('table');
-                          
-                          if (!table) {
-                            alert('Por favor, selecciona celdas dentro de una tabla');
+                          // Usar las celdas del estado en lugar de la selección
+                          if (celdasSeleccionadas.length < 2) {
+                            alert('Por favor, selecciona al menos 2 celdas con Ctrl+Click');
                             return;
                           }
                           
-                          // Obtener las celdas seleccionadas
-                          const selectedCells = [];
-                          const tempDiv = document.createElement('div');
-                          tempDiv.appendChild(range.cloneContents());
-                          const cells = tempDiv.querySelectorAll('td, th');
+                          // Verificar que todas las celdas están en la misma fila
+                          const firstRow = celdasSeleccionadas[0].parentElement;
+                          const sameRow = celdasSeleccionadas.every(cell => cell.parentElement === firstRow);
                           
-                          if (cells.length < 2) {
-                            alert('Selecciona al menos 2 celdas para combinar');
+                          if (!sameRow) {
+                            alert('Solo puedes combinar celdas de la misma fila');
                             return;
                           }
                           
-                          // Combinar el contenido de todas las celdas
+                          // Ordenar las celdas por su posición en la fila
+                          const allCellsInRow = Array.from(firstRow.querySelectorAll('td, th'));
+                          const sortedCells = celdasSeleccionadas.sort((a, b) => {
+                            return allCellsInRow.indexOf(a) - allCellsInRow.indexOf(b);
+                          });
+                          
+                          // Verificar que las celdas son consecutivas
+                          for (let i = 1; i < sortedCells.length; i++) {
+                            const prevIndex = allCellsInRow.indexOf(sortedCells[i - 1]);
+                            const currIndex = allCellsInRow.indexOf(sortedCells[i]);
+                            if (currIndex !== prevIndex + 1) {
+                              alert('Las celdas deben ser consecutivas');
+                              return;
+                            }
+                          }
+                          
+                          // Combinar contenido
                           let combinedContent = '';
-                          cells.forEach(cell => {
-                            if (cell.textContent.trim()) {
-                              combinedContent += cell.textContent.trim() + ' ';
+                          sortedCells.forEach(cell => {
+                            const text = cell.innerHTML.trim();
+                            if (text && text !== '<br>') {
+                              combinedContent += (combinedContent ? '<br>' : '') + text;
                             }
                           });
                           
-                          // Aplicar colspan/rowspan a la primera celda
-                          if (range.startContainer.nodeType === 3) {
-                            const firstCell = range.startContainer.parentElement?.closest('td, th');
-                            if (firstCell) {
-                              const colspan = cells.length;
-                              firstCell.setAttribute('colspan', colspan.toString());
-                              firstCell.innerHTML = combinedContent.trim();
-                              
-                              // Eliminar las celdas siguientes en la misma fila
-                              let nextCell = firstCell.nextElementSibling;
-                              for (let i = 1; i < colspan; i++) {
-                                if (nextCell) {
-                                  const toRemove = nextCell;
-                                  nextCell = nextCell.nextElementSibling;
-                                  toRemove.remove();
-                                }
-                              }
-                            }
+                          if (!combinedContent) {
+                            combinedContent = '<br>';
                           }
+                          
+                          // Aplicar colspan a la primera celda
+                          const firstCell = sortedCells[0];
+                          firstCell.setAttribute('colspan', sortedCells.length.toString());
+                          firstCell.setAttribute('contenteditable', 'true');
+                          firstCell.innerHTML = combinedContent;
+                          
+                          // Quitar estilo de selección
+                          firstCell.classList.remove('celda-seleccionada');
+                          firstCell.style.backgroundColor = '';
+                          firstCell.style.boxShadow = '';
+                          
+                          // Eliminar las demás celdas
+                          for (let i = 1; i < sortedCells.length; i++) {
+                            sortedCells[i].remove();
+                          }
+                          
+                          // Actualizar el estado
+                          setContenidoManual(editorManualRef.current.innerHTML);
+                          const storageKey = `menu_manual_draft_${uid}`;
+                          localStorage.setItem(storageKey, editorManualRef.current.innerHTML);
+                          
+                          // Limpiar selección
+                          setCeldasSeleccionadas([]);
                         }}
                         style={{
                           padding: "6px 10px",
                           border: "1px solid #cbd5e1",
                           borderRadius: "4px",
-                          backgroundColor: "white",
+                          backgroundColor: celdasSeleccionadas.length >= 2 ? "#3b82f6" : "white",
+                          color: celdasSeleccionadas.length >= 2 ? "white" : "#374151",
                           cursor: "pointer",
                           fontSize: "12px",
-                          whiteSpace: "nowrap"
+                          whiteSpace: "nowrap",
+                          fontWeight: celdasSeleccionadas.length >= 2 ? "600" : "normal",
+                          transition: "all 0.2s"
                         }}
-                        title="Combinar celdas seleccionadas"
+                        title={`Combinar celdas seleccionadas (${celdasSeleccionadas.length} seleccionadas)`}
                       >
-                        🔗 Combinar
+                        🔗 Combinar {celdasSeleccionadas.length >= 2 && `(${celdasSeleccionadas.length})`}
                       </button>
                       <button
                         onClick={(e) => {
@@ -6490,6 +6577,7 @@ Ruiz Nutrición
                             for (let i = 1; i < colspan; i++) {
                               const newCell = document.createElement('td');
                               newCell.innerHTML = '<br>';
+                              newCell.setAttribute('contenteditable', 'true');
                               
                               // Copiar estilos básicos si no es la primera columna
                               const isFirstColumn = Array.from(row.children).indexOf(cell) === 0;
@@ -6524,6 +6612,7 @@ Ruiz Nutrición
                               if (targetRow) {
                                 const newCell = document.createElement('td');
                                 newCell.innerHTML = '<br>';
+                                newCell.setAttribute('contenteditable', 'true');
                                 newCell.style.minHeight = '80px';
                                 
                                 // Insertar en la posición correcta
@@ -6539,6 +6628,8 @@ Ruiz Nutrición
                           // Actualizar el contenido en el estado
                           if (editorManualRef.current) {
                             setContenidoManual(editorManualRef.current.innerHTML);
+                            const storageKey = `menu_manual_draft_${uid}`;
+                            localStorage.setItem(storageKey, editorManualRef.current.innerHTML);
                           }
                         }}
                         style={{
@@ -6555,6 +6646,34 @@ Ruiz Nutrición
                       >
                         ⛓️‍💥 Descombinar
                       </button>
+                      {celdasSeleccionadas.length > 0 && (
+                        <button
+                          onClick={() => {
+                            // Limpiar estilos de todas las celdas seleccionadas
+                            celdasSeleccionadas.forEach(cell => {
+                              cell.classList.remove('celda-seleccionada');
+                              cell.style.backgroundColor = '';
+                              cell.style.boxShadow = '';
+                            });
+                            setCeldasSeleccionadas([]);
+                          }}
+                          style={{
+                            padding: "6px 10px",
+                            border: "1px solid #ef4444",
+                            borderRadius: "4px",
+                            backgroundColor: "white",
+                            color: "#ef4444",
+                            cursor: "pointer",
+                            fontSize: "12px",
+                            whiteSpace: "nowrap",
+                            marginLeft: "4px",
+                            fontWeight: "600"
+                          }}
+                          title="Limpiar selección"
+                        >
+                          ✖ Limpiar ({celdasSeleccionadas.length})
+                        </button>
+                      )}
                     </div>
                     
                     {/* Panel de control de comidas activas */}
@@ -6710,7 +6829,8 @@ Ruiz Nutrición
                       borderRadius: "6px", 
                       border: "1px solid #e2e8f0" 
                     }}>
-                      💡 <strong>Instrucciones:</strong> {isMobile ? "Toca" : "Haz clic en"} cualquier celda para editar el contenido. La tabla se puede desplazar horizontalmente.
+                      💡 <strong>Instrucciones:</strong> {isMobile ? "Toca" : "Haz clic en"} cualquier celda para editar el contenido.<br/>
+                      🔗 <strong>Para combinar celdas:</strong> Mantén presionada la tecla Ctrl (o Cmd en Mac) y haz clic en las celdas que deseas combinar. Luego presiona el botón "🔗 Combinar".
                     </div>
                       </>
                     </div>
