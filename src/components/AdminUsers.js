@@ -389,6 +389,7 @@ export default function AdminUsers() {
     if (plan === "básico" || plan === "basico") return "basico";
     if (plan.includes("básico + ejercicio") || plan.includes("basico + ejercicio")) return "basico_ejercicios";
     if (plan === "seguimiento") return "seguimiento";
+    if (plan === "gym + seguimiento") return "gym_seguimiento";
     if (plan === "gym") return "gym";
     
     return null;
@@ -2185,6 +2186,7 @@ export default function AdminUsers() {
                     <option value="Básico + Ejercicios">Básico + Ejercicios</option>
                     <option value="Seguimiento">Seguimiento</option>
                     <option value="GYM">GYM</option>
+                    <option value="GYM + Seguimiento">GYM + Seguimiento</option>
                   </select>
                   <small style={{ color: "#64748b", fontSize: isMobile ? "13px" : "11px", marginTop: "4px", display: "block" }}>Define qué módulos tendrá acceso el usuario en la aplicación</small>
                 </div>
@@ -2329,6 +2331,10 @@ export default function AdminUsers() {
                 <div style={{ marginBottom: "10px", fontSize: isMobile ? "13px" : "14px" }}>
                   <strong style={{ color: "#8b5cf6" }}>🏋️ GYM:</strong>
                   <div style={{ color: "#64748b", marginLeft: "20px" }}>SOLO GYM</div>
+                </div>
+                <div style={{ marginBottom: "10px", fontSize: isMobile ? "13px" : "14px" }}>
+                  <strong style={{ color: "#0891b2" }}>🏋️📊 GYM + Seguimiento:</strong>
+                  <div style={{ color: "#64748b", marginLeft: "20px" }}>SOLO Pesaje y GYM</div>
                 </div>
               </div>
             </div>

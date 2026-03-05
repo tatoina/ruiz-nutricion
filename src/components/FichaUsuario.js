@@ -16,6 +16,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
   serverTimestamp,
   arrayUnion,
   collection,
@@ -66,20 +67,34 @@ const ensureContentEditableInHTML = (htmlContent) => {
       cell.setAttribute('contenteditable', 'true');
       
       // IMPORTANTE: Limpiar contenido corrupto de las celdas editables
-      // Si la celda tiene elementos anidados complejos, simplificar a texto plano
+      // Preservar saltos de línea (<br>) pero eliminar nesting complejo
       const innerHTML = cell.innerHTML.trim();
       
-      // Si la celda solo tiene <br>, dejarla así
+      // Si la celda solo tiene <br> o está vacía, dejarla así
       if (innerHTML === '<br>' || innerHTML === '') {
         cell.innerHTML = '<br>';
       } else {
-        // Extraer solo el texto y dejarlo como texto plano
-        const textContent = cell.textContent || '';
-        if (textContent.trim()) {
-          // Mantener el texto pero sin elementos anidados complejos
-          cell.textContent = textContent;
+        // Verificar si hay elementos verdaderamente complejos (tablas, listas, etc.)
+        const hasTrulyComplex = cell.querySelector('table, tr, td, th, ul, ol, li, h1, h2, h3, h4, h5, h6, blockquote');
+        if (hasTrulyComplex) {
+          // Para HTML muy complejo (tablas anidadas, listas...) extraer texto plano
+          const textContent = cell.textContent || '';
+          if (textContent.trim()) {
+            cell.textContent = textContent;
+          } else {
+            cell.innerHTML = '<br>';
+          }
         } else {
-          cell.innerHTML = '<br>';
+          // Convertir <div> y <p> a saltos de línea (comportamiento de Chrome al pulsar Enter)
+          // Esto preserva los saltos de línea insertados por el usuario
+          let cleaned = cell.innerHTML;
+          // Sustituir </div> y </p> por <br> (fin de bloque → salto de línea)
+          cleaned = cleaned.replace(/<\/(div|p)>/gi, '<br>');
+          // Eliminar etiquetas <div> y <p> de apertura
+          cleaned = cleaned.replace(/<(div|p)[^>]*>/gi, '');
+          // Evitar múltiples <br> consecutivos innecesarios al final
+          cleaned = cleaned.replace(/(<br\s*\/?>\s*)+$/i, '');
+          cell.innerHTML = cleaned || '<br>';
         }
       }
     }
@@ -103,7 +118,7 @@ export default function FichaUsuario(props) {
     { id: "semana", label: "🍽️ Dieta", icon: "🍽️" },
     { id: "lista-compra", label: "🛒 Lista Compra", icon: "🛒" },
     { id: "gym", label: "🏋️ GYM", icon: "🏋️" },
-    { id: "ejercicios", label: "💪 Ejercicios", icon: "💪" },
+    { id: "ejercicios", label: "� Docs", icon: "📄" },
     { id: "citas", label: "📅 Citas", icon: "📅" },
     { id: "mensajes", label: "💬 MSG", icon: "💬" },
   ], []);
@@ -151,6 +166,7 @@ export default function FichaUsuario(props) {
   const [showVideoModal, setShowVideoModal] = useState(false);
   const [currentVideoUrl, setCurrentVideoUrl] = useState("");
   const [currentVideoTitle, setCurrentVideoTitle] = useState("");
+  const [diasColapsados, setDiasColapsados] = useState({"Día 1": true, "Día 2": true, "Día 3": true, "Día 4": true, "Día 5": true, "Día 6": true, "Día 7": true});
 
   const [peso, setPeso] = useState("");
   const [altura, setAltura] = useState("");
@@ -260,6 +276,32 @@ export default function FichaUsuario(props) {
   // Estados para solicitud de nueva tabla GYM
   const [showSolicitudNuevaTabla, setShowSolicitudNuevaTabla] = useState(false);
   
+  // Modal confirmación email al guardar dieta
+  const [showEmailConfirmModal, setShowEmailConfirmModal] = useState(false);
+  const [emailConfirmVersion, setEmailConfirmVersion] = useState("");
+  const emailConfirmResolveRef = React.useRef(null);
+
+  // Modal restaurar dieta histórica
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
+  const [restoreDietaPreview, setRestoreDietaPreview] = useState(null);
+
+  // Historial de dietas (subcolección)
+  const [dietasHistoricoList, setDietasHistoricoList] = useState([]);
+  const loadDietasHistorico = useCallback(async (targetUid) => {
+    if (!targetUid) return;
+    try {
+      const histRef = collection(db, "users", targetUid, "dietasHistorico");
+      const q = query(histRef, orderBy("createdAt", "desc"));
+      const snap = await getDocs(q);
+      setDietasHistoricoList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (err) {
+      logger.error("[FichaUsuario] loadDietasHistorico error:", err);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cargar historial cuando cambia el uid (uid se define más abajo, se usa en useEffect)
+  // El useEffect se declara aquí pero uid se resuelve en tiempo de ejecución desde props/auth
+
   // Estados para galería de fotos de dieta
   const [showFotosModal, setShowFotosModal] = useState(false);
   const [fotosGaleria, setFotosGaleria] = useState([]);
@@ -358,6 +400,9 @@ export default function FichaUsuario(props) {
       } else if (planUsuario === "GYM") {
         // Plan GYM: solo GYM
         tabsFiltradas = baseTabs.filter(tab => tab.id === "gym");
+      } else if (planUsuario === "GYM + Seguimiento") {
+        // Plan GYM + Seguimiento: Pesaje y GYM
+        tabsFiltradas = baseTabs.filter(tab => tab.id === "pesaje" || tab.id === "gym");
       }
       // Plan "Basico + Ejercicios" y cualquier otro: todas las pestañas
     }
@@ -382,6 +427,10 @@ export default function FichaUsuario(props) {
   }, [userData, adminMode, baseTabs, isMobile]);
 
   const saveTimerRef = useRef(null);
+  const autoSaveManualFirestoreTimerRef = useRef(null);
+  const latestMenuRef = useRef(null);
+  const latestUidRef = useRef(null);
+  const latestModoManualRef = useRef(false);
   const [saveStatus, setSaveStatus] = useState("idle");
   const rootRef = useRef(null);
 
@@ -446,6 +495,10 @@ export default function FichaUsuario(props) {
   }
 
   const uid = targetUid || authUid;
+
+  // Cargar historial cuando cambia el uid
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (uid) loadDietasHistorico(uid); }, [uid]);
 
   const emptyDayMenu = useCallback(() => ({
     desayuno: "", almuerzo: "", comida: "", merienda: "", cena: "", consejos: ""
@@ -689,45 +742,92 @@ export default function FichaUsuario(props) {
     });
   };
 
-  // autosave menu (modo tabla/vertical)
+  // === AUTOSAVE FIABLE: sincronización de refs con últimos valores ===
+  // (permite acceso sin stale closures desde visibilitychange y cleanups)
+  useEffect(() => { latestMenuRef.current = editable.menu; }, [editable.menu]);
+  useEffect(() => { latestUidRef.current = uid; }, [uid]);
+  useEffect(() => { latestModoManualRef.current = modoManual; }, [modoManual]);
+
+  // Guardado real del menú normal – lee siempre de refs, nunca stale
+  const flushSaveMenu = useCallback(async () => {
+    const currentUid = latestUidRef.current;
+    const currentMenu = latestMenuRef.current;
+    if (!currentUid || !currentMenu) return;
+    setSaveStatus("saving");
+    try {
+      const menuToSave = Array.isArray(currentMenu) ? currentMenu : Array.from({ length: 7 }, () => ({ ...emptyDayMenu() }));
+      await updateDoc(doc(db, "users", currentUid), { menu: menuToSave, updatedAt: serverTimestamp() });
+      setSaveStatus("saved"); setTimeout(() => setSaveStatus("idle"), 1200);
+    } catch (err) {
+      logger.error("[FichaUsuario] flushSaveMenu error:", err);
+      const notFoundCodes = ["not-found", "notFound", "404"];
+      const isNotFound = err?.code ? notFoundCodes.some((c) => String(err.code).toLowerCase().includes(String(c).toLowerCase())) : false;
+      if (isNotFound) {
+        try {
+          await setDoc(doc(db, "users", currentUid), { menu: Array.isArray(currentMenu) ? currentMenu : Array.from({ length: 7 }, () => ({ ...emptyDayMenu() })), updatedAt: serverTimestamp(), createdAt: serverTimestamp() }, { merge: true });
+          setSaveStatus("saved"); setTimeout(() => setSaveStatus("idle"), 1200);
+        } catch (err2) {
+          logger.error("[FichaUsuario] flushSaveMenu fallback error:", err2);
+          setSaveStatus("error"); setError(err2?.message || "No se pudo guardar el menú.");
+        }
+      } else {
+        setSaveStatus("error"); setError(err?.message || "No se pudo guardar el menú.");
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Guardado real del modo manual – lee de editorManualRef (DOM) o contenidoManualRef
+  const flushSaveManual = useCallback(async () => {
+    const currentUid = latestUidRef.current;
+    const html = editorManualRef.current?.innerHTML || contenidoManualRef.current;
+    if (!currentUid || !html) return;
+    // Guardia de tamaño (autosave)
+    const estimatedKB = Math.round(new Blob([html]).size / 1024);
+    if (estimatedKB > 800) {
+      logger.error(`[FichaUsuario] flushSaveManual BLOQUEADO: contenidoManual es ${estimatedKB} KB (límite seguro 800 KB)`);
+      setSaveStatus("error");
+      return;
+    }
+    setSaveStatus("saving");
+    try {
+      await updateDoc(doc(db, "users", currentUid), {
+        contenidoManual: html,
+        modoManual: true,
+        updatedAt: serverTimestamp()
+      });
+      setSaveStatus("saved"); setTimeout(() => setSaveStatus("idle"), 1200);
+    } catch (err) {
+      logger.error("[FichaUsuario] flushSaveManual error:", err);
+      setSaveStatus("error");
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Autosave menú normal (tabla/vertical)
+  // Fix: en el cleanup, si hay timer pendiente → flush inmediato en vez de cancelar
   useEffect(() => {
     if (!uid) return;
     if (!editable.menu) return;
-    if (modoManual) return; // No autoguardar en modo manual
+    if (modoManual) return;
     if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
-
     setSaveStatus("pending");
     saveTimerRef.current = setTimeout(async () => {
-      setSaveStatus("saving");
-      try {
-        const menuToSave = Array.isArray(editable.menu) ? editable.menu : Array.from({ length: 7 }, () => ({ ...emptyDayMenu() }));
-        await updateDoc(doc(db, "users", uid), { menu: menuToSave, updatedAt: serverTimestamp() });
-        setSaveStatus("saved"); setTimeout(() => setSaveStatus("idle"), 1200);
-      } catch (err) {
-        logger.error("[FichaUsuario] autosave error:", err);
-        const notFoundCodes = ["not-found", "notFound", "404"];
-        const isNotFound = err?.code ? notFoundCodes.some((c) => String(err.code).toLowerCase().includes(String(c).toLowerCase())) : false;
-        if (isNotFound) {
-          try {
-            await setDoc(doc(db, "users", uid), { menu: Array.isArray(editable.menu) ? editable.menu : Array.from({ length: 7 }, () => ({ ...emptyDayMenu() })), updatedAt: serverTimestamp(), createdAt: serverTimestamp() }, { merge: true });
-            setSaveStatus("saved"); setTimeout(() => setSaveStatus("idle"), 1200);
-          } catch (err2) {
-            logger.error("[FichaUsuario] autosave fallback error:", err2);
-            setSaveStatus("error"); setError(err2?.message || "No se pudo guardar el menú.");
-          }
-        } else {
-          setSaveStatus("error"); setError(err?.message || "No se pudo guardar el menú.");
-        }
-      }
+      saveTimerRef.current = null;
+      await flushSaveMenu();
     }, 1200);
-
-    return () => { if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; } };
+    return () => {
+      if (saveTimerRef.current) {
+        // Cambios pendientes: cancelar timer y guardar YA (al navegar/desmontar)
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+        flushSaveMenu();
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editable.menu, uid, modoManual]);
 
   // Autoguardar contenido manual en localStorage mientras se edita
   const autoSaveManualTimerRef = useRef(null);
-  
+
   // Limpiar timer de debounce al desmontar
   useEffect(() => {
     return () => {
@@ -736,17 +836,14 @@ export default function FichaUsuario(props) {
       }
     };
   }, []);
-  
+
+  // Autosave modoManual: localStorage rápido (800ms) + Firestore (3000ms)
+  // Fix: antes solo iba a localStorage; ahora también va a Firestore
   useEffect(() => {
     if (!adminMode || !modoManual || !uid || !contenidoManual) return;
-    
-    // Limpiar timer anterior
-    if (autoSaveManualTimerRef.current) {
-      clearTimeout(autoSaveManualTimerRef.current);
-      autoSaveManualTimerRef.current = null;
-    }
-    
-    // Guardar en localStorage después de 800ms de inactividad
+
+    // localStorage rápido (800ms)
+    if (autoSaveManualTimerRef.current) { clearTimeout(autoSaveManualTimerRef.current); autoSaveManualTimerRef.current = null; }
     autoSaveManualTimerRef.current = setTimeout(() => {
       const storageKey = `menu_manual_draft_${uid}`;
       try {
@@ -756,26 +853,69 @@ export default function FichaUsuario(props) {
         logger.error("[FichaUsuario] Error guardando en localStorage:", err);
       }
     }, 800);
-    
+
+    // Firestore con debounce de 3s
+    if (autoSaveManualFirestoreTimerRef.current) { clearTimeout(autoSaveManualFirestoreTimerRef.current); autoSaveManualFirestoreTimerRef.current = null; }
+    autoSaveManualFirestoreTimerRef.current = setTimeout(async () => {
+      autoSaveManualFirestoreTimerRef.current = null;
+      await flushSaveManual();
+    }, 3000);
+
     return () => {
-      if (autoSaveManualTimerRef.current) {
-        clearTimeout(autoSaveManualTimerRef.current);
-        autoSaveManualTimerRef.current = null;
+      if (autoSaveManualTimerRef.current) { clearTimeout(autoSaveManualTimerRef.current); autoSaveManualTimerRef.current = null; }
+      if (autoSaveManualFirestoreTimerRef.current) {
+        clearTimeout(autoSaveManualFirestoreTimerRef.current);
+        autoSaveManualFirestoreTimerRef.current = null;
+        flushSaveManual(); // flush inmediato si hay cambios pendientes al navegar
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contenidoManual, adminMode, modoManual, uid]);
+
+  // visibilitychange: guardar inmediatamente cuando el admin cambia de pestaña del navegador
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) return;
+      // Modo normal: hay timer pendiente → flush ahora
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+        if (!latestModoManualRef.current) flushSaveMenu();
+      }
+      // Modo manual: hay timer Firestore pendiente → flush ahora
+      if (autoSaveManualFirestoreTimerRef.current) {
+        clearTimeout(autoSaveManualFirestoreTimerRef.current);
+        autoSaveManualFirestoreTimerRef.current = null;
+        if (latestModoManualRef.current) flushSaveManual();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   // Establecer el contenido inicial del editor manual
+  // IMPORTANTE: se actualiza síncronamente en cada render (NO en useEffect)
+  // para que cuando setEditorManualRef se ejecute tras el commit, el ref ya tenga el valor actual.
   const contenidoManualRef = useRef(contenidoManual);
-  useEffect(() => {
-    contenidoManualRef.current = contenidoManual;
-  }, [contenidoManual]);
+  contenidoManualRef.current = contenidoManual;
   
   const setEditorManualRef = useCallback((node) => {
-    if (!node || !adminMode || !modoManual || !uid) return;
-    
+    // Siempre actualizar el ref del DOM (ANTES del early-return).
+    // useCallback tiene deps=[] → su closure puede tener modoManual stale.
+    // Al menos el ref apunta al nodo correcto para que el timeout del restore lo encuentre.
+    if (!node) { editorManualRef.current = null; return; }
     editorManualRef.current = node;
-    
+
+    // Si hay contenido pendiente de restauración, aplicarlo y salir
+    // (no necesitamos inicialización estándar en ese caso)
+    if (pendingRestoreContentRef.current) {
+      node.innerHTML = ensureContentEditableInHTML(pendingRestoreContentRef.current);
+      pendingRestoreContentRef.current = null;
+      return;
+    }
+
+    if (!adminMode || !modoManual || !uid) return;
     const defaultContent = `
       <style>
         table { 
@@ -1614,21 +1754,23 @@ export default function FichaUsuario(props) {
       const timestamp = new Date().toISOString();
       const now = new Date();
       
-      // Get existing diet history
       const snap = await getDoc(doc(db, "users", uid));
       const currentData = snap.exists() ? snap.data() : {};
-      const dietasHistorico = Array.isArray(currentData.dietasHistorico) ? currentData.dietasHistorico : [];
-      
-      // Update previous version's fechaHasta if exists
-      if (dietasHistorico.length > 0) {
-        const lastVersion = dietasHistorico[dietasHistorico.length - 1];
-        if (!lastVersion.fechaHasta) {
-          lastVersion.fechaHasta = timestamp;
+
+      // --- Historial en SUBCOLECIÓN (no en el documento del usuario) ---
+      const histRef = collection(db, "users", uid, "dietasHistorico");
+      // Marcar fechaHasta de la última versión activa
+      const sortedAsc = [...dietasHistoricoList].sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+      if (sortedAsc.length > 0) {
+        const lastVersion = sortedAsc[sortedAsc.length - 1];
+        if (!lastVersion.fechaHasta && lastVersion.id) {
+          try {
+            await updateDoc(doc(db, "users", uid, "dietasHistorico", lastVersion.id), { fechaHasta: timestamp });
+          } catch (_) {}
         }
       }
-      
-      // Create new version
-      const versionNumber = String(dietasHistorico.length + 1).padStart(3, '0');
+      // Crear nueva versión en la subcoleción
+      const versionNumber = String(dietasHistoricoList.length + 1).padStart(3, '0');
       const newVersion = {
         numero: versionNumber,
         fechaDesde: timestamp,
@@ -1637,29 +1779,45 @@ export default function FichaUsuario(props) {
         modoManual: modoManual,
         contenidoManual: modoManual ? contenidoManualToSave : null,
         tipoMenu: tipoMenu,
+        menuVertical: tipoMenu === "vertical" ? menuVertical : null,
         createdAt: timestamp
       };
-      
-      // Preparar datos para actualizar
+      await addDoc(histRef, newVersion);
+
+      // Actualizar documento usuario SIN dietasHistorico ni menuHistorico
       const updateData = {
         menu: menuToSave,
-        dietasHistorico: [...dietasHistorico, newVersion],
-        menuHistorico: arrayUnion({ createdAt: timestamp, menu: menuToSave }),
         modoManual: modoManual,
         tipoMenu: tipoMenu,
-        comidasActivas: comidasActivas, // Guardar estado de comidas activas
+        comidasActivas: comidasActivas,
         updatedAt: serverTimestamp()
       };
-      
-      // Si es modo manual, también guardar el contenido HTML
       if (modoManual) {
         updateData.contenidoManual = contenidoManualToSave;
         setContenidoManual(contenidoManualToSave);
       }
-      
-      // Save to Firestore
+      // Guardar menuVertical cuando el tipo de menú es vertical
+      if (tipoMenu === "vertical") {
+        updateData.menuVertical = menuVertical;
+      }
+
+      // ── Guardia de tamaño: estimar KB antes de escribir ──────────────────
+      // Firestore limita a 1MB por documento. JSON.stringify subestima ligeramente
+      // (Firestore usa codificación propia), pero sirve como cota de seguridad.
+      const estimatedUpdateKB = Math.round(new Blob([JSON.stringify(updateData)]).size / 1024);
+      const FIRESTORE_SAFE_LIMIT_KB = 800; // 80% del límite real (1024 KB)
+      if (estimatedUpdateKB > FIRESTORE_SAFE_LIMIT_KB) {
+        logger.error(`[FichaUsuario] GUARDIA TAMAÑO: updateData estimado en ${estimatedUpdateKB} KB, supera ${FIRESTORE_SAFE_LIMIT_KB} KB. Guardado bloqueado.`);
+        alert(`⚠️ El contenido de la dieta es demasiado grande (${estimatedUpdateKB} KB).\nFirestore tiene un límite de 1024 KB por documento.\nPor favor, reduce el contenido antes de guardar.`);
+        return;
+      }
+      if (estimatedUpdateKB > 500) {
+        logger.warn(`[FichaUsuario] Aviso tamaño: updateData es ${estimatedUpdateKB} KB. Considera reducir el contenido.`);
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       await updateDoc(doc(db, "users", uid), updateData);
-      
+      await loadDietasHistorico(uid);
       const newSnap = await getDoc(doc(db, "users", uid));
       if (newSnap.exists()) setUserData(newSnap.data());
       
@@ -1677,9 +1835,13 @@ export default function FichaUsuario(props) {
       // Preguntar si desea enviar email de notificación al usuario
       let emailEnviado = false;
       if (currentData.email) {
-        const confirmarEmail = window.confirm(
-          `✅ Dieta #${versionNumber} guardada correctamente.\n\n¿Deseas enviar un email de notificación al usuario?`
-        );
+        const confirmarEmail = await new Promise((resolve) => {
+          emailConfirmResolveRef.current = resolve;
+          setEmailConfirmVersion(versionNumber);
+          setShowEmailConfirmModal(true);
+        });
+        setShowEmailConfirmModal(false);
+        emailConfirmResolveRef.current = null;
         
         if (confirmarEmail) {
           try {
@@ -1691,11 +1853,13 @@ export default function FichaUsuario(props) {
             alert("⚠️ La dieta se guardó pero hubo un error al enviar el email.");
           }
         }
+      } else {
+        alert(`✅ Dieta #${versionNumber} guardada correctamente`);
       }
       
       if (emailEnviado) {
         alert(`✅ Dieta #${versionNumber} guardada y email enviado al usuario`);
-      } else {
+      } else if (currentData.email) {
         alert(`✅ Dieta #${versionNumber} guardada correctamente`);
       }
     } catch (err) {
@@ -3859,8 +4023,8 @@ Ruiz Nutrición
     }
   };
 
-  const menuHistoryRaw = Array.isArray(userData?.menuHistorico) ? userData.menuHistorico : [];
-  const menuHistoryMapped = menuHistoryRaw.map((m) => ({ ...m, _t: timestampToMs(m?.createdAt || m?.when || m?.fecha) || 0 })).sort((a, b) => (b._t || 0) - (a._t || 0));
+  const menuHistoryRaw = [];
+  const menuHistoryMapped = [];
 
   const selDay = Number.isFinite(editable._selectedDay) ? editable._selectedDay : todayIndex;
   const dayName = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"][selDay];
@@ -4279,6 +4443,86 @@ Ruiz Nutrición
     } catch (err) {
       console.error("handlePrint error:", err);
       alert("No se pudo generar el PDF. Revisa la consola.");
+    }
+  };
+
+  // Restaurar una versión histórica de la dieta
+  // Ref para cargar contenido en el editor tras una restauración
+  // (cubre tanto el caso de editor ya montado como el de recién montado)
+  const pendingRestoreContentRef = useRef(null);
+
+  const handleRestoreDieta = async (dieta) => {
+    if (!uid) return;
+    try {
+      const restoredMenu = Array.isArray(dieta.menu) ? dieta.menu : Array.from({ length: 7 }, () => ({ ...emptyDayMenu() }));
+      const restoredModoManual = dieta.modoManual || false;
+      const restoredTipoMenu = dieta.tipoMenu || "tabla";
+      const restoredContenido = dieta.contenidoManual || "";
+
+      const updateData = {
+        menu: restoredMenu,
+        modoManual: restoredModoManual,
+        tipoMenu: restoredTipoMenu,
+        updatedAt: serverTimestamp()
+      };
+      if (restoredModoManual && restoredContenido) {
+        updateData.contenidoManual = restoredContenido;
+      }
+      if (restoredTipoMenu === "vertical" && dieta.menuVertical) {
+        updateData.menuVertical = dieta.menuVertical;
+      }
+      await updateDoc(doc(db, "users", uid), updateData);
+
+      // 1. Limpiar borrador de localStorage para que no machaque la restauración
+      try { localStorage.removeItem(`menu_manual_draft_${uid}`); } catch (_) {}
+
+      // 2. Actualizar refs síncronos ANTES de los setStates
+      if (restoredModoManual && restoredContenido) {
+        contenidoManualRef.current = restoredContenido;
+        // Guardar también en el pending ref por si el editor aún no está montado
+        pendingRestoreContentRef.current = restoredContenido;
+      }
+
+      // 3. Si el editor ya está montado, actualizar el DOM directamente ahora
+      if (restoredModoManual && restoredContenido && editorManualRef.current) {
+        editorManualRef.current.innerHTML = ensureContentEditableInHTML(restoredContenido);
+        pendingRestoreContentRef.current = null; // ya aplicado
+      }
+
+      // 4. Actualizar todo el estado de React
+      setModoManual(restoredModoManual);
+      setTipoMenu(restoredTipoMenu);
+      if (restoredModoManual && restoredContenido) {
+        setContenidoManual(restoredContenido);
+      }
+      if (restoredTipoMenu === "vertical" && dieta.menuVertical) {
+        setMenuVertical(dieta.menuVertical);
+      }
+      setEditable(prev => ({
+        ...prev,
+        menu: normalizeMenu(restoredMenu)
+      }));
+
+      // 5. Fallback con setTimeout: cubre el caso de que el editor se monte
+      //    después de que React procese el cambio de modoManual (modo tabla → manual)
+      if (restoredModoManual && restoredContenido) {
+        setTimeout(() => {
+          if (pendingRestoreContentRef.current && editorManualRef.current) {
+            editorManualRef.current.innerHTML = ensureContentEditableInHTML(pendingRestoreContentRef.current);
+            pendingRestoreContentRef.current = null;
+          }
+        }, 150);
+      }
+
+      const newSnap = await getDoc(doc(db, "users", uid));
+      if (newSnap.exists()) setUserData(newSnap.data());
+
+      setShowRestoreModal(false);
+      setRestoreDietaPreview(null);
+      alert(`✅ Dieta #${dieta.numero} restaurada correctamente`);
+    } catch (err) {
+      console.error("Error restaurando dieta:", err);
+      alert("❌ Error al restaurar la dieta");
     }
   };
 
@@ -6051,7 +6295,7 @@ Ruiz Nutrición
                       
                       <button 
                         onClick={saveVersionMenu}
-                        title="Guardar Dieta"
+                        title="Guardar dieta"
                         style={{
                           display: "flex",
                           alignItems: "center",
@@ -6796,17 +7040,29 @@ Ruiz Nutrición
                       ref={setEditorManualRef}
                       suppressContentEditableWarning
                       onInput={(e) => {
-                        // Guardar los cambios sin validaciones complejas
-                        // Solo cuando termine de editar (onBlur)
+                        // Guardar con debounce en cada pulsación (incluido Enter → <br>)
+                        if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+                        debounceTimerRef.current = setTimeout(() => {
+                          if (editorManualRef.current) {
+                            const html = editorManualRef.current.innerHTML;
+                            setContenidoManual(html);
+                            try {
+                              const storageKey = `menu_manual_draft_${uid}`;
+                              localStorage.setItem(storageKey, html);
+                            } catch (_) {}
+                          }
+                        }, 600);
                       }}
                       onBlur={(e) => {
-                        // Actualizar el estado cuando el usuario termine de editar
+                        // Guardar inmediatamente al perder el foco
+                        if (debounceTimerRef.current) { clearTimeout(debounceTimerRef.current); debounceTimerRef.current = null; }
                         if (editorManualRef.current) {
-                          setContenidoManual(editorManualRef.current.innerHTML);
-                          
-                          // Guardar en localStorage también
-                          const storageKey = `menu_manual_draft_${uid}`;
-                          localStorage.setItem(storageKey, editorManualRef.current.innerHTML);
+                          const html = editorManualRef.current.innerHTML;
+                          setContenidoManual(html);
+                          try {
+                            const storageKey = `menu_manual_draft_${uid}`;
+                            localStorage.setItem(storageKey, html);
+                          } catch (_) {}
                         }
                       }}
                       style={{
@@ -8023,7 +8279,7 @@ Ruiz Nutrición
                       <h4 style={{ marginTop: "20px", marginBottom: "12px", fontSize: "16px", fontWeight: "600" }}>📋 Historial de Dietas Completas</h4>
                       <div style={{ overflowX: "auto", marginTop: 8 }}>
                         {(() => {
-                          const dietasHistorico = Array.isArray(userData?.dietasHistorico) ? userData.dietasHistorico : [];
+                          const dietasHistorico = dietasHistoricoList;
                           if (dietasHistorico.length === 0) {
                             return <div style={{ padding: 12, color: "#374151", backgroundColor: "#f9fafb", borderRadius: "6px" }}>No hay dietas guardadas. Pulsa "💾 Guardar versión" para crear la primera.</div>;
                           }
@@ -8039,7 +8295,7 @@ Ruiz Nutrición
                                 </tr>
                               </thead>
                               <tbody>
-                                {dietasHistorico.slice().reverse().map((dieta, idx) => {
+                                {dietasHistorico.map((dieta, idx) => {
                                   const fechaDesde = new Date(dieta.fechaDesde);
                                   const fechaHasta = dieta.fechaHasta ? new Date(dieta.fechaHasta) : null;
                                   const formatFecha = (date) => {
@@ -8060,17 +8316,9 @@ Ruiz Nutrición
                                       return;
                                     }
                                     try {
-                                      const actualIdx = dietasHistorico.length - 1 - idx;
-                                      const nuevasHistorico = dietasHistorico.filter((_, i) => i !== actualIdx);
-                                      await updateDoc(doc(db, "users", uid), {
-                                        dietasHistorico: nuevasHistorico,
-                                        updatedAt: serverTimestamp()
-                                      });
+                                      await deleteDoc(doc(db, "users", uid, "dietasHistorico", dieta.id));
+                                      await loadDietasHistorico(uid);
                                       alert("✅ Dieta eliminada correctamente");
-                                      const snap = await getDoc(doc(db, "users", uid));
-                                      if (snap.exists()) {
-                                        setUserData(snap.data());
-                                      }
                                     } catch (err) {
                                       console.error("Error eliminando dieta:", err);
                                       alert("❌ Error al eliminar la dieta");
@@ -8104,6 +8352,25 @@ Ruiz Nutrición
                                             onMouseOut={(e) => e.target.style.backgroundColor = "#ef4444"}
                                           >
                                             📄 Ver PDF
+                                          </button>
+                                          <button
+                                            onClick={() => { setRestoreDietaPreview(dieta); setShowRestoreModal(true); }}
+                                            style={{
+                                              backgroundColor: "#f59e0b",
+                                              color: "white",
+                                              padding: "6px 16px",
+                                              borderRadius: "6px",
+                                              border: "none",
+                                              cursor: "pointer",
+                                              fontWeight: "500",
+                                              fontSize: "13px",
+                                              boxShadow: "0 2px 4px rgba(245, 158, 11, 0.3)",
+                                              transition: "all 0.2s"
+                                            }}
+                                            onMouseOver={(e) => e.target.style.backgroundColor = "#d97706"}
+                                            onMouseOut={(e) => e.target.style.backgroundColor = "#f59e0b"}
+                                          >
+                                            ♻️ Restaurar
                                           </button>
                                           <button
                                             onClick={handleDelete}
@@ -8419,32 +8686,42 @@ Ruiz Nutrición
                       const ejerciciosDelDia = userData.ejerciciosPorDia[dia] || [];
                       if (ejerciciosDelDia.length === 0) return null;
                       
+                      const colapsado = diasColapsados[dia] !== false;
                       return (
                         <div key={dia} style={{
-                          marginBottom: "20px",
-                          padding: "12px",
-                          backgroundColor: "#f8f9fa",
+                          marginBottom: "12px",
                           borderRadius: "12px",
-                          border: "2px solid #e0e7ff"
+                          border: "2px solid #e0e7ff",
+                          overflow: "hidden"
                         }}>
-                          {/* Encabezado del día */}
-                          <div style={{
-                            fontSize: "16px",
-                            fontWeight: "700",
-                            color: "#1976d2",
-                            marginBottom: "12px",
-                            paddingBottom: "8px",
-                            borderBottom: "2px solid #1976d2",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px"
-                          }}>
+                          {/* Encabezado del día - clicable */}
+                          <div
+                            onClick={() => setDiasColapsados(prev => ({ ...prev, [dia]: !colapsado }))}
+                            style={{
+                              fontSize: "16px",
+                              fontWeight: "700",
+                              color: "white",
+                              padding: "12px 14px",
+                              backgroundColor: "#1976d2",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              cursor: "pointer",
+                              userSelect: "none"
+                            }}
+                          >
+                            <span style={{
+                              display: "inline-block",
+                              transition: "transform 0.25s",
+                              transform: colapsado ? "rotate(-90deg)" : "rotate(0deg)",
+                              fontSize: "12px"
+                            }}>▼</span>
                             <span>📅</span>
-                            <span>{dia}</span>
+                            <span style={{ flex: 1 }}>{dia}</span>
                             <span style={{
                               fontSize: "12px",
                               fontWeight: "500",
-                              backgroundColor: "#1976d2",
+                              backgroundColor: "rgba(255,255,255,0.25)",
                               color: "white",
                               padding: "2px 8px",
                               borderRadius: "12px"
@@ -8454,10 +8731,12 @@ Ruiz Nutrición
                           </div>
                           
                           {/* Lista de ejercicios del día */}
-                          <div style={{
+                          {!colapsado && <div style={{
                             display: "flex",
                             flexDirection: "column",
-                            gap: "8px"
+                            gap: "8px",
+                            padding: "12px",
+                            backgroundColor: "#f8f9fa"
                           }}>
                             {ejerciciosDelDia.map((ejercicio, index) => (
                               <div 
@@ -8499,7 +8778,8 @@ Ruiz Nutrición
                                       marginBottom: "3px",
                                       display: "flex",
                                       alignItems: "center",
-                                      gap: "8px"
+                                      gap: "8px",
+                                      justifyContent: "space-between"
                                     }}>
                                       <span>{ejercicio.nombre}</span>
                                       {ejercicio.videoUrl && (
@@ -8627,7 +8907,7 @@ Ruiz Nutrición
                                 </div>
                               </div>
                             ))}
-                          </div>
+                          </div>}
                         </div>
                       );
                     })}
@@ -8680,7 +8960,8 @@ Ruiz Nutrición
                                 marginBottom: "3px",
                                 display: "flex",
                                 alignItems: "center",
-                                gap: "8px"
+                                gap: "8px",
+                                justifyContent: "space-between"
                               }}>
                                 <span>{ejercicio.nombre}</span>
                                 {ejercicio.videoUrl && (
@@ -10623,6 +10904,161 @@ Ruiz Nutrición
               color: "#6b7280"
             }}>
               Video demostrativo del ejercicio
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal restaurar dieta histórica */}
+      {showRestoreModal && restoreDietaPreview && (() => {
+        const d = restoreDietaPreview;
+        const dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+        const comidas = ["desayuno", "almuerzo", "comida", "merienda", "cena", "consejos"];
+        const comidasLabels = ["Desayuno", "Almuerzo", "Comida", "Merienda", "Cena", "Consejos"];
+        const formatFecha = (iso) => {
+          if (!iso) return "";
+          const dt = new Date(iso);
+          return `${String(dt.getDate()).padStart(2,"0")}/${String(dt.getMonth()+1).padStart(2,"0")}/${dt.getFullYear()}`;
+        };
+        return (
+          <div style={{
+            position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 9999, padding: "16px"
+          }}>
+            <div style={{
+              backgroundColor: "#fff", borderRadius: "12px", padding: "28px",
+              maxWidth: "900px", width: "100%", maxHeight: "90vh",
+              overflowY: "auto", boxShadow: "0 8px 40px rgba(0,0,0,0.3)"
+            }}>
+              {/* Cabecera */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "20px", color: "#92400e" }}>♻️ Restaurar Dieta #{d.numero}</h3>
+                  <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#6b7280" }}>
+                    Desde: {formatFecha(d.fechaDesde)} {d.fechaHasta ? `— Hasta: ${formatFecha(d.fechaHasta)}` : "(Actual)"}
+                  </p>
+                </div>
+                <button onClick={() => { setShowRestoreModal(false); setRestoreDietaPreview(null); }}
+                  style={{ background: "none", border: "none", fontSize: "24px", cursor: "pointer", color: "#6b7280", lineHeight: 1 }}>✕</button>
+              </div>
+
+              {/* Aviso */}
+              <div style={{ backgroundColor: "#fef3c7", border: "1px solid #f59e0b", borderRadius: "8px", padding: "12px 16px", marginBottom: "20px", fontSize: "14px", color: "#92400e" }}>
+                ⚠️ <strong>Atención:</strong> Restaurar esta dieta <strong>sobreescribirá</strong> la dieta actual del usuario. Esta acción no se puede deshacer.
+              </div>
+
+              {/* Vista previa */}
+              <h4 style={{ margin: "0 0 12px", fontSize: "15px", color: "#374151" }}>Vista previa de la dieta a restaurar:</h4>
+
+              {d.modoManual && d.contenidoManual ? (
+                /* Modo manual: mostrar el HTML de la tabla */
+                <div style={{ border: "1px solid #e5e7eb", borderRadius: "8px", padding: "16px", overflowX: "auto", backgroundColor: "#fafafa" }}>
+                  <div dangerouslySetInnerHTML={{ __html: d.contenidoManual }} />
+                </div>
+              ) : d.tipoMenu === "vertical" && d.menuVertical ? (
+                /* Modo vertical: mostrar secciones con ítems */
+                <div style={{ border: "1px solid #e5e7eb", borderRadius: "8px", padding: "16px", backgroundColor: "#fafafa" }}>
+                  {["desayuno","almuerzo","comida","merienda","cena","consejos"].map(sec => {
+                    const labels = { desayuno:"🌅 Desayuno", almuerzo:"☕ Almuerzo", comida:"🍽️ Comida", merienda:"🥤 Merienda", cena:"🌙 Cena", consejos:"💡 Consejos" };
+                    const val = d.menuVertical[sec];
+                    const isEmpty = !val || (Array.isArray(val) && val.length === 0) || (typeof val === "string" && !val.trim());
+                    if (isEmpty) return null;
+                    return (
+                      <div key={sec} style={{ marginBottom: "12px" }}>
+                        <strong style={{ color: "#374151" }}>{labels[sec]}</strong>
+                        {sec === "consejos" ? (
+                          <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#6b7280", whiteSpace: "pre-wrap" }}>{typeof val === "string" ? val : val[0] || ""}</p>
+                        ) : (
+                          <ul style={{ margin: "4px 0 0", paddingLeft: "20px", fontSize: "13px", color: "#6b7280" }}>
+                            {(Array.isArray(val) ? val : [val]).map((item, i) => <li key={i}>{typeof item === "string" ? item : (item?.nombre || item)}</li>)}
+                          </ul>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* Modo tabla: mostrar cuadrícula semanal */
+                <div style={{ overflowX: "auto", border: "1px solid #e5e7eb", borderRadius: "8px" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                    <thead>
+                      <tr style={{ backgroundColor: "#15803d" }}>
+                        <th style={{ padding: "8px", color: "white", fontWeight: "600", textAlign: "center", minWidth: "80px" }}>Comida</th>
+                        {dias.map(dia => <th key={dia} style={{ padding: "8px", color: "white", fontWeight: "600", textAlign: "center", minWidth: "100px" }}>{dia}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {comidas.map((c, ci) => (
+                        <tr key={c} style={{ borderBottom: "1px solid #e5e7eb" }}>
+                          <td style={{ padding: "8px", fontWeight: "600", backgroundColor: "#f0fdf4", textAlign: "center" }}>{comidasLabels[ci]}</td>
+                          {dias.map((_, di) => {
+                            const val = (Array.isArray(d.menu) && d.menu[di]) ? d.menu[di][c] || "" : "";
+                            return <td key={di} style={{ padding: "8px", verticalAlign: "top", color: val ? "#374151" : "#d1d5db", fontStyle: val ? "normal" : "italic" }}>{val || "—"}</td>;
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Botones */}
+              <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "24px" }}>
+                <button
+                  onClick={() => { setShowRestoreModal(false); setRestoreDietaPreview(null); }}
+                  style={{ padding: "10px 24px", borderRadius: "8px", fontSize: "14px", fontWeight: "600", cursor: "pointer", border: "2px solid #d1d5db", backgroundColor: "#fff", color: "#374151" }}
+                >Cancelar</button>
+                <button
+                  onClick={() => handleRestoreDieta(d)}
+                  style={{ padding: "10px 24px", borderRadius: "8px", fontSize: "14px", fontWeight: "600", cursor: "pointer", border: "none", backgroundColor: "#f59e0b", color: "white", boxShadow: "0 2px 8px rgba(245,158,11,0.4)" }}
+                >♻️ Sí, restaurar esta dieta</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Modal confirmación email al guardar dieta */}
+      {showEmailConfirmModal && (
+        <div style={{
+          position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 9999
+        }}>
+          <div style={{
+            backgroundColor: "#fff", borderRadius: "12px", padding: "28px 32px",
+            maxWidth: "420px", width: "90%", boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+            textAlign: "center"
+          }}>
+            <div style={{ fontSize: "40px", marginBottom: "12px" }}>💾</div>
+            <h3 style={{ margin: "0 0 8px", fontSize: "18px", color: "#0f172a" }}>
+              Dieta #{emailConfirmVersion} guardada
+            </h3>
+            <p style={{ margin: "0 0 24px", fontSize: "15px", color: "#475569", lineHeight: "1.5" }}>
+              ¿Quieres enviar un email de notificación al usuario?
+            </p>
+            <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+              <button
+                onClick={() => { if (emailConfirmResolveRef.current) emailConfirmResolveRef.current(false); }}
+                style={{
+                  flex: 1, padding: "12px", borderRadius: "8px", fontSize: "14px",
+                  fontWeight: "600", cursor: "pointer", border: "2px solid #d1d5db",
+                  backgroundColor: "#fff", color: "#374151"
+                }}
+              >
+                No, solo guardar
+              </button>
+              <button
+                onClick={() => { if (emailConfirmResolveRef.current) emailConfirmResolveRef.current(true); }}
+                style={{
+                  flex: 1, padding: "12px", borderRadius: "8px", fontSize: "14px",
+                  fontWeight: "600", cursor: "pointer", border: "2px solid #16a34a",
+                  backgroundColor: "#16a34a", color: "white"
+                }}
+              >
+                Sí, guardar y enviar mail
+              </button>
             </div>
           </div>
         </div>

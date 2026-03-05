@@ -678,12 +678,15 @@ button, .tab { -webkit-tap-highlight-color: rgba(0,0,0,0); }
 .print-modal {
   width: 520px;
   max-width: calc(100% - 32px);
+  max-height: calc(100vh - 60px);
   background: #fff;
   border-radius: 16px;
   padding: 24px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   box-sizing: border-box;
   animation: slideUp 0.3s ease-out;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 @keyframes slideUp {
@@ -707,6 +710,41 @@ button, .tab { -webkit-tap-highlight-color: rgba(0,0,0,0); }
 
 /* small responsive rule for print modal inputs */
 .print-modal input[type="month"].input { padding: 8px 10px; }
+
+/* Responsive adjustments for mobile devices */
+@media (max-width: 640px) {
+  .print-modal-backdrop {
+    padding: 8px;
+  }
+  
+  .print-modal {
+    padding: 16px;
+    max-height: calc(100vh - 32px);
+    border-radius: 12px;
+  }
+  
+  .print-modal h3 {
+    font-size: 18px !important;
+  }
+  
+  .print-modal p {
+    font-size: 13px !important;
+  }
+}
+
+@media (max-height: 700px) {
+  .print-modal {
+    max-height: calc(100vh - 40px);
+    padding: 20px;
+  }
+}
+
+@media (max-height: 600px) {
+  .print-modal {
+    max-height: calc(100vh - 32px);
+    padding: 16px;
+  }
+}
 
 /* For the printed page we included inline CSS inside the generated HTML.
    These rules are helpers if you use a local print preview container. */

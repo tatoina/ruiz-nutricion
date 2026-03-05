@@ -482,11 +482,34 @@ exports.checkAppointmentReminders = onSchedule("every 1 hours", async (event) =>
     const userName = `${userData.nombre || ''} ${userData.apellidos || ''}`.trim() || 'Usuario';
     
     for (const cita of citas) {
-      // Combinar fecha y hora para crear el objeto Date correcto
-      const citaDate = new Date(`${cita.fecha}T${cita.hora}:00`);
+      // Combinar fecha y hora interpretándolas como hora de Madrid (UTC+1/UTC+2)
+      // Se usa el offset explícito para evitar que Node.js (UTC) sume 1h al mostrar la hora
+      const madridOffset = (() => {
+        // Calcular el offset real de Europe/Madrid en el momento de la cita
+        const testDate = new Date(`${cita.fecha}T${cita.hora}:00Z`);
+        const madridStr = testDate.toLocaleString('en-US', { timeZone: 'Europe/Madrid', hour12: false, hour: '2-digit', minute: '2-digit' });
+        const utcStr = testDate.toLocaleString('en-US', { timeZone: 'UTC', hour12: false, hour: '2-digit', minute: '2-digit' });
+        const [mH, mM] = madridStr.split(':').map(Number);
+        const [uH, uM] = utcStr.split(':').map(Number);
+        return (mH * 60 + mM) - (uH * 60 + uM); // offset en minutos
+      })();
+      // Crear el Date sumando el offset en sentido contrario para compensar
+      // de modo que citaDate.toLocaleString con Europe/Madrid devuelva la hora correcta
+      const citaDate = new Date(`${cita.fecha}T${cita.hora}:00Z`);
+      citaDate.setMinutes(citaDate.getMinutes() - madridOffset);
+
       const timeDiff = citaDate.getTime() - now.getTime();
       const hoursDiff = timeDiff / (1000 * 60 * 60);
       const daysDiff = timeDiff / (1000 * 60 * 60 * 24);
+
+      // Formatear fecha y hora usando los valores guardados directamente (sin conversión UTC)
+      // cita.fecha = "YYYY-MM-DD" y cita.hora = "HH:MM" ya están en hora de Madrid
+      const [yearN, monthN, dayN] = cita.fecha.split('-').map(Number);
+      const citaDateLocal = new Date(yearN, monthN - 1, dayN);
+      const fechaFormateada = citaDateLocal.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      const horaFormateada = cita.hora; // ya es HH:MM en hora local de Madrid
+      const notasHtml = cita.notas ? `<p style="margin: 10px 0;"><strong>📝 Notas:</strong> ${cita.notas}</p>` : '';
+      const notasText = cita.notas ? `📝 Notas: ${cita.notas}` : '';
       
       // Email 1 día antes (entre 23 y 25 horas antes)
       if (daysDiff > 0.95 && daysDiff < 1.05 && !cita.emailSent) {
@@ -551,9 +574,9 @@ exports.checkAppointmentReminders = onSchedule("every 1 hours", async (event) =>
 
                     <div class="cita-box">
                       <h3 style="margin-top: 0; color: #15803d;">📋 Detalles de la cita</h3>
-                      <p style="margin: 10px 0;"><strong>📅 Fecha:</strong> ${citaDate.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Europe/Madrid' })}</p>
-                      <p style="margin: 10px 0;"><strong>🕐 Hora:</strong> ${citaDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })}</p>
-                      ${cita.notas ? `<p style="margin: 10px 0;"><strong>📝 Notas:</strong> ${cita.notas}</p>` : ''}
+                      <p style="margin: 10px 0;"><strong>📅 Fecha:</strong> ${fechaFormateada}</p>
+                      <p style="margin: 10px 0;"><strong>🕐 Hora:</strong> ${horaFormateada}</p>
+                      ${notasHtml}
                     </div>
 
                     <p style="margin-top: 30px;">Por favor, confirma tu asistencia o avisa con antelación si necesitas cancelar o reprogramar.</p>
@@ -575,9 +598,9 @@ Hola ${userName},
 
 Te recordamos que MAÑANA tienes una cita programada:
 
-📅 Fecha: ${citaDate.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Europe/Madrid' })}
-🕐 Hora: ${citaDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })}
-${cita.notas ? `📝 Notas: ${cita.notas}` : ''}
+📅 Fecha: ${fechaFormateada}
+🕐 Hora: ${horaFormateada}
+${notasText}
 
 Por favor, confirma tu asistencia o avisa si necesitas cancelar.
 
@@ -607,7 +630,7 @@ Ruiz Nutrición
             userId: userDoc.id,
             type: "appointment_reminder",
             title: "🔔 Recordatorio de Cita",
-            body: `Tu cita es en 1 hora - ${citaDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })}`,
+            body: `Tu cita es en 1 hora - ${horaFormateada}`,
             data: {
               citaFecha: cita.fecha,
               citaNotas: cita.notas || '',

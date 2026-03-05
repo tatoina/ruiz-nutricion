@@ -7,7 +7,7 @@ import {
   deleteObject,
   listAll,
 } from "firebase/storage";
-import { doc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
+import { doc, updateDoc, arrayUnion, arrayRemove, getDoc, addDoc, collection } from "firebase/firestore";
 
 /**
  * Componente para gestionar archivos de ejercicios o recetas de un usuario
@@ -121,6 +121,72 @@ export default function FileManager({ userId, type, isAdmin }) {
               path: uploadTask.snapshot.ref.fullPath,
             }),
           });
+
+          // Enviar email de notificación al usuario si es admin quien sube
+          if (isAdmin) {
+            try {
+              const userSnap = await getDoc(userRef);
+              if (userSnap.exists()) {
+                const userData = userSnap.data();
+                const userEmail = userData.email;
+                const userName = userData.nombre || "Usuario";
+                if (userEmail) {
+                  await addDoc(collection(db, "mail"), {
+                    to: userEmail,
+                    message: {
+                      subject: "Nuevo documento disponible 📎",
+                      html: `
+                        <!DOCTYPE html>
+                        <html>
+                        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+                        <body style="margin:0;padding:0;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background-color:#f5f5f5;">
+                          <table role="presentation" style="width:100%;border-collapse:collapse;">
+                            <tr><td align="center" style="padding:40px 0;">
+                              <table role="presentation" style="width:600px;max-width:90%;border-collapse:collapse;background-color:white;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+                                <tr>
+                                  <td style="background:linear-gradient(135deg,#16a34a 0%,#15803d 100%);padding:40px 30px;text-align:center;border-radius:12px 12px 0 0;">
+                                    <h1 style="color:white;margin:0;font-size:26px;font-weight:600">📎 Nuevo documento disponible</h1>
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td style="padding:40px 30px;">
+                                    <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 20px 0;">Hola <strong>${userName}</strong>,</p>
+                                    <p style="color:#333;font-size:16px;line-height:1.6;margin:0 0 20px 0;">Tu nutricionista ha subido un nuevo documento a tu ficha:</p>
+                                    <div style="background-color:#f0fdf4;border-left:4px solid #16a34a;padding:20px;margin:20px 0;border-radius:4px;">
+                                      <p style="color:#166534;font-size:15px;margin:0;line-height:1.6;">
+                                        <strong>📄 ${fileName}</strong>
+                                      </p>
+                                    </div>
+                                    <p style="color:#333;font-size:16px;line-height:1.6;margin:20px 0;">Puedes consultarlo accediendo a la aplicación.</p>
+                                    <table role="presentation" style="margin:30px 0;width:100%;">
+                                      <tr><td align="center">
+                                        <a href="https://nutricionapp-b7b7d.web.app"
+                                           style="display:inline-block;background:linear-gradient(135deg,#16a34a 0%,#15803d 100%);color:white;text-decoration:none;padding:16px 32px;border-radius:8px;font-weight:600;font-size:16px;">
+                                          📱 Ver mis documentos
+                                        </a>
+                                      </td></tr>
+                                    </table>
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td style="background-color:#f8f9fa;padding:20px 30px;text-align:center;border-radius:0 0 12px 12px;border-top:1px solid #e5e7eb;">
+                                    <p style="color:#6b7280;font-size:13px;margin:0;">Este correo se envió automáticamente. Por favor, no respondas a este mensaje.</p>
+                                  </td>
+                                </tr>
+                              </table>
+                            </td></tr>
+                          </table>
+                        </body>
+                        </html>
+                      `,
+                    },
+                  });
+                }
+              }
+            } catch (emailErr) {
+              console.error("Error enviando email de nuevo documento:", emailErr);
+            }
+          }
 
           setUploading(false);
           setUploadProgress(0);

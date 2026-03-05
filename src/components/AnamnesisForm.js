@@ -1738,8 +1738,14 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
                   <div style={{ marginBottom: "4px" }}>
                     <strong>• Básico + Ejercicios:</strong> TODAS las pestañas
                   </div>
-                  <div>
+                  <div style={{ marginBottom: "4px" }}>
                     <strong>• Seguimiento:</strong> SOLO Pesaje y Citas
+                  </div>
+                  <div style={{ marginBottom: "4px" }}>
+                    <strong>• GYM:</strong> SOLO GYM
+                  </div>
+                  <div>
+                    <strong>• GYM + Seguimiento:</strong> SOLO Pesaje y GYM
                   </div>
                 </div>
               </div>
@@ -1757,6 +1763,7 @@ export default function AnamnesisForm({ user, onUpdateUser, isAdmin }) {
               <option value="Basico + Ejercicios">Básico + Ejercicios</option>
               <option value="Seguimiento">Seguimiento</option>
               <option value="GYM">GYM</option>
+              <option value="GYM + Seguimiento">GYM + Seguimiento</option>
             </select>
             
             {/* Eliminar campo de texto para "Otros" ya que se removió la opción */}
