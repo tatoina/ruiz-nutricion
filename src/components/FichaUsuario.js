@@ -661,17 +661,18 @@ export default function FichaUsuario(props) {
         if (snapshot.exists()) {
           const data = snapshot.data();
           
-          // Actualizar modo manual y contenido si cambian
-          if (data.modoManual !== undefined) {
-            setModoManual(data.modoManual);
-          }
-          if (data.contenidoManual !== undefined) {
-            setContenidoManual(data.contenidoManual);
-          }
-          
-          // Actualizar tipo de menú
-          if (data.tipoMenu !== undefined) {
-            setTipoMenu(data.tipoMenu);
+          // En modo admin, NO sobreescribir modoManual/tipoMenu desde Firestore:
+          // el admin es quien controla esos valores localmente
+          if (!adminMode) {
+            if (data.modoManual !== undefined) {
+              setModoManual(data.modoManual);
+            }
+            if (data.contenidoManual !== undefined) {
+              setContenidoManual(data.contenidoManual);
+            }
+            if (data.tipoMenu !== undefined) {
+              setTipoMenu(data.tipoMenu);
+            }
           }
           
           // Actualizar menú vertical solo si no estamos en modo admin editando
@@ -778,6 +779,8 @@ export default function FichaUsuario(props) {
 
   // Guardado real del modo manual – lee de editorManualRef (DOM) o contenidoManualRef
   const flushSaveManual = useCallback(async () => {
+    // Guarda: si ya no estamos en modo manual (el admin cambió de tipo), no guardar
+    if (!latestModoManualRef.current) return;
     const currentUid = latestUidRef.current;
     const html = editorManualRef.current?.innerHTML || contenidoManualRef.current;
     if (!currentUid || !html) return;
@@ -866,7 +869,8 @@ export default function FichaUsuario(props) {
       if (autoSaveManualFirestoreTimerRef.current) {
         clearTimeout(autoSaveManualFirestoreTimerRef.current);
         autoSaveManualFirestoreTimerRef.current = null;
-        flushSaveManual(); // flush inmediato si hay cambios pendientes al navegar
+        // Solo hacer flush si seguimos en modo manual (evita guardar modoManual:true al cambiar de tipo)
+        if (latestModoManualRef.current) flushSaveManual();
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -6187,6 +6191,7 @@ Ruiz Nutrición
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       <button 
                         onClick={async () => {
+                          latestModoManualRef.current = false; // actualizar ref antes de que React procese el cleanup
                           setTipoMenu("tabla");
                           setModoManual(false);
                           try {
@@ -6223,6 +6228,7 @@ Ruiz Nutrición
                       
                       <button 
                         onClick={async () => {
+                          latestModoManualRef.current = false; // actualizar ref antes de que React procese el cleanup
                           setTipoMenu("vertical");
                           setModoManual(false);
                           try {
