@@ -6724,9 +6724,10 @@ Ruiz Nutrición
                             combinedContent = '<br>';
                           }
                           
-                          // Aplicar colspan a la primera celda
+                          // Aplicar colspan a la primera celda (sumar colspans existentes)
                           const firstCell = sortedCells[0];
-                          firstCell.setAttribute('colspan', sortedCells.length.toString());
+                          const totalColspan = sortedCells.reduce((sum, c) => sum + parseInt(c.getAttribute('colspan') || '1', 10), 0);
+                          firstCell.setAttribute('colspan', totalColspan.toString());
                           firstCell.setAttribute('contenteditable', 'true');
                           firstCell.innerHTML = combinedContent;
                           
@@ -6766,76 +6767,95 @@ Ruiz Nutrición
                       </button>
                       <button
                         onClick={(e) => {
-                          // Buscar la celda que está actualmente en foco o seleccionada
-                          let cell = null;
-                          
-                          // Intentar obtener desde la selección
-                          const selection = window.getSelection();
-                          if (selection && selection.rangeCount > 0) {
-                            const range = selection.getRangeAt(0);
-                            let currentElement = range.startContainer;
-                            
-                            // Buscar la celda más cercana
-                            if (currentElement.nodeType === Node.TEXT_NODE) {
-                              currentElement = currentElement.parentElement;
+                          // Helper: asignar listener Ctrl+Click a una celda nueva
+                          const setupNewCell = (newCell) => {
+                            newCell.style.cursor = 'text';
+                            newCell.style.outline = 'none';
+                            newCell.style.userSelect = 'text';
+                            newCell.style.WebkitUserSelect = 'text';
+                            newCell.style.transition = 'background-color 0.2s, box-shadow 0.2s';
+                            newCell.addEventListener('click', (ev) => {
+                              if (ev.ctrlKey || ev.metaKey) {
+                                ev.preventDefault();
+                                ev.stopPropagation();
+                                const isSelected = newCell.classList.contains('celda-seleccionada');
+                                if (isSelected) {
+                                  newCell.classList.remove('celda-seleccionada');
+                                  newCell.style.backgroundColor = '';
+                                  newCell.style.boxShadow = '';
+                                  setCeldasSeleccionadas(prev => prev.filter(c => c !== newCell));
+                                } else {
+                                  newCell.classList.add('celda-seleccionada');
+                                  newCell.style.backgroundColor = '#dbeafe';
+                                  newCell.style.boxShadow = 'inset 0 0 0 2px #3b82f6';
+                                  setCeldasSeleccionadas(prev => [...prev, newCell]);
+                                }
+                              }
+                            });
+                          };
+
+                          // 1. Prioridad: celda combinada seleccionada con Ctrl+Click
+                          let cell = celdasSeleccionadas.find(c =>
+                            parseInt(c.getAttribute('colspan') || '1', 10) > 1 ||
+                            parseInt(c.getAttribute('rowspan') || '1', 10) > 1
+                          ) || null;
+
+                          // 2. Fallback: cursor de texto dentro del editor
+                          if (!cell) {
+                            const selection = window.getSelection();
+                            if (selection && selection.rangeCount > 0) {
+                              const range = selection.getRangeAt(0);
+                              let currentElement = range.startContainer;
+                              if (currentElement.nodeType === Node.TEXT_NODE) {
+                                currentElement = currentElement.parentElement;
+                              }
+                              cell = currentElement?.closest('td, th') || null;
                             }
-                            
-                            cell = currentElement?.closest('td, th');
                           }
-                          
-                          // Si no hay selección, buscar la última celda clickeada en el editor
+
+                          // 3. Fallback: única celda combinada en la tabla
                           if (!cell && editorManualRef.current) {
-                            // Obtener todas las celdas con colspan o rowspan
                             const table = editorManualRef.current.querySelector('table');
                             if (table) {
                               const allCells = table.querySelectorAll('td[colspan], td[rowspan], th[colspan], th[rowspan]');
                               if (allCells.length === 1) {
-                                // Si solo hay una celda combinada, usar esa
                                 cell = allCells[0];
                               } else if (allCells.length > 1) {
-                                alert('Hay varias celdas combinadas. Por favor, haz clic primero dentro de la celda que deseas separar y luego presiona el botón Descombinar.');
+                                alert('Selecciona la celda combinada con Ctrl+Click y luego pulsa Descombinar.');
                                 return;
                               }
                             }
                           }
-                          
+
                           if (!cell) {
-                            alert('Por favor, haz clic primero dentro de una celda de la tabla y luego presiona Descombinar');
+                            alert('Selecciona una celda combinada con Ctrl+Click y luego pulsa Descombinar.');
                             return;
                           }
-                          
+
                           // Verificar si la celda tiene colspan o rowspan
                           const colspan = parseInt(cell.getAttribute('colspan') || '1', 10);
                           const rowspan = parseInt(cell.getAttribute('rowspan') || '1', 10);
-                          
+
                           if (colspan === 1 && rowspan === 1) {
                             alert('Esta celda no está combinada');
                             return;
                           }
-                          
-                          // Obtener el contenido actual
-                          const currentContent = cell.innerHTML;
-                          
-                          // Si tiene colspan, añadir las celdas que faltan en la misma fila
+
+                          // Quitar estilo de selección de la celda a descombinar
+                          cell.classList.remove('celda-seleccionada');
+                          cell.style.backgroundColor = '';
+                          cell.style.boxShadow = '';
+
+                          // Si tiene colspan, añadir las celdas faltantes en la misma fila
                           if (colspan > 1) {
                             const row = cell.parentElement;
-                            
-                            // Eliminar el atributo colspan
                             cell.removeAttribute('colspan');
-                            
-                            // Añadir las celdas faltantes después de la celda actual
                             for (let i = 1; i < colspan; i++) {
                               const newCell = document.createElement('td');
                               newCell.innerHTML = '<br>';
                               newCell.setAttribute('contenteditable', 'true');
-                              
-                              // Copiar estilos básicos si no es la primera columna
-                              const isFirstColumn = Array.from(row.children).indexOf(cell) === 0;
-                              if (!isFirstColumn) {
-                                newCell.style.minHeight = '80px';
-                              }
-                              
-                              // Insertar después de la celda actual
+                              newCell.style.minHeight = '80px';
+                              setupNewCell(newCell);
                               if (cell.nextSibling) {
                                 row.insertBefore(newCell, cell.nextSibling);
                               } else {
@@ -6843,8 +6863,8 @@ Ruiz Nutrición
                               }
                             }
                           }
-                          
-                          // Si tiene rowspan, añadir las celdas que faltan en las filas siguientes
+
+                          // Si tiene rowspan, añadir las celdas faltantes en las filas siguientes
                           if (rowspan > 1) {
                             const table = cell.closest('table');
                             const tbody = table.querySelector('tbody');
@@ -6852,11 +6872,7 @@ Ruiz Nutrición
                             const allRows = Array.from(tbody.querySelectorAll('tr'));
                             const currentRowIndex = allRows.indexOf(currentRow);
                             const cellIndex = Array.from(currentRow.children).indexOf(cell);
-                            
-                            // Eliminar el atributo rowspan
                             cell.removeAttribute('rowspan');
-                            
-                            // Añadir celdas en las filas siguientes
                             for (let i = 1; i < rowspan; i++) {
                               const targetRow = allRows[currentRowIndex + i];
                               if (targetRow) {
@@ -6864,8 +6880,7 @@ Ruiz Nutrición
                                 newCell.innerHTML = '<br>';
                                 newCell.setAttribute('contenteditable', 'true');
                                 newCell.style.minHeight = '80px';
-                                
-                                // Insertar en la posición correcta
+                                setupNewCell(newCell);
                                 if (cellIndex < targetRow.children.length) {
                                   targetRow.insertBefore(newCell, targetRow.children[cellIndex]);
                                 } else {
@@ -6874,7 +6889,10 @@ Ruiz Nutrición
                               }
                             }
                           }
-                          
+
+                          // Limpiar celda descombinada de la selección
+                          setCeldasSeleccionadas(prev => prev.filter(c => c !== cell));
+
                           // Actualizar el contenido en el estado
                           if (editorManualRef.current) {
                             setContenidoManual(editorManualRef.current.innerHTML);
@@ -7092,7 +7110,8 @@ Ruiz Nutrición
                       border: "1px solid #e2e8f0" 
                     }}>
                       💡 <strong>Instrucciones:</strong> {isMobile ? "Toca" : "Haz clic en"} cualquier celda para editar el contenido.<br/>
-                      🔗 <strong>Para combinar celdas:</strong> Mantén presionada la tecla Ctrl (o Cmd en Mac) y haz clic en las celdas que deseas combinar. Luego presiona el botón "🔗 Combinar".
+                      🔗 <strong>Para combinar celdas:</strong> Mantén presionada la tecla Ctrl (o Cmd en Mac) y haz clic en las celdas que deseas combinar. Luego presiona el botón "🔗 Combinar".<br/>
+                      ⛓️‍💥 <strong>Para descombinar:</strong> Haz Ctrl+Click sobre la celda combinada para seleccionarla y luego pulsa "⛓️‍💥 Descombinar".
                     </div>
                       </>
                     </div>
