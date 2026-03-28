@@ -6976,17 +6976,50 @@ Ruiz Nutrición
                       )}
                       <button
                         onClick={() => {
-                          if (!window.confirm('¿Reparar la tabla? Esto restablece la estructura a la plantilla por defecto. El contenido escrito se perderá.')) return;
+                          if (!window.confirm('¿Reparar la estructura de la tabla? Se intentará conservar el contenido existente.')) return;
                           if (!editorManualRef.current || !uid) return;
-                          // Limpiar localStorage y Firestore, restaurar plantilla limpia
-                          try { localStorage.removeItem(`menu_manual_draft_${uid}`); } catch (_) {}
-                          const cleanTable = `<style>table{width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;table-layout:fixed;}th,td{border:1px solid #ddd;padding:8px;vertical-align:top;word-break:break-word;}th{background-color:#15803d;color:white;text-align:center;font-weight:600;user-select:none;cursor:not-allowed;}td:first-child{font-weight:600;background-color:#f0fdf4;text-align:center;width:100px;user-select:none;cursor:not-allowed;}td:not(:first-child){min-height:80px;height:auto;}</style><table><thead><tr><th style="width:120px" contenteditable="false">COMIDA</th><th contenteditable="false">LUNES</th><th contenteditable="false">MARTES</th><th contenteditable="false">MIÉRCOLES</th><th contenteditable="false">JUEVES</th><th contenteditable="false">VIERNES</th><th contenteditable="false">SÁBADO</th><th contenteditable="false">DOMINGO</th></tr></thead><tbody><tr><td contenteditable="false">DESAYUNO</td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td></tr><tr><td contenteditable="false">ALMUERZO</td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td></tr><tr><td contenteditable="false">COMIDA</td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td></tr><tr><td contenteditable="false">MERIENDA</td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td></tr><tr><td contenteditable="false">CENA</td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td></tr><tr><td style="background-color:#fff7ed" contenteditable="false">TIPS</td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td></tr></tbody></table>`;
-                          editorManualRef.current.innerHTML = cleanTable;
-                          setContenidoManual(cleanTable);
-                          try { localStorage.setItem(`menu_manual_draft_${uid}`, cleanTable); } catch (_) {}
-                          // Limpiar selección
+
+                          // --- Extraer contenido existente por fila (preservar dieta) ---
+                          const existingTable = editorManualRef.current.querySelector('table');
+                          const tbody = existingTable?.querySelector('tbody');
+                          const existingRows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
+                          // Para cada fila, expandir colspan para obtener array de 7 contenidos (un por día)
+                          const extractedContent = existingRows.slice(0, 6).map(row => {
+                            const cells = Array.from(row.querySelectorAll('td'));
+                            // Ignorar primera celda (nombre comida)
+                            const dataCells = cells.slice(1);
+                            const dayContents = [];
+                            dataCells.forEach(cell => {
+                              const span = parseInt(cell.getAttribute('colspan') || '1', 10);
+                              const html = cell.innerHTML.trim();
+                              dayContents.push(html && html !== '<br>' ? html : '<br>');
+                              for (let i = 1; i < span; i++) dayContents.push('<br>');
+                            });
+                            // Rellenar hasta 7 columnas
+                            while (dayContents.length < 7) dayContents.push('<br>');
+                            return dayContents.slice(0, 7);
+                          });
+                          // Si no había filas, usar vacío
+                          const mealDefaults = [['<br>','<br>','<br>','<br>','<br>','<br>','<br>'],['<br>','<br>','<br>','<br>','<br>','<br>','<br>'],['<br>','<br>','<br>','<br>','<br>','<br>','<br>'],['<br>','<br>','<br>','<br>','<br>','<br>','<br>'],['<br>','<br>','<br>','<br>','<br>','<br>','<br>'],['<br>','<br>','<br>','<br>','<br>','<br>','<br>']];
+                          const mealNames = ['DESAYUNO','ALMUERZO','COMIDA','MERIENDA','CENA','TIPS'];
+                          const mealStyles = ['','','','','','background-color:#fff7ed;'];
+                          const content = extractedContent.length > 0 ? extractedContent : mealDefaults;
+
+                          const tbodyHtml = mealNames.map((name, ri) => {
+                            const days = content[ri] || mealDefaults[ri];
+                            const cells = days.map(d => `<td contenteditable="true">${d}</td>`).join('');
+                            const style = mealStyles[ri] ? ` style="${mealStyles[ri]}"` : '';
+                            return `<tr><td${style} contenteditable="false">${name}</td>${cells}</tr>`;
+                          }).join('');
+
+                          const repairedTable = `<style>table{width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;table-layout:fixed;}th,td{border:1px solid #ddd;padding:8px;vertical-align:top;word-break:break-word;}th{background-color:#15803d;color:white;text-align:center;font-weight:600;user-select:none;cursor:not-allowed;}td:first-child{font-weight:600;background-color:#f0fdf4;text-align:center;width:100px;user-select:none;cursor:not-allowed;}td:not(:first-child){min-height:80px;height:auto;}</style><table><thead><tr><th style="width:120px" contenteditable="false">COMIDA</th><th contenteditable="false">LUNES</th><th contenteditable="false">MARTES</th><th contenteditable="false">MIÉRCOLES</th><th contenteditable="false">JUEVES</th><th contenteditable="false">VIERNES</th><th contenteditable="false">SÁBADO</th><th contenteditable="false">DOMINGO</th></tr></thead><tbody>${tbodyHtml}</tbody></table>`;
+
+                          editorManualRef.current.innerHTML = repairedTable;
+                          setContenidoManual(repairedTable);
+                          try { localStorage.setItem(`menu_manual_draft_${uid}`, repairedTable); } catch (_) {}
                           setCeldasSeleccionadas([]);
-                          // Re-adjuntar listeners
+
+                          // Re-adjuntar listeners Ctrl+Click
                           setTimeout(() => {
                             if (!editorManualRef.current) return;
                             editorManualRef.current.querySelectorAll('td[contenteditable="true"]').forEach((cell, index) => {
@@ -7023,7 +7056,7 @@ Ruiz Nutrición
                           whiteSpace: "nowrap",
                           marginLeft: "4px"
                         }}
-                        title="Reparar estructura de la tabla (resetea a plantilla limpia)"
+                        title="Reparar estructura de la tabla conservando el contenido existente"
                       >
                         🔧 Reparar tabla
                       </button>
