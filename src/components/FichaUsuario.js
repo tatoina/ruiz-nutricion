@@ -431,6 +431,8 @@ export default function FichaUsuario(props) {
   const latestMenuRef = useRef(null);
   const latestUidRef = useRef(null);
   const latestModoManualRef = useRef(false);
+  // Ref para detectar cambios de usuario en el autosave (evitar guardar contenido de un usuario bajo el uid de otro)
+  const prevAutoSaveUidRef = useRef(null);
   const [saveStatus, setSaveStatus] = useState("idle");
   const rootRef = useRef(null);
 
@@ -843,6 +845,12 @@ export default function FichaUsuario(props) {
   // Autosave modoManual: localStorage rápido (800ms) + Firestore (3000ms)
   // Fix: antes solo iba a localStorage; ahora también va a Firestore
   useEffect(() => {
+    // GUARD: si el uid acaba de cambiar, contenidoManual todavía contiene el contenido
+    // del usuario anterior → saltar este ciclo para evitar cruzar dietas entre usuarios
+    const isUidChange = prevAutoSaveUidRef.current !== null && prevAutoSaveUidRef.current !== uid;
+    prevAutoSaveUidRef.current = uid;
+    if (isUidChange) return;
+
     if (!adminMode || !modoManual || !uid || !contenidoManual) return;
 
     // localStorage rápido (800ms)
@@ -1308,6 +1316,8 @@ export default function FichaUsuario(props) {
     
     // Si cambió el usuario, recargar el contenido
     if (lastLoadedUidRef.current && lastLoadedUidRef.current !== uid) {
+      // Eliminar el draft del usuario ANTERIOR para evitar que quede contaminando localStorage
+      try { localStorage.removeItem(`menu_manual_draft_${lastLoadedUidRef.current}`); } catch (_) {}
       const defaultContent = `
       <style>
         table { 
