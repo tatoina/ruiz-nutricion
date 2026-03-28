@@ -1488,23 +1488,45 @@ export default function FichaUsuario(props) {
         editorManualRef.current.innerHTML = defaultContent;
       }
       
-      // Configurar celdas editables después de cargar
+      // Configurar celdas editables y re-adjuntar listeners Ctrl+Click después de cargar
       setTimeout(() => {
         if (!editorManualRef.current) return;
         
         const editableCells = editorManualRef.current.querySelectorAll('td[contenteditable="true"]');
         console.log('🔧 Configurando celdas al cambiar usuario:', editableCells.length);
         
-        editableCells.forEach((cell) => {
+        editableCells.forEach((cell, index) => {
           cell.setAttribute('contenteditable', 'true');
+          cell.dataset.cellId = `cell-uid-${index}`;
           cell.style.cursor = 'text';
           cell.style.outline = 'none';
           cell.style.userSelect = 'text';
           cell.style.WebkitUserSelect = 'text';
+          cell.style.transition = 'background-color 0.2s, box-shadow 0.2s';
           
           if (!cell.textContent.trim() && !cell.querySelector('br')) {
             cell.innerHTML = '<br>';
           }
+
+          // Re-adjuntar listener Ctrl+Click (las celdas anteriores ya no existen en el DOM)
+          cell.addEventListener('click', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+              e.preventDefault();
+              e.stopPropagation();
+              const isSelected = cell.classList.contains('celda-seleccionada');
+              if (isSelected) {
+                cell.classList.remove('celda-seleccionada');
+                cell.style.backgroundColor = '';
+                cell.style.boxShadow = '';
+                setCeldasSeleccionadas(prev => prev.filter(c => c !== cell));
+              } else {
+                cell.classList.add('celda-seleccionada');
+                cell.style.backgroundColor = '#dbeafe';
+                cell.style.boxShadow = 'inset 0 0 0 2px #3b82f6';
+                setCeldasSeleccionadas(prev => [...prev, cell]);
+              }
+            }
+          });
         });
       }, 100);
     }
@@ -6952,6 +6974,59 @@ Ruiz Nutrición
                           ✖ Limpiar ({celdasSeleccionadas.length})
                         </button>
                       )}
+                      <button
+                        onClick={() => {
+                          if (!window.confirm('¿Reparar la tabla? Esto restablece la estructura a la plantilla por defecto. El contenido escrito se perderá.')) return;
+                          if (!editorManualRef.current || !uid) return;
+                          // Limpiar localStorage y Firestore, restaurar plantilla limpia
+                          try { localStorage.removeItem(`menu_manual_draft_${uid}`); } catch (_) {}
+                          const cleanTable = `<style>table{width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;table-layout:fixed;}th,td{border:1px solid #ddd;padding:8px;vertical-align:top;word-break:break-word;}th{background-color:#15803d;color:white;text-align:center;font-weight:600;user-select:none;cursor:not-allowed;}td:first-child{font-weight:600;background-color:#f0fdf4;text-align:center;width:100px;user-select:none;cursor:not-allowed;}td:not(:first-child){min-height:80px;height:auto;}</style><table><thead><tr><th style="width:120px" contenteditable="false">COMIDA</th><th contenteditable="false">LUNES</th><th contenteditable="false">MARTES</th><th contenteditable="false">MIÉRCOLES</th><th contenteditable="false">JUEVES</th><th contenteditable="false">VIERNES</th><th contenteditable="false">SÁBADO</th><th contenteditable="false">DOMINGO</th></tr></thead><tbody><tr><td contenteditable="false">DESAYUNO</td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td></tr><tr><td contenteditable="false">ALMUERZO</td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td></tr><tr><td contenteditable="false">COMIDA</td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td></tr><tr><td contenteditable="false">MERIENDA</td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td></tr><tr><td contenteditable="false">CENA</td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td></tr><tr><td style="background-color:#fff7ed" contenteditable="false">TIPS</td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td><td contenteditable="true"><br></td></tr></tbody></table>`;
+                          editorManualRef.current.innerHTML = cleanTable;
+                          setContenidoManual(cleanTable);
+                          try { localStorage.setItem(`menu_manual_draft_${uid}`, cleanTable); } catch (_) {}
+                          // Limpiar selección
+                          setCeldasSeleccionadas([]);
+                          // Re-adjuntar listeners
+                          setTimeout(() => {
+                            if (!editorManualRef.current) return;
+                            editorManualRef.current.querySelectorAll('td[contenteditable="true"]').forEach((cell, index) => {
+                              cell.dataset.cellId = `cell-repair-${index}`;
+                              cell.style.cursor = 'text'; cell.style.outline = 'none';
+                              cell.style.userSelect = 'text'; cell.style.WebkitUserSelect = 'text';
+                              cell.style.transition = 'background-color 0.2s, box-shadow 0.2s';
+                              cell.addEventListener('click', (e) => {
+                                if (e.ctrlKey || e.metaKey) {
+                                  e.preventDefault(); e.stopPropagation();
+                                  const isSel = cell.classList.contains('celda-seleccionada');
+                                  if (isSel) {
+                                    cell.classList.remove('celda-seleccionada');
+                                    cell.style.backgroundColor = ''; cell.style.boxShadow = '';
+                                    setCeldasSeleccionadas(prev => prev.filter(c => c !== cell));
+                                  } else {
+                                    cell.classList.add('celda-seleccionada');
+                                    cell.style.backgroundColor = '#dbeafe'; cell.style.boxShadow = 'inset 0 0 0 2px #3b82f6';
+                                    setCeldasSeleccionadas(prev => [...prev, cell]);
+                                  }
+                                }
+                              });
+                            });
+                          }, 100);
+                        }}
+                        style={{
+                          padding: "6px 10px",
+                          border: "1px solid #f59e0b",
+                          borderRadius: "4px",
+                          backgroundColor: "white",
+                          color: "#b45309",
+                          cursor: "pointer",
+                          fontSize: "12px",
+                          whiteSpace: "nowrap",
+                          marginLeft: "4px"
+                        }}
+                        title="Reparar estructura de la tabla (resetea a plantilla limpia)"
+                      >
+                        🔧 Reparar tabla
+                      </button>
                     </div>
                     
                     {/* Panel de control de comidas activas */}
