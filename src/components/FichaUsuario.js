@@ -431,6 +431,10 @@ export default function FichaUsuario(props) {
   const latestMenuRef = useRef(null);
   const latestUidRef = useRef(null);
   const latestModoManualRef = useRef(false);
+  // Bloquea cualquier escritura automática a Firestore mientras se carga un usuario nuevo.
+  // Evita que un timer que quedó pendiente del usuario anterior (o del reset intermedio)
+  // escriba datos incorrectos bajo el uid del nuevo usuario.
+  const isLoadingNewUserRef = useRef(false);
   // Ref para detectar cambios de usuario en el autosave (evitar guardar contenido de un usuario bajo el uid de otro)
   const prevAutoSaveUidRef = useRef(null);
   const [saveStatus, setSaveStatus] = useState("idle");
@@ -531,6 +535,29 @@ export default function FichaUsuario(props) {
     let mounted = true;
     const load = async () => {
       setLoading(true); setError(null);
+
+      // BLOQUEAR autosave inmediatamente: ningún timer que quede pendiente
+      // puede escribir a Firestore mientras cargamos el nuevo usuario.
+      isLoadingNewUserRef.current = true;
+
+      // RESET INMEDIATO del estado de dieta al cambiar de usuario.
+      // Esto evita que los autosave effects (que se reejecutarán con el nuevo uid)
+      // encuentren datos del usuario anterior y los guarden bajo el uid del nuevo usuario.
+      setModoManual(false);
+      latestModoManualRef.current = false;
+      setContenidoManual("");
+      setTipoMenu("tabla");
+      setMenuVertical({
+        desayuno: [], almuerzo: [], comida: [], merienda: [], cena: [],
+        consejos: "", desayuno_notas: "", almuerzo_notas: "", comida_notas: "",
+        merienda_notas: "", cena_notas: ""
+      });
+      setEditable((prev) => ({
+        ...prev,
+        menu: Array.from({ length: 7 }, () => ({ ...emptyDayMenu() }))
+      }));
+      latestMenuRef.current = null;
+
       try {
         if (!uid) { setLoading(false); return; }
         if (!db) { setError("Error interno: Firestore no inicializado."); setLoading(false); return; }
@@ -652,7 +679,11 @@ export default function FichaUsuario(props) {
         setError(err?.message || "Error al cargar la ficha.");
         setUserData(null);
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          setLoading(false);
+          // Desbloquear autosave: el nuevo usuario ya está cargado correctamente
+          isLoadingNewUserRef.current = false;
+        }
       }
     };
     load();
@@ -697,8 +728,8 @@ export default function FichaUsuario(props) {
             setMenuVertical(normalizedMenuVertical);
           }
           
-          // Actualizar menú normal
-          if (data.menu !== undefined) {
+          // Actualizar menú normal solo si no es admin (el admin gestiona su propio estado local)
+          if (data.menu !== undefined && !adminMode) {
             setEditable((prev) => ({
               ...prev,
               menu: normalizeMenu(data.menu)
@@ -753,6 +784,8 @@ export default function FichaUsuario(props) {
 
   // Guardado real del menú normal – lee siempre de refs, nunca stale
   const flushSaveMenu = useCallback(async () => {
+    // Bloquear escritura si estamos en medio de una carga de usuario
+    if (isLoadingNewUserRef.current) return;
     const currentUid = latestUidRef.current;
     const currentMenu = latestMenuRef.current;
     if (!currentUid || !currentMenu) return;
@@ -781,6 +814,8 @@ export default function FichaUsuario(props) {
 
   // Guardado real del modo manual – lee de editorManualRef (DOM) o contenidoManualRef
   const flushSaveManual = useCallback(async () => {
+    // Bloquear escritura si estamos en medio de una carga de usuario
+    if (isLoadingNewUserRef.current) return;
     // Guarda: si ya no estamos en modo manual (el admin cambió de tipo), no guardar
     if (!latestModoManualRef.current) return;
     const currentUid = latestUidRef.current;
@@ -822,9 +857,10 @@ export default function FichaUsuario(props) {
     return () => {
       if (saveTimerRef.current) {
         // Cambios pendientes: cancelar timer y guardar YA (al navegar/desmontar)
+        // NO guardar si estamos cargando un usuario nuevo (evita cruzar dietas)
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
-        flushSaveMenu();
+        if (!isLoadingNewUserRef.current) flushSaveMenu();
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
